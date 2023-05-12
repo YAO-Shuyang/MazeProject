@@ -1059,16 +1059,23 @@ def ColorBarsTicks(peak_rate:float = 10, intervals:float = 1, is_auto:bool = Fal
     Output:
     - <class 'numpy.ndarray'>
     '''
+    if np.isnan(peak_rate):
+        return []
+    
+    peak_rate = round(peak_rate,2)
+    
     # Automatically set the stick value
     if is_auto == True:
         # A tick unit vector
         round_edge = np.array([0.1, 0.2, 0.4, 0.5, 0.8, 1, 2, 4, 5, 8, 10, 12, 15, 20, 40, 50, 80, 100, 150, 200, 400, 500, 800, 1000], dtype = np.float64)
-        assert peak_rate >= round_edge[0] and peak_rate <= 30 * round_edge[-1] # the peak rate is not suit for this function. Add new number in round_edge or give up using this function.
-        # distance vector
-        dis_vec = np.abs(peak_rate/int(tick_number) - round_edge)
-        fittest_unit_index = np.argmin(dis_vec)
-        # Set intervals as the fittest unit
-        intervals = round_edge[fittest_unit_index]
+        if peak_rate >= round_edge[0] and peak_rate <= round_edge[-1]:
+            # distance vector
+            dis_vec = np.abs(peak_rate/int(tick_number) - round_edge)
+            fittest_unit_index = np.argmin(dis_vec)
+            # Set intervals as the fittest unit
+            intervals = round_edge[fittest_unit_index]
+        else:
+            return [0, peak_rate/2, peak_rate]
 
     num = int(peak_rate // intervals)
     ticks = np.linspace(0, num * intervals, num+1)
@@ -1343,6 +1350,19 @@ def calc_pearsonr(rate_map_all1:np.ndarray, rate_map_all2:np.ndarray = None):
 
     return PearsonC
 
+# Calculating behavior speed if it is not exist in behav_new.mat
+def calc_speed(behav_positions = None, behav_time = None):
+    # Do not delete NAN value! to keep the same vector length with behav_positions_original and behav_time_original
+    # behav_positions, behav_time = Delete_NAN(behav_positions = behav_positions, behav_time = behav_time)
+    dx = np.append(np.ediff1d(behav_positions[:,0]),0)
+    dy = np.append(np.ediff1d(behav_positions[:,1]),0)
+    dt = np.append(np.ediff1d(behav_time),33)
+    dl = np.sqrt(dx**2+dy**2)
+    behav_speed = dl / dt * 1000
+    #_, _, behav_speed = Add_NAN(behav_positions = behav_positions, behav_time = behav_time, behav_nodes = behav_speed)
+    return behav_speed
+
+
 # Fit equal poison distribution:
 from scipy.optimize import leastsq
 import math
@@ -1472,6 +1492,59 @@ def peak_velocity(behav_speed: np.ndarray, behav_nodes: np.ndarray, idx: int):
 
     idx = np.where(behav_nodes == idx)[0]
     return behav_speed[idx]
+
+
+def uniform_smooth_range(i: int, T: int, window: int):
+    """uniform_smooth_range _summary_
+
+    Generation of the range of smoothing.
+
+    Parameters
+    ----------
+    i : int
+        the current frame.
+    T : int
+        the total number of frames.
+    window : int
+        the length of window.
+    """
+    if window%2 == 1:
+        left = i - int((window-1)/2) if i - int((window-1)/2) >= 0 else 0
+        right = i + int((window-1)/2) if i + int((window-1)/2) < T - 1 else T - 1
+        return left, right
+    elif window%2 == 0:
+        left = i - int(window/2) + 1 if i - int(window/2) + 1 >= 0 else 0
+        right = i + int(window/2) if i + int(window/2) < T - 1 else T - 1
+        return left, right
+    else:
+        raise ValueError(f"{window} is invalid value for window.")
+
+def uniform_smooth_speed(speed: np.ndarray, window: int = 30) -> np.ndarray:
+    """uniform_smooth_speed _summary_
+
+    Smooth the speed with a uniform window.
+
+    Parameters
+    ----------
+    speed : np.ndarray
+        the speed to be smoothed
+    window : int, optional
+        smooth window length, by default 30
+
+    Returns
+    -------
+    np.ndarray
+        the smoothed speed
+    """
+    T = speed.shape[0]
+    M = np.zeros((T, T), dtype=np.float64) # Smooth matrix
+    
+    for i in range(T):
+        left, right = uniform_smooth_range(i, T, window=window)
+        idx = np.arange(left, right+1)
+        M[i, idx] = 1/len(idx)
+    
+    return np.dot(M, speed)
 
 
 if __name__ == '__main__':

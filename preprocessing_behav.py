@@ -452,21 +452,9 @@ def TrajectoryTurnAround(behav_nodes, standard = 10, maze_type = 1):
     for k in range(standard, behav_nodes.shape[0] - standard):
         Direction[k] = LocomotionDirection(check_node = behav_nodes[k - standard], targ_node = behav_nodes[k], maze_type = maze_type)
 
-# Calculating behavior speed if it is not exist in behav_new.mat
-def calc_speed(behav_positions = None, behav_time = None):
-    # Do not delete NAN value! to keep the same vector length with behav_positions_original and behav_time_original
-    # behav_positions, behav_time = Delete_NAN(behav_positions = behav_positions, behav_time = behav_time)
-    dx = np.append(np.ediff1d(behav_positions[:,0]),0)
-    dy = np.append(np.ediff1d(behav_positions[:,1]),0)
-    dt = np.append(np.ediff1d(behav_time),33)
-    dl = np.sqrt(dx**2+dy**2)
-    behav_speed = dl / dt * 1000
-    #_, _, behav_speed = Add_NAN(behav_positions = behav_positions, behav_time = behav_time, behav_nodes = behav_speed)
-    return behav_speed
-
 
 # Run all mice function ============================================================================================================================================
-def run_all_mice(mylist: list, behavior_paradigm = 'CrossMaze', P = None, cam_degree = 180):
+def run_all_mice(mylist: list, behavior_paradigm = 'CrossMaze', P = None, cam_degree = 180, **speed_sm_args):
     date = mylist[0]      # str
     MiceID = mylist[1]    # str
     folder = mylist[2]    # str
@@ -735,13 +723,11 @@ def run_all_mice(mylist: list, behavior_paradigm = 'CrossMaze', P = None, cam_de
                                                                           trace['behav_time'], trace['behav_nodes'])
     trace['correct_pos'], trace['correct_time'], trace['correct_nodes'] = Delete_NAN(trace['correct_pos'], 
                                                                           trace['correct_time'], trace['correct_nodes'])
-    speed_idx = []
-    behav_time = trace['behav_time']
-    for i in tqdm(range(behav_time.shape[0])):
-        idx = np.where(trace['behav_time_original'] == behav_time[i])[0][0]
-        speed_idx.append(idx)
-    trace['original_to_behav_idx'] = np.array(speed_idx,dtype = np.int64)
-    trace['behav_speed'] = cp.deepcopy(trace['behav_speed_original'][trace['original_to_behav_idx']])
+    # behav_speed
+    behav_speed = calc_speed(behav_positions = trace['correct_pos']/10, behav_time = trace['correct_time'])
+    smooth_speed = uniform_smooth_speed(behav_speed, **speed_sm_args)
+    trace['behav_speed'] = behav_speed
+    trace['smooth_speed'] = smooth_speed
     
     plt.figure(figsize = (8,6))
     MAX_X = (np.nanmax(trace['behav_speed']) // 5 + 1) * 5

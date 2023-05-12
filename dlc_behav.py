@@ -10,61 +10,10 @@ import cv2
 import copy as cp
 import pickle
 from mylib.maze_utils3 import mkdir, plot_trajactory, Delete_NAN, Add_NAN, Clear_Axes, DrawMazeProfile
-from mylib.preprocessing_behav import plot_trajactory_comparison, clean_data, get_meanframe, calc_speed, PolygonDrawer, Circulate_Checking
+from mylib.preprocessing_behav import plot_trajactory_comparison, clean_data, get_meanframe, calc_speed
+from mylib.preprocessing_behav import PolygonDrawer, Circulate_Checking, uniform_smooth_speed
 from mylib.maze_utils3 import position_transform, location_to_idx, occu_time_transform, DLC_Concatenate
 from mylib.maze_graph import Father2SonGraph
-
-def uniform_smooth_range(i: int, T: int, window: int):
-    """uniform_smooth_range _summary_
-
-    Generation of the range of smoothing.
-
-    Parameters
-    ----------
-    i : int
-        the current frame.
-    T : int
-        the total number of frames.
-    window : int
-        the length of window.
-    """
-    if window%2 == 1:
-        left = i - int((window-1)/2) if i - int((window-1)/2) >= 0 else 0
-        right = i + int((window-1)/2) if i + int((window-1)/2) < T - 1 else T - 1
-        return left, right
-    elif window%2 == 0:
-        left = i - int(window/2) + 1 if i - int(window/2) + 1 >= 0 else 0
-        right = i + int(window/2) if i + int(window/2) < T - 1 else T - 1
-        return left, right
-    else:
-        raise ValueError(f"{window} is invalid value for window.")
-
-def uniform_smooth_speed(speed: np.ndarray, window: int = 30) -> np.ndarray:
-    """uniform_smooth_speed _summary_
-
-    Smooth the speed with a uniform window.
-
-    Parameters
-    ----------
-    speed : np.ndarray
-        the speed to be smoothed
-    window : int, optional
-        smooth window length, by default 30
-
-    Returns
-    -------
-    np.ndarray
-        the smoothed speed
-    """
-    T = speed.shape[0]
-    M = np.zeros((T, T), dtype=np.float64) # Smooth matrix
-    
-    for i in range(T):
-        left, right = uniform_smooth_range(i, T, window=window)
-        idx = np.arange(left, right+1)
-        M[i, idx] = 1/len(idx)
-    
-    return np.dot(M, speed)
 
 
 def read_time_stamp(file_dir: str, key_word: str = 'Time Stamp (ms)') -> np.ndarray:

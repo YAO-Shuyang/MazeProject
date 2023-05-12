@@ -1,24 +1,24 @@
 from mylib.preprocessing_behav import *
 from mylib.preprocessing_ms import *
 from mylib.Interfaces import *
-from matplotlib.pyplot import MultipleLocator
 import seaborn as sns
 import scipy.io
 from mylib.Interfaces import FiringRateProcess_Interface, SpatialInformation_Interface, LearningCurve_Interface, PlaceFieldNumber_Interface, PlaceCellPercentage_Interface, NeuralDecodingResults_Interface, PeakDistributionDensity_Interface
 
-figpath = 'F:\YSY\FinalResults'
-figdata = 'F:\YSY\FigData'
+figpath = 'E:\Data\FinalResults'
+figdata = 'E:\Data\FigData'
 
-CM_path = 'G:\YSY\Cross_maze'
-SM_path = 'G:\YSY\Simple_maze'
+CM_path = 'E:\Data\Cross_maze'
+CM_path2 = 'E:\Data\Cross_maze2'
+SM_path = 'E:\Data\Simple_maze'
 f1 = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'calcium')
 f1_behav = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'behavior')
 f2 = pd.read_excel(os.path.join(SM_path,'simple_maze_paradigm.xlsx'), sheet_name = 'calcium')
 
 f_CellReg = pd.read_excel(os.path.join(CM_path, 'cell_reg_path.xlsx'), sheet_name = 'CellRegPath')
 
-cellReg_95_maze1 = r'G:\YSY\Cross_maze\11095\Maze1-footprint\Cell_reg\cellRegistered.mat'
-cellReg_95_maze2 = r'G:\YSY\Cross_maze\11095\Maze2-footprint\Cell_reg\cellRegistered.mat'
+cellReg_95_maze1 = r'E:\Data\Cross_maze\11095\Maze1-footprint\Cell_reg\cellRegistered.mat'
+cellReg_95_maze2 = r'E:\Data\Cross_maze\11095\Maze2-footprint\Cell_reg\cellRegistered.mat'
 order_95_maze1 = np.array([], dtype = np.int64)
 marker_list = ['o','s','^','*','+','x', 'p','1','v','D','h','p']
 
