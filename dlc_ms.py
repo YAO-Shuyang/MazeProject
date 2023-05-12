@@ -10,7 +10,7 @@ import pandas as pd
 import scipy.stats
 from mylib.preprocessing_ms import plot_split_trajactory, Delete_InterLapSpike, Generate_SilentNeuron, calc_ratemap, place_field
 from mylib.preprocessing_ms import shuffle_test, RateMap, QuarterMap, OldMap, SimplePeakCurve, TraceMap, LocTimeCurve, PVCorrelationMap
-from mylib.preprocessing_ms import CrossLapsCorrelation, OldMapSplit, FiringRateProcess, spike_filtered_by_speed, plot_spike_monitor
+from mylib.preprocessing_ms import CrossLapsCorrelation, OldMapSplit, FiringRateProcess, calc_ms_speed, plot_spike_monitor
 from mylib.preprocessing_ms import half_half_correlation, odd_even_correlation, coverage_curve
 from mylib.maze_utils3 import SpikeType, SpikeNodes, SmoothMatrix, mkdir
 
@@ -72,22 +72,38 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, v_thre: float = 2.
                 behav_time = trace['correct_time'], behav_nodes = trace['correct_nodes'])
 
     # Filter the speed
-    ms_speed, Spikes_original = spike_filtered_by_speed(trace['smooth_speed'], trace['correct_time'], Spikes_original_raw, ms_time, speed_thre=v_thre) # thre = 2.5 cm/s
-    trace['ms_speed'] = ms_speed
-
-    spike_num_mon2 = np.nansum(Spikes_original, axis = 1)
+    ms_speed = calc_ms_speed(behav_speed=trace['smooth_speed'], behav_time=trace['correct_time'], 
+                             Spikes = Spikes_original_raw, ms_time=ms_time)
 
     # Delete NAN value in spike nodes
+    print("      - Delete NAN values in data.")
     idx = np.where(np.isnan(spike_nodes_original) == False)[0]
-    Spikes = cp.deepcopy(Spikes_original[:,idx])
+    Spikes = cp.deepcopy(Spikes_original_raw[:,idx])
     spike_nodes = cp.deepcopy(spike_nodes_original[idx])
     ms_time_behav = cp.deepcopy(ms_time[idx])
     ms_speed_behav = cp.deepcopy(ms_speed[idx])
+    dt = np.append(np.ediff1d(ms_time_behav), 33)
+    dt[np.where(dt >= 100)[0]] = 100
+    
+    # Filter the speed
+    speed_thre = 2.5 # cm/s
+    print(f"      - Filter spikes with speed {speed_thre} cm/s.")
+    spf_idx = np.where(ms_speed_behav >= speed_thre)[0]
+    spf_results = [ms_speed_behav.shape[0], spf_idx.shape[0]]
+    print(f"        {spf_results[0]} frames -> {spf_results[1]} frames.")
+    print(f"        Deletion rate: {round(spf_results[1]/spf_results[0]*100, 2)}%")
+    print(f"        Remain rate: {round(100 - spf_results[1]/spf_results[0]*100, 2)}%")
+    ms_time_behav = ms_time_behav[spf_idx]
+    Spikes = Spikes[:, spf_idx]
+    spike_nodes = spike_nodes[spf_idx]
+    ms_speed_behav = ms_speed_behav[spf_idx]
+    dt = dt[spf_idx]
+    spike_num_mon2 = np.nansum(Spikes, axis = 1)
 
     # Delete InterLap Spikes
+    print("      - Delete the inter-lap spikes.")
     Spikes, spike_nodes, ms_time_behav, ms_speed_behav = Delete_InterLapSpike(behav_time = trace['correct_time'], ms_time = ms_time_behav, ms_speed=ms_speed_behav, Spikes = Spikes, spike_nodes = spike_nodes,
                                                               behavior_paradigm = behavior_paradigm, trace = trace)
-    trace['ms_speed_behav'] = ms_speed_behav
     n_neuron = Spikes.shape[0]
     spike_num_mon3 = np.nansum(Spikes, axis = 1)
 
@@ -95,8 +111,6 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, v_thre: float = 2.
 
     print("    C. Calculating firing rate for each neuron and identified their place fields (those areas which firing rate >= 50% peak rate)")
     # Set occu_time <= 50ms spatial bins as nan to avoid too big firing rate
-    dt = np.append(np.ediff1d(ms_time_behav),33)
-    dt[np.where(dt >= 100)[0]] = 100
     _nbins = 2304
     _coords_range = [0, _nbins +0.0001 ]
 
@@ -106,14 +120,14 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, v_thre: float = 2.
             bins=_nbins,
             statistic="sum",
             range=_coords_range)
-    trace['occu_time'] = cp.deepcopy(occu_time)
 
     # Generate silent neuron
     SilentNeuron = Generate_SilentNeuron(Spikes = Spikes, threshold = 30)
     print('       These neurons have spikes less than 30:', SilentNeuron)
     # Calculating firing rate
     Ms = SmoothMatrix(maze_type = maze_type, sigma = 2, _range = 7, nx = 48)
-    rate_map_all, rate_map_clear, smooth_map_all, nanPos = calc_ratemap(Spikes = Spikes, spike_nodes = spike_nodes, _nbins = 48*48, occu_time = occu_time, Ms = Ms, is_silent = SilentNeuron)
+    rate_map_all, rate_map_clear, smooth_map_all, nanPos = calc_ratemap(Spikes = Spikes, spike_nodes = spike_nodes, 
+                                                                        _nbins = 48*48, occu_time = occu_time, Ms = Ms, is_silent = SilentNeuron)
 
     # Generate place field
     place_field_all = place_field(n_neuron = n_neuron, smooth_map_all = smooth_map_all, maze_type = maze_type)
@@ -125,12 +139,10 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, v_thre: float = 2.
     t_nodes_frac = occu_time / 1000 / (t_total+ 1E-6)
 
     # Save all variables in a dict
-    trace_ms = {'Spikes_original':Spikes_original, 'spike_nodes_original':spike_nodes_original,
-                'RawTraces':RawTraces,'DeconvSignal':DeconvSignal,'ms_time':ms_time, 'Spikes':Spikes, 
-                'spike_nodes':spike_nodes, 'ms_time_behav':ms_time_behav, 'n_neuron':n_neuron, 
-                't_total':t_total, 't_nodes_frac':t_nodes_frac, 'SilentNeuron':SilentNeuron, 
-                'rate_map_all':rate_map_all, 'rate_map_clear':rate_map_clear, 'smooth_map_all':smooth_map_all, 
-                'nanPos':nanPos, 'Ms':Ms, 'place_field_all':place_field_all, 'ms_folder':folder}
+    trace_ms = {'Spikes_original':Spikes_original_raw, 'spike_nodes_original':spike_nodes_original, 'ms_speed_original': ms_speed, 'RawTraces':RawTraces,'DeconvSignal':DeconvSignal,
+                'ms_time':ms_time, 'Spikes':Spikes, 'spike_nodes':spike_nodes, 'ms_time_behav':ms_time_behav, 'ms_speed_behav':ms_speed_behav, 'n_neuron':n_neuron, 
+                't_total':t_total, 'dt': dt, 't_nodes_frac':t_nodes_frac, 'SilentNeuron':SilentNeuron, 'rate_map_all':rate_map_all, 'rate_map_clear':rate_map_clear, 
+                'smooth_map_all':smooth_map_all, 'nanPos':nanPos, 'Ms':Ms, 'place_field_all':place_field_all, 'ms_folder':folder, 'occu_time_spf': occu_time}
     trace.update(trace_ms)
 
 
@@ -143,23 +155,23 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, v_thre: float = 2.
     
     print("    Plotting:")
     print("      1. Ratemap")
-    RateMap(trace)
+    #RateMap(trace)
     
-    print("      2. Quarter_map")
+    print("      2. Tracemap")
+    #TraceMap(trace)      
+      
+    print("      3. Quarter_map")
     trace = QuarterMap(trace, isDraw = False)
-
-    print("      3. Tracemap")
-    TraceMap(trace)    
     
     print("      4. Oldmap")
-    trace = OldMap(trace)
+    trace = OldMap(trace, isDraw=False)
     
     print("      5. PeakCurve")
     mkdir(os.path.join(trace['p'], 'PeakCurve'))
     SimplePeakCurve(trace, file_name = 'PeakCurve', save_loc = os.path.join(trace['p'], 'PeakCurve'))
     
     print("      6. Combining tracemap, rate map(48 x 48), old map(12 x 12) and quarter map(24 x 24)")
-    #CombineMap(trace)
+    CombineMap(trace)
     
     if trace['maze_type'] != 0:
         # LocTimeCurve
