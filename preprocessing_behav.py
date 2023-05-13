@@ -271,7 +271,7 @@ def Circulate_Checking(trace, circulate_time = 4):
     
     print('Cross-Wall events checking for '+str(is_stop)+' times and the final length of frames is: ',length)
     return trace
-
+"""Being obsolete
 def TrajectoryInterpolated(trace, P = None):
     if 'correct_pos' not in trace.keys():
         print("    Warning! you should run Cross-Wall correction function (TrajactoryCorrection) first!")
@@ -329,7 +329,7 @@ def TrajectoryInterpolated(trace, P = None):
     trace['interpolated_nodes'] = interpolated_nodes
     trace['interpolated_time'] = interpolated_time
     return trace
-
+"""
 def plot_trajactory_comparison(pos_bef = None, pos_aft = None, save_loc = None, file_name = None, is_show = False, 
                                is_position_transform = False, is_node = False, maze_type = 1):
     
@@ -410,7 +410,7 @@ def clean_data(behav_positions = None, behav_time = None, maze_type = 1, v_thre:
     return  behav_positions, behav_time
 
 # -------------------------------------------------------------------------------------------------------------------------------------
-
+""" Obsolete
 with open(r'F:\YSY\Simulation_pc\decoder_DMatrix.pkl', 'rb') as handle:
     D_Matrice = pickle.load(handle)
 
@@ -423,7 +423,7 @@ def P_Matrice():
         P2 = pickle.load(handle)
     print("    Path Matrix P1 is loaded successful! ")
     return P1, P2
-
+"""
 def LocomotionDirection(check_node = 1, targ_node = 1, maze_type = 1, nx = 48):
     if nx == 12:
         D = D_Matrice[6+maze_type] / nx * 12
@@ -659,6 +659,7 @@ def run_all_mice(mylist: list, behavior_paradigm = 'CrossMaze', P = None, cam_de
     
         # Interpolate values
 
+        """
         trace = TrajectoryInterpolated(trace, P = P)
     
         # Check the effect of cross-wall correction
@@ -670,16 +671,18 @@ def run_all_mice(mylist: list, behavior_paradigm = 'CrossMaze', P = None, cam_de
         plot_trajactory_comparison(trace['correct_nodes'], trace['interpolated_nodes'], is_node = True, 
                                    save_loc = p_behav, file_name = 'Interpolated-Correction_Nodes', maze_type = maze_type)
         print("    Figure 10 has done.")
+        """
 
     # For open field, nothing need to do. ------------------------------------------------------------------------------------
     elif maze_type == 0:
         trace['correct_pos'] = cp.deepcopy(trace['processed_pos_new'])
         trace['correct_nodes'] = cp.deepcopy(trace['behav_nodes'])
         trace['correct_time'] = cp.deepcopy(trace['behav_time'])
+        """
         trace['interpolated_pos'] = cp.deepcopy(trace['processed_pos_new'])
         trace['interpolated_nodes'] = cp.deepcopy(trace['behav_nodes'])
         trace['interpolated_time'] = cp.deepcopy(trace['behav_time'])
-
+        """
     # =======================================================================================================================
     # calculating ratemap ----------------------------------------------------------------------------------------------------
     pos, correct_time, behav_nodes = Delete_NAN(trace['correct_pos'], trace['correct_time'], trace['correct_nodes'])
@@ -754,7 +757,7 @@ def run_all_mice(mylist: list, behavior_paradigm = 'CrossMaze', P = None, cam_de
 if __name__ == '__main__':
     totalpath = "G:\YSY\Reverse_maze"
     print("Initiate key matrix that will be used in interpolated algorithm. It'll take tens of seconds.")
-    P1, P2 = P_Matrice()
+    #P1, P2 = P_Matrice()
     file = pd.read_excel(os.path.join(totalpath,"Back_and_Forth_metadata_time.xlsx"), sheet_name = "behavior")
     
     i = 1
@@ -763,6 +766,6 @@ if __name__ == '__main__':
           +", maze type "+str(int(file['maze_type'][i]))+"............................................................")
     mylist = [str(int(file['date'][i])), str(int(file['MiceID'][i])), str(file['recording_folder'][i]), int(file['training_day'][i]),
               int(file['maze_type'][i])]
-    P = P1 if file['maze_type'][i] == 1 else P2
-    run_all_mice(mylist, behavior_paradigm = 'ReverseMaze', P = P)
+    #P = P1 if file['maze_type'][i] == 1 else P2
+    run_all_mice(mylist, behavior_paradigm = 'ReverseMaze')#, P = P)
     print("Done.",end='\n\n\n')

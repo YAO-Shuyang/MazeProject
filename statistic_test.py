@@ -8,17 +8,17 @@ from mylib.Interfaces import FiringRateProcess_Interface, SpatialInformation_Int
 figpath = 'E:\Data\FinalResults'
 figdata = 'E:\Data\FigData'
 
-CM_path = 'E:\Data\Cross_maze'
+CM_path = 'E:\Data\CrossMazeBackUp'
 CM_path2 = 'E:\Data\Cross_maze2'
-SM_path = 'E:\Data\Simple_maze'
+#SM_path = 'E:\Data\Simple_maze'
 f1 = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'calcium')
 f1_behav = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'behavior')
-f2 = pd.read_excel(os.path.join(SM_path,'simple_maze_paradigm.xlsx'), sheet_name = 'calcium')
+#f2 = pd.read_excel(os.path.join(SM_path,'simple_maze_paradigm.xlsx'), sheet_name = 'calcium')
 
-f_CellReg = pd.read_excel(os.path.join(CM_path, 'cell_reg_path.xlsx'), sheet_name = 'CellRegPath')
+#f_CellReg = pd.read_excel(os.path.join(CM_path, 'cell_reg_path.xlsx'), sheet_name = 'CellRegPath')
 
-cellReg_95_maze1 = r'E:\Data\Cross_maze\11095\Maze1-footprint\Cell_reg\cellRegistered.mat'
-cellReg_95_maze2 = r'E:\Data\Cross_maze\11095\Maze2-footprint\Cell_reg\cellRegistered.mat'
+#cellReg_95_maze1 = r'E:\Data\Cross_maze\11095\Maze1-footprint\Cell_reg\cellRegistered.mat'
+#cellReg_95_maze2 = r'E:\Data\Cross_maze\11095\Maze2-footprint\Cell_reg\cellRegistered.mat'
 order_95_maze1 = np.array([], dtype = np.int64)
 marker_list = ['o','s','^','*','+','x', 'p','1','v','D','h','p']
 
@@ -254,7 +254,7 @@ def Add_NAN_Line(ax = None, incorrect_map = None, is_single = False, linewidth =
 
 
 # Generate data about some key variables. Generate all data from a behavior paragidm.
-def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f2, function = None, file_name:str = 'default', behavior_paradigm:str = 'CrossMaze', 
+def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function = None, file_name:str = 'default', behavior_paradigm:str = 'CrossMaze', 
                        legal_maze_type:list = [0,1,2], f_member: list|None = None, file_idx:np.ndarray|list = None, func_kwgs:dict = {}):
     '''
     Author: YAO Shuyang
@@ -370,7 +370,7 @@ def DivideData(data:dict, index:list|np.ndarray, keys:list[str] = None):
     return subGroup
 
 
-def plot_diagonal_figure(f:pd.DataFrame = f_CellReg, row:int = None, map1:int = 1, map2:int = 2, save_loc:str = None, f_trace:pd.DataFrame = f1, function = None,
+def plot_diagonal_figure(f:pd.DataFrame = None, row:int = None, map1:int = 1, map2:int = 2, save_loc:str = None, f_trace:pd.DataFrame = f1, function = None,
                          residents:float = 5, add_noise:bool = False, noise_amplitude:float = 1., **kwargs):
     '''
     Author: YAO Shuyang
@@ -403,7 +403,7 @@ def plot_diagonal_figure(f:pd.DataFrame = f_CellReg, row:int = None, map1:int = 
     if os.path.exists(f['Cell Reg Path'][row]):
         index_map = Read_and_Sort_IndexMap(path = f_CellReg['Cell Reg Path'][row], occur_num = 2, align_type = 'cross_session')
     else:
-        print(f_CellReg['Cell Reg Path'][row], 'is not exist!')
+        print(f['Cell Reg Path'][row], 'is not exist!')
         return False, None
     
     # Select Cell Pairs that Both exist in index_map in map1 and map2
@@ -489,7 +489,7 @@ def plot_diagonal_figure(f:pd.DataFrame = f_CellReg, row:int = None, map1:int = 
         return True, classified_data
 
 
-def ExclusivePeakRate_Interface(trace:dict = {}, spike_threshold:int = 30, variable_names:str = None, f_CellReg:pd.DataFrame = f_CellReg, f_trace:pd.DataFrame = f1):
+def ExclusivePeakRate_Interface(trace:dict = {}, spike_threshold:int = 30, variable_names:str = None, f_CellReg:pd.DataFrame = None, f_trace:pd.DataFrame = f1):
     '''
     Parameters
     ----------
