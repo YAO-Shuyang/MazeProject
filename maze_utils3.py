@@ -16,6 +16,7 @@ import shutil
 import seaborn as sns
 import pandas as pd
 import matplotlib
+from matplotlib.axes import Axes
 from mylib.AssertError import KeyWordErrorCheck, VariablesInputErrorCheck, ReportErrorLoc, ValueErrorCheck
 import warnings
 
@@ -121,7 +122,49 @@ def DrawMazeProfile(maze_type = 1,axes = None, color = 'white',linewidth = 1, nx
         for i in range(h.shape[1]):
             if h[j,i] == 1:
                 axes.plot([i*l-0.5, (i+1)*l-0.5],[j*l-0.5,j*l-0.5], color = color, linewidth = linewidth)
+                
+    axes.axis([-1, nx, -1, nx])
     return axes
+
+def MazeSegments(maze_type: int = 1):
+    maze_seg = {}
+    DP = DecisionPoint1_Linear if maze_type == 1 else DecisionPoint2_Linear
+    graph = maze1_graph if maze_type == 1 else maze2_graph
+    Path = cp.deepcopy(DP)
+    if DP[0] != 1:
+        Path = np.concatenate([np.array([1]), Path])
+    if DP[-1] != 144:
+        Path = np.concatenate([Path, np.array([144])])
+
+    seg_num = 1
+    for i in range(len(Path)-1):
+        if Path[i+1] not in graph[Path[i]]:
+            p = DFS(start=Path[i], goal=Path[i+1], maze_type=maze_type, nx = 12)
+            maze_seg[seg_num] = np.array(p[1:-1])
+            seg_num += 1
+    
+    return maze_seg
+        
+def DrawMazeTrack(ax: Axes, maze_type: int, color: str = 'black', linewidth: float = 1., 
+                  cmap: str = 'rainbow', text_args: dict = {'ha': 'center', 'va': 'center'}, 
+                  fill_args: dict = {'alpha':0.5, 'color': 'gray'}, **kwargs):
+    maze_seg = MazeSegments(maze_type=maze_type)
+    DP = DecisionPoint1 if maze_type == 1 else DecisionPoint2
+
+    maze_value = np.zeros(144, dtype = np.float64)*np.nan
+    for k in maze_seg.keys():
+        maze_value[maze_seg[k]-1] = k
+    
+    for p in DP:
+        x, y = (p-1)%12, (p-1)//12
+        ax.fill_betweenx(y = np.linspace(y-0.5,y+0.5,2), x1 = x-0.5, x2 = x+0.5, **fill_args)
+        ax.text(x, y, s = str(p), **text_args)
+    
+    DrawMazeProfile(axes=ax, maze_type=maze_type, color=color, linewidth=linewidth, nx = 12)
+    ax.imshow(np.reshape(maze_value, [12,12]), cmap=cmap, **kwargs)
+    return ax, len(maze_seg.keys())
+    
+        
 
 # make up dir
 def mkdir(path:str):
@@ -419,8 +462,8 @@ def DateTime(is_print:bool = False):
     else:
         return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
 
-def Clear_Axes(axes = None,close_spines:list = ['top','bottom','left','right'],
-               xticks:list|np.ndarray = [], yticks:list|np.ndarray = [], ifxticks:bool = False, ifyticks:bool = False):
+def Clear_Axes(axes: Axes = None,close_spines:list = ['top','bottom','left','right'],
+               xticks:list|np.ndarray = [], yticks:list|np.ndarray = [], ifxticks:bool = False, ifyticks:bool = False) -> Axes:
     '''
     Author: YAO Shuyang
     Date: Jan 25th, 2022 (Modified) 21:44 UTC +8
@@ -1088,20 +1131,23 @@ def ColorBarsTicks(peak_rate:float = 10, intervals:float = 1, is_auto:bool = Fal
     return ticks
 
 # plot shadows on some area.
-def ax_shadow(ax = None, x1_list = np.array([]), x2_list = np.array([]), y = np.array([]), palette = 'muted', alpha = 0.5, **kwargs):
+def ax_shadow(ax = None, x1_list = np.array([]), x2_list = np.array([]), y = np.array([]), 
+              colors: list = [], palette = 'muted', alpha = 0.5, **kwargs):
     if len(x1_list) != len(x2_list):
-        print("Error! The length of x1_list is not equal to the length of x2_list.")
+        warnings.warn("Error! The length of x1_list is not equal to the length of x2_list.")
         return ax
 
     # Number of shadow areas.
     areas_num = len(x1_list)
     # length (or density) of y axis points.
     y_len = len(y)
-    colors = sns.color_palette(palette = palette, n_colors = areas_num)
+    if colors is None:
+        colors = sns.color_palette(palette = palette, n_colors = areas_num)
 
     for i in range(areas_num):
         # plot shadows areas.
-        ax.fill_betweenx(y = y, x1 = np.repeat(x1_list[i], y_len), x2 = np.repeat(x2_list[i], y_len), color = colors[i], alpha = alpha, **kwargs)
+        ax.fill_betweenx(y = y, x1 = np.repeat(x1_list[i], y_len), x2 = np.repeat(x2_list[i], y_len), 
+                         color = colors[i], alpha = alpha, **kwargs)
 
     return ax
 

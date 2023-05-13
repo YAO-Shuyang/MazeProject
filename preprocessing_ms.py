@@ -647,7 +647,7 @@ def CombineMap(trace):
                 Time_idx[j] = time[-1]
             
         b = axes[0,0].plot(processed_pos_new[Time_idx,0]/20-0.5, processed_pos_new[Time_idx,1]/20-0.5,'o',
-                            color = 'black',markersize = 1,zorder = 2)
+                            color = 'black',markersize = 2,zorder = 2)
         color = 'red' if trace['is_placecell'][k] == 1 else 'black'
         axes[0,0].set_title(f"Mice {trace['MiceID']}, Cell {k+1}", color = color, fontsize = 16)
         
@@ -1037,7 +1037,7 @@ def CrossLapsCorrelation(trace, behavior_paradigm = 'CrossMaze'):
 
     return trace
 
-def Delete_InterLapSpike(behav_time, ms_time, ms_speed, Spikes, spike_nodes, trace = None, 
+def Delete_InterLapSpike(behav_time, ms_time, ms_speed, Spikes, spike_nodes, dt: np.ndarray, trace = None, 
                          behavior_paradigm = 'CrossMaze'):
     beg_idx, end_idx = LapSplit(trace, behavior_paradigm = behavior_paradigm) # Get Split TimeIndex Point
     lap = len(beg_idx) # Number of inter-laps
@@ -1048,7 +1048,7 @@ def Delete_InterLapSpike(behav_time, ms_time, ms_speed, Spikes, spike_nodes, tra
         idx = np.where((ms_time >= behav_time[beg_idx[k]])&(ms_time <= behav_time[end_idx[k]]))[0]
         IDX = np.concatenate([IDX, idx])
 
-    return cp.deepcopy(Spikes[:,IDX]), cp.deepcopy(spike_nodes[IDX]), cp.deepcopy(ms_time[IDX]), cp.deepcopy(ms_speed[IDX])
+    return cp.deepcopy(Spikes[:,IDX]), cp.deepcopy(spike_nodes[IDX]), cp.deepcopy(ms_time[IDX]), cp.deepcopy(ms_speed[IDX]), cp.deepcopy(dt[IDX])
 
 def SimplePeakCurve(trace, is_ExistAxes = False, is_GetAxes = False, file_name = None, save_loc = None):
     maze_type = trace['maze_type']
@@ -1267,7 +1267,7 @@ def half_half_correlation(trace):
     return trace
 
 def calc_ms_speed(behav_speed: np.ndarray, behav_time: np.ndarray, 
-                  Spikes: np.ndarray, ms_time: np.ndarray, 
+                  ms_time: np.ndarray, 
                   time_thre: float = 500) -> np.ndarray:
     """calc_ms_speed 
     Calculate the speed of mice according with the 
@@ -1293,7 +1293,6 @@ def calc_ms_speed(behav_speed: np.ndarray, behav_time: np.ndarray,
         with the same shape as behav_time.
     """
     assert behav_speed.shape[0] == behav_time.shape[0]
-    assert ms_time.shape[0] == Spikes.shape[1]
 
     ms_speed = np.zeros_like(ms_time)
     
@@ -1355,8 +1354,133 @@ def coverage_curve(processed_pos, srt = 5, end = 49, save_loc: str or None = Non
 
     return coverage
 
+def field_arange(trace, is_pc: bool = True):
+    num = np.zeros(144, dtype=np.int64)
+    n = trace['n_neuron']
+    place_field_all = trace['place_field_all']
+    
+    for i in range(n):
+        if is_pc == False or trace['is_placecell'][i] == 1:
+            fields = np.array([])
+            for k in place_field_all[i].keys():
+                fields = np.concatenate([fields, place_field_all[i][k]])
+
+            fields = fields.astype(np.int64)
+            num[S2F[fields-1]-1] += 1
+        
+    return num
+
+def plot_field_arange(trace: dict, save_loc:str = None, file_name: str = 'place_field_arrangement',
+                      is_showbehavior = False):
+    num_pc = field_arange(trace, is_pc=True)
+    prop_pc = num_pc / np.sum(num_pc) # proportion
+
+    num_ac = field_arange(trace, is_pc=False)
+    prop_ac = num_ac / np.sum(num_ac) # proportion    
+
+    mkdir(save_loc)
+    if trace['maze_type'] == 0:
+        return
+    
+    else:
+        length = len(CorrectPath_maze_1) if trace['maze_type'] == 1 else len(CorrectPath_maze_2)
+        x_order = xorder1-1 if trace['maze_type'] == 1 else xorder2-1
+        DP = DecisionPoint1 if trace['maze_type'] == 1 else DecisionPoint2 # Decision point
+        x_l, x_r, dp_ord = [], [], []
+        for p in DP:
+            idx = np.where(x_order == p-1)[0][0]
+            x_l.append(idx+0.5)
+            x_r.append(idx+1.5)
+            dp_ord.append(idx+1)
+            
+        x_r.sort()
+        x_l.sort()
+               
+        prop_ord_ac = prop_ac[x_order]*100
+        prop_ord_pc = prop_pc[x_order]*100
+        occu_old = occu_time_transform(trace['occu_time'], nx = 12)
+        occu_rate = occu_old/np.nansum(occu_old)*100
+        occu_rate_ord = occu_rate[x_order]
+        MAX = np.nanmax(np.concatenate([prop_ord_ac, prop_ord_pc]))
+        
+        fig, axes = plt.subplots(nrows = 1, ncols = 2, figsize = (11,2), gridspec_kw={'width_ratios': [3, 8]})
+        # plot maze profile
+        axm = Clear_Axes(axes[0])
+        axm.set_aspect('equal')
+        axm, seg_num = DrawMazeTrack(ax = axm, maze_type=trace['maze_type'], linewidth=1, 
+                            text_args={'ha': 'center', 'va':'center', 'fontsize':4},
+                            fill_args={'alpha':0.5, 'color': 'gray', 'ec': None},)
+        axm.invert_yaxis()
+        
+        
+        ax = Clear_Axes(axes[1], close_spines=['top', 'right'], ifxticks=True, ifyticks=True)
+        # All cells
+        """
+        ax.plot(np.linspace(1, length, length), prop_ord_ac[0:length], ls='-.', marker = 's', markersize = 2, 
+                markerfacecolor = 'brown',markeredgecolor = 'brown', label = 'All cells, c.p.', linewidth = 0.7)
+        ax.bar(np.linspace(length+1, 144, 144 - length), prop_ord_ac[length:144], width = 0.8, label = 'All cells, i.p.', alpha = 0.5)
+        """
+                
+        # Place cells 
+        c = ax.plot(np.linspace(1, length, length), prop_ord_pc[0:length], marker = '^', markersize = 1.5, 
+                    markerfacecolor = 'black',markeredgecolor = 'black', label = 'Place cells, c.p.', linewidth = 0.7)
+        d = ax.bar(np.linspace(length+1, 144, 144 - length), prop_ord_pc[length:144], width = 0.8, 
+                   label = 'Place cells, i.p.', alpha = 0.5)
+
+        # plot behavior or not
+        if is_showbehavior:
+            ay=Clear_Axes(ax.twinx(), close_spines=['top'])
+            a = ay.plot(np.linspace(1, 144, 144), occu_rate_ord, marker = 'x', markersize = 1.5, color = 'purple',
+                    markerfacecolor = 'brown',markeredgecolor = 'brown', label = 'occu. prop.', linewidth = 0.7)
+            ay.set_ylabel("Occupation\nProportion / %")
+            ay.set_yticks(ColorBarsTicks(peak_rate=round(np.nanmax(occu_rate_ord), 1), is_auto=True, tick_number=4))
+            ay.axis([0,145,0, round(np.nanmax(occu_rate_ord), 1)*1.1])
+        
+            legs = a + c
+            legs.append(d)
+            labs = [l.get_label() for l in legs]
+            ax.legend(legs, labs, facecolor = 'white', edgecolor = 'white', loc='upper left', bbox_to_anchor=(1.1, 1), 
+                      fontsize = 8, title_fontsize = 8, ncol = 1, title = 'Cell Type') 
+        else:
+            ax.legend(facecolor = 'white', edgecolor = 'white', loc='upper left', bbox_to_anchor=(1, 1), 
+                      fontsize = 8, title_fontsize = 8, ncol = 1, title = 'Cell Type')
+        
+        # Decision area text label
+        ax_shadow(ax=ax, x1_list=x_l, x2_list=x_r, y = np.linspace(0, MAX*1.1, 10000), 
+                  colors = np.repeat('orange', len(DP)), edgecolor = None)       
+        for d in range(len(dp_ord)):
+            ax.text(dp_ord[d], MAX*1.11, str(DP[d]), ha = 'center', fontsize = 3)
+            
+        # plot inter decision points area
+        k = 0
+        cmap = matplotlib.colormaps['rainbow']
+        colors = cmap(np.linspace(0, 1, seg_num))
+        for i in range(len(x_l)-1):
+            if x_l[i+1] == x_r[i]:
+                continue
+            ax.fill_between(x = np.linspace(x_r[i], x_l[i+1], 2), y1 = MAX*1.05, y2 = MAX*1.1, ec = None, color = colors[k])
+            k += 1
+        
+        # Adjust ax object            
+        ax.axvline(length+0.5, ls='--', color = 'black')        
+        ax.set_xlabel(f"Maze ID (Linearized) [Maze {trace['maze_type']} - Mouse {trace['MiceID']} - Date {trace['date']} - {np.nansum(trace['is_placecell'])} Cells]")
+        ax.set_ylabel("Field Proportions / %")
+        ax.set_xticks([1, 9, 18, 27, 36, 45, 54, 63, 72, 81, 90, length, 108, 117, 126, 135, 144]) if trace['maze_type'] == 2 else ax.set_xticks([1, 9, 18, 27, 36, 45, 54, 63, 72, 81, 90, 99, length, 117, 126, 135, 144])
+        ax.set_yticks(ColorBarsTicks(peak_rate=round(MAX, 1)))
+        ax.text(length+1, MAX, 'Incorrect\npath', ha = 'left', fontsize = 8, va = 'center')
+        ax.text(length, MAX, 'Correct\npath', ha = 'right', fontsize = 8, va  ='center')
+        ax.axis([0,145,0, MAX*1.1])
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(save_loc, file_name+'.png'), dpi = 1800)
+        plt.savefig(os.path.join(save_loc, file_name+'.svg'), dpi = 1800)
+        plt.close()
+        
+        
+
+
 # ------------------------------------------------------------------------ 主程序 -------------------------------------------------------------------------------------
-def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', **speed_sm_args):
+def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', v_thre: float = 2.5, **speed_sm_args):
     if behavior_paradigm not in ['CrossMaze','ReverseMaze','SimpleMaze','DSPMaze']:
         print("behavior_paradigm ValueError! Only 'CrossMaze','ReverseMaze','SimpleMaze' and 'DSPMaze' are valid value.")
 
@@ -1402,22 +1526,22 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', **spe
 
     print("    B. Calculate putative spikes and correlated location from deconvolved signal traces. Delete spikes that evoked at interlaps gap and those spikes that cannot find it's clear locations.")
     # Calculating Spikes, than delete the interlaps frames
-    Spikes_original_raw = SpikeType(Transients = DeconvSignal, threshold = 3)
-    spike_num_mon1 = np.nansum(Spikes_original_raw, axis = 1) # record temporary spike number
+    Spikes_original = SpikeType(Transients = DeconvSignal, threshold = 3)
+    spike_num_mon1 = np.nansum(Spikes_original, axis = 1) # record temporary spike number
     # Calculating correlated spike nodes
-    spike_nodes_original = SpikeNodes(Spikes = Spikes_original_raw, ms_time = ms_time, 
+    spike_nodes_original = SpikeNodes(Spikes = Spikes_original, ms_time = ms_time, 
                 behav_time = trace['correct_time'], behav_nodes = trace['correct_nodes'])
 
     # calc ms speed
     behav_speed = calc_speed(behav_positions = trace['correct_pos']/10, behav_time = trace['correct_time'])
     smooth_speed = uniform_smooth_speed(behav_speed, **speed_sm_args)
     
-    ms_speed = calc_ms_speed(behav_speed=smooth_speed, behav_time=trace['correct_time'], Spikes = Spikes_original_raw, ms_time=ms_time)
+    ms_speed = calc_ms_speed(behav_speed=smooth_speed, behav_time=trace['correct_time'], ms_time=ms_time)
 
     # Delete NAN value in spike nodes
     print("      - Delete NAN values in data.")
     idx = np.where(np.isnan(spike_nodes_original) == False)[0]
-    Spikes = cp.deepcopy(Spikes_original_raw[:,idx])
+    Spikes = cp.deepcopy(Spikes_original[:,idx])
     spike_nodes = cp.deepcopy(spike_nodes_original[idx])
     ms_time_behav = cp.deepcopy(ms_time[idx])
     ms_speed_behav = cp.deepcopy(ms_speed[idx])
@@ -1425,13 +1549,12 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', **spe
     dt[np.where(dt >= 100)[0]] = 100
     
     # Filter the speed (spf: speed filter)
-    speed_thre = 2.5 # cm/s
-    print(f"      - Filter spikes with speed {speed_thre} cm/s.")
-    spf_idx = np.where(ms_speed_behav >= speed_thre)[0]
+    print(f"      - Filter spikes with speed {v_thre} cm/s.")
+    spf_idx = np.where(ms_speed_behav >= v_thre)[0]
     spf_results = [ms_speed_behav.shape[0], spf_idx.shape[0]]
     print(f"        {spf_results[0]} frames -> {spf_results[1]} frames.")
-    print(f"        Deletion rate: {round(spf_results[1]/spf_results[0]*100, 2)}%")
-    print(f"        Remain rate: {round(100 - spf_results[1]/spf_results[0]*100, 2)}%")
+    print(f"        Remain rate: {round(spf_results[1]/spf_results[0]*100, 2)}%")
+    print(f"        Delete rate: {round(100 - spf_results[1]/spf_results[0]*100, 2)}%")
     ms_time_behav = ms_time_behav[spf_idx]
     Spikes = Spikes[:, spf_idx]
     spike_nodes = spike_nodes[spf_idx]
@@ -1441,8 +1564,8 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', **spe
     
     # Delete InterLap Spikes
     print("      - Delete the inter-lap spikes.")
-    Spikes, spike_nodes, ms_time_behav, ms_speed_behav = Delete_InterLapSpike(behav_time = trace['correct_time'], ms_time = ms_time_behav, 
-                                                                              Spikes = Spikes, spike_nodes = spike_nodes,
+    Spikes, spike_nodes, ms_time_behav, ms_speed_behav, dt = Delete_InterLapSpike(behav_time = trace['correct_time'], ms_time = ms_time_behav, 
+                                                                              Spikes = Spikes, spike_nodes = spike_nodes, dt = dt, ms_speed=ms_speed_behav,
                                                                               behavior_paradigm = behavior_paradigm, trace = trace)
     n_neuron = Spikes.shape[0]
     spike_num_mon3 = np.nansum(Spikes, axis = 1)
@@ -1472,6 +1595,7 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', **spe
     # Generate place field
     place_field_all = place_field(n_neuron = n_neuron, smooth_map_all = smooth_map_all, maze_type = trace['maze_type'])
     
+    
     print("    D. Shuffle test for spatial information of each cells to identified place cells. Shuffle method including 1) inter spike intervals(isi), 2) rigid spike shifts, 3) purely random rearrangement of spikes.")
     # total occupation time
     t_total = np.nansum(occu_time)/1000
@@ -1479,15 +1603,15 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', **spe
     t_nodes_frac = occu_time / 1000 / (t_total+ 1E-6)
 
     # Save all variables in a dict
-    trace_ms = {'Spikes_original':Spikes_original_raw, 'spike_nodes_original':spike_nodes_original, 'ms_speed_original': ms_speed, 'RawTraces':RawTraces,'DeconvSignal':DeconvSignal,
+    trace_ms = {'Spikes_original':Spikes_original, 'spike_nodes_original':spike_nodes_original, 'ms_speed_original': ms_speed, 'RawTraces':RawTraces,'DeconvSignal':DeconvSignal,
                 'ms_time':ms_time, 'Spikes':Spikes, 'spike_nodes':spike_nodes, 'ms_time_behav':ms_time_behav, 'ms_speed_behav':ms_speed_behav, 'n_neuron':n_neuron, 
                 't_total':t_total, 'dt': dt, 't_nodes_frac':t_nodes_frac, 'SilentNeuron':SilentNeuron, 'rate_map_all':rate_map_all, 'rate_map_clear':rate_map_clear, 
                 'smooth_map_all':smooth_map_all, 'nanPos':nanPos, 'Ms':Ms, 'place_field_all':place_field_all, 'ms_folder':folder, 'occu_time_spf': occu_time, 'speed_filter_results': spf_results}
     trace.update(trace_ms)
 
-
     # Shuffle test
     trace = shuffle_test(trace, trace['Ms'])
+    plot_field_arange(trace, save_loc=os.path.join(trace['p'], 'PeakCurve'))
 
     path = os.path.join(p,"trace.pkl")
     with open(path, 'wb') as f:
@@ -1550,10 +1674,9 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', **spe
 
 
 if __name__ == '__main__':
-    with open(r'E:\Data\CrossMazeBackUp\11095\20220830\session 3\trace.pkl', 'rb') as handle:
+    with open(r'E:\Data\CrossMazeBackUp\11095\20220830\session 2\trace.pkl', 'rb') as handle:
         trace = pickle.load(handle)
         
-    trace['p'] = r"E:\Data\CrossMazeBackUp\test\11095\20220830\session 3"
-    mkdir(trace['p'])
+    trace['p'] = r"E:\Data\CrossMazeBackUp\test\11095\20220830\session 2"
     
-    RateMap(trace)
+    plot_field_arange(trace, save_loc=os.path.join(trace['p'], 'PeakCurve'), is_showbehavior=True)
