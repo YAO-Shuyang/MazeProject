@@ -126,39 +126,52 @@ def DrawMazeProfile(maze_type = 1,axes = None, color = 'white',linewidth = 1, nx
     axes.axis([-1, nx, -1, nx])
     return axes
 
-def MazeSegments(maze_type: int = 1):
-    maze_seg = {}
+def MazeSegments(maze_type: int = 1, path_type: str = 'cp'):
     DP = DecisionPoint1_Linear if maze_type == 1 else DecisionPoint2_Linear
-    graph = maze1_graph if maze_type == 1 else maze2_graph
-    Path = cp.deepcopy(DP)
-    if DP[0] != 1:
-        Path = np.concatenate([np.array([1]), Path])
-    if DP[-1] != 144:
-        Path = np.concatenate([Path, np.array([144])])
-
-    seg_num = 1
-    for i in range(len(Path)-1):
-        if Path[i+1] not in graph[Path[i]]:
-            p = DFS(start=Path[i], goal=Path[i+1], maze_type=maze_type, nx = 12)
-            maze_seg[seg_num] = np.array(p[1:-1])
-            seg_num += 1
+    maze_seg = {}
     
-    return maze_seg
+    if path_type == 'cp':
+        graph = maze1_graph if maze_type == 1 else maze2_graph
+        Path = cp.deepcopy(DP)
+        if DP[0] != 1:
+            Path = np.concatenate([np.array([1]), Path])
+        if DP[-1] != 144:
+            Path = np.concatenate([Path, np.array([144])])
+
+        seg_num = 1
+        for i in range(len(Path)-1):
+            if Path[i+1] not in graph[Path[i]]:
+                p = DFS(start=Path[i], goal=Path[i+1], maze_type=maze_type, nx = 12)
+                maze_seg[seg_num] = np.array(p[1:-1])
+                seg_num += 1
+        return maze_seg
+    
+    elif path_type == 'ip':
+        WG = DecisionPoint2WrongGraph1 if maze_type == 1 else DecisionPoint2WrongGraph2
+        for i in range(1, len(DP)+1):
+            maze_seg[i] = np.array(WG[DP[i-1]], dtype = np.int64)
+        return maze_seg
+    
+    else:
+        raise ValueError(f"Only 'cp' and 'ip' are valid for parameter path_type, instead of '{path_type}'")
+
         
 def DrawMazeTrack(ax: Axes, maze_type: int, color: str = 'black', linewidth: float = 1., 
                   cmap: str = 'rainbow', text_args: dict = {'ha': 'center', 'va': 'center'}, 
-                  fill_args: dict = {'alpha':0.5, 'color': 'gray'}, **kwargs):
-    maze_seg = MazeSegments(maze_type=maze_type)
-    DP = DecisionPoint1 if maze_type == 1 else DecisionPoint2
-
-    maze_value = np.zeros(144, dtype = np.float64)*np.nan
-    for k in maze_seg.keys():
-        maze_value[maze_seg[k]-1] = k
+                  fill_args: dict = {'alpha':0.5, 'color': 'gray'}, path_type: str = 'cp', 
+                  **kwargs):
     
+    DP = DecisionPoint1 if maze_type == 1 else DecisionPoint2
     for p in DP:
         x, y = (p-1)%12, (p-1)//12
         ax.fill_betweenx(y = np.linspace(y-0.5,y+0.5,2), x1 = x-0.5, x2 = x+0.5, **fill_args)
         ax.text(x, y, s = str(p), **text_args)
+        
+    maze_seg = MazeSegments(maze_type=maze_type, path_type = path_type)
+        
+    maze_value = np.zeros(144, dtype = np.float64)*np.nan
+    for k in maze_seg.keys():
+        maze_value[maze_seg[k]-1] = k
     
     DrawMazeProfile(axes=ax, maze_type=maze_type, color=color, linewidth=linewidth, nx = 12)
     ax.imshow(np.reshape(maze_value, [12,12]), cmap=cmap, **kwargs)

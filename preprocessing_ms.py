@@ -2,6 +2,7 @@ import pandas as pd
 from scipy.io import loadmat
 from mylib.maze_utils3 import *
 from matplotlib_venn import venn3, venn3_circles
+from mylib.dp_analysis import field_arange, plot_field_arange, DecisionPointAnalyzer
 
 #  -------------------------------------------------------- Calsium ----------------------------------------------------------------------------
 # In some cases (for example, mice 10019, date 4_20, neuron 23), there're some 'silent neurons' which has indistinct 
@@ -1353,128 +1354,6 @@ def coverage_curve(processed_pos, srt = 5, end = 49, save_loc: str or None = Non
     plt.close()
 
     return coverage
-
-def field_arange(trace, is_pc: bool = True):
-    num = np.zeros(144, dtype=np.int64)
-    n = trace['n_neuron']
-    place_field_all = trace['place_field_all']
-    
-    for i in range(n):
-        if is_pc == False or trace['is_placecell'][i] == 1:
-            fields = np.array([])
-            for k in place_field_all[i].keys():
-                fields = np.concatenate([fields, place_field_all[i][k]])
-
-            fields = fields.astype(np.int64)
-            num[S2F[fields-1]-1] += 1
-        
-    return num
-
-def plot_field_arange(trace: dict, save_loc:str = None, file_name: str = 'place_field_arrangement',
-                      is_showbehavior = False):
-    num_pc = field_arange(trace, is_pc=True)
-    prop_pc = num_pc / np.sum(num_pc) # proportion
-
-    num_ac = field_arange(trace, is_pc=False)
-    prop_ac = num_ac / np.sum(num_ac) # proportion    
-
-    mkdir(save_loc)
-    if trace['maze_type'] == 0:
-        return
-    
-    else:
-        length = len(CorrectPath_maze_1) if trace['maze_type'] == 1 else len(CorrectPath_maze_2)
-        x_order = xorder1-1 if trace['maze_type'] == 1 else xorder2-1
-        DP = DecisionPoint1 if trace['maze_type'] == 1 else DecisionPoint2 # Decision point
-        x_l, x_r, dp_ord = [], [], []
-        for p in DP:
-            idx = np.where(x_order == p-1)[0][0]
-            x_l.append(idx+0.5)
-            x_r.append(idx+1.5)
-            dp_ord.append(idx+1)
-            
-        x_r.sort()
-        x_l.sort()
-               
-        prop_ord_ac = prop_ac[x_order]*100
-        prop_ord_pc = prop_pc[x_order]*100
-        occu_old = occu_time_transform(trace['occu_time'], nx = 12)
-        occu_rate = occu_old/np.nansum(occu_old)*100
-        occu_rate_ord = occu_rate[x_order]
-        MAX = np.nanmax(np.concatenate([prop_ord_ac, prop_ord_pc]))
-        
-        fig, axes = plt.subplots(nrows = 1, ncols = 2, figsize = (11,2), gridspec_kw={'width_ratios': [3, 8]})
-        # plot maze profile
-        axm = Clear_Axes(axes[0])
-        axm.set_aspect('equal')
-        axm, seg_num = DrawMazeTrack(ax = axm, maze_type=trace['maze_type'], linewidth=1, 
-                            text_args={'ha': 'center', 'va':'center', 'fontsize':4},
-                            fill_args={'alpha':0.5, 'color': 'gray', 'ec': None},)
-        axm.invert_yaxis()
-        
-        
-        ax = Clear_Axes(axes[1], close_spines=['top', 'right'], ifxticks=True, ifyticks=True)
-        # All cells
-        """
-        ax.plot(np.linspace(1, length, length), prop_ord_ac[0:length], ls='-.', marker = 's', markersize = 2, 
-                markerfacecolor = 'brown',markeredgecolor = 'brown', label = 'All cells, c.p.', linewidth = 0.7)
-        ax.bar(np.linspace(length+1, 144, 144 - length), prop_ord_ac[length:144], width = 0.8, label = 'All cells, i.p.', alpha = 0.5)
-        """
-                
-        # Place cells 
-        c = ax.plot(np.linspace(1, length, length), prop_ord_pc[0:length], marker = '^', markersize = 1.5, 
-                    markerfacecolor = 'black',markeredgecolor = 'black', label = 'Place cells, c.p.', linewidth = 0.7)
-        d = ax.bar(np.linspace(length+1, 144, 144 - length), prop_ord_pc[length:144], width = 0.8, 
-                   label = 'Place cells, i.p.', alpha = 0.5)
-
-        # plot behavior or not
-        if is_showbehavior:
-            ay=Clear_Axes(ax.twinx(), close_spines=['top'])
-            a = ay.plot(np.linspace(1, 144, 144), occu_rate_ord, marker = 'x', markersize = 1.5, color = 'purple',
-                    markerfacecolor = 'brown',markeredgecolor = 'brown', label = 'occu. prop.', linewidth = 0.7)
-            ay.set_ylabel("Occupation\nProportion / %")
-            ay.set_yticks(ColorBarsTicks(peak_rate=round(np.nanmax(occu_rate_ord), 1), is_auto=True, tick_number=4))
-            ay.axis([0,145,0, round(np.nanmax(occu_rate_ord), 1)*1.1])
-        
-            legs = a + c
-            legs.append(d)
-            labs = [l.get_label() for l in legs]
-            ax.legend(legs, labs, facecolor = 'white', edgecolor = 'white', loc='upper left', bbox_to_anchor=(1.1, 1), 
-                      fontsize = 8, title_fontsize = 8, ncol = 1, title = 'Cell Type') 
-        else:
-            ax.legend(facecolor = 'white', edgecolor = 'white', loc='upper left', bbox_to_anchor=(1, 1), 
-                      fontsize = 8, title_fontsize = 8, ncol = 1, title = 'Cell Type')
-        
-        # Decision area text label
-        ax_shadow(ax=ax, x1_list=x_l, x2_list=x_r, y = np.linspace(0, MAX*1.1, 10000), 
-                  colors = np.repeat('orange', len(DP)), edgecolor = None)       
-        for d in range(len(dp_ord)):
-            ax.text(dp_ord[d], MAX*1.11, str(DP[d]), ha = 'center', fontsize = 3)
-            
-        # plot inter decision points area
-        k = 0
-        cmap = matplotlib.colormaps['rainbow']
-        colors = cmap(np.linspace(0, 1, seg_num))
-        for i in range(len(x_l)-1):
-            if x_l[i+1] == x_r[i]:
-                continue
-            ax.fill_between(x = np.linspace(x_r[i], x_l[i+1], 2), y1 = MAX*1.05, y2 = MAX*1.1, ec = None, color = colors[k])
-            k += 1
-        
-        # Adjust ax object            
-        ax.axvline(length+0.5, ls='--', color = 'black')        
-        ax.set_xlabel(f"Maze ID (Linearized) [Maze {trace['maze_type']} - Mouse {trace['MiceID']} - Date {trace['date']} - {np.nansum(trace['is_placecell'])} Cells]")
-        ax.set_ylabel("Field Proportions / %")
-        ax.set_xticks([1, 9, 18, 27, 36, 45, 54, 63, 72, 81, 90, length, 108, 117, 126, 135, 144]) if trace['maze_type'] == 2 else ax.set_xticks([1, 9, 18, 27, 36, 45, 54, 63, 72, 81, 90, 99, length, 117, 126, 135, 144])
-        ax.set_yticks(ColorBarsTicks(peak_rate=round(MAX, 1)))
-        ax.text(length+1, MAX, 'Incorrect\npath', ha = 'left', fontsize = 8, va = 'center')
-        ax.text(length, MAX, 'Correct\npath', ha = 'right', fontsize = 8, va  ='center')
-        ax.axis([0,145,0, MAX*1.1])
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_loc, file_name+'.png'), dpi = 1800)
-        plt.savefig(os.path.join(save_loc, file_name+'.svg'), dpi = 1800)
-        plt.close()
         
         
 
@@ -1673,10 +1552,3 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', v_thr
     print(t1,'\n',t2)
 
 
-if __name__ == '__main__':
-    with open(r'E:\Data\CrossMazeBackUp\11095\20220830\session 2\trace.pkl', 'rb') as handle:
-        trace = pickle.load(handle)
-        
-    trace['p'] = r"E:\Data\CrossMazeBackUp\test\11095\20220830\session 2"
-    
-    plot_field_arange(trace, save_loc=os.path.join(trace['p'], 'PeakCurve'), is_showbehavior=True)
