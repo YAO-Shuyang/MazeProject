@@ -151,7 +151,9 @@ def NeuralDecodingResults_Interface(trace = {}, spike_threshold = 30, variable_n
 
 
 # Fig0033 Peak Velocity
-def PeakVelocity_Interface(trace: dict, spike_threshold: int or float = 30, variable_names: list or None = None, is_placecell: bool = False):
+def PeakVelocity_Interface(trace: dict, spike_threshold: int or float = 30, 
+                           variable_names: list or None = None, 
+                           is_placecell: bool = False):
     KeyWordErrorCheck(trace, __file__, ['behav_nodes', 'behav_speed', 'n_neuron', 'old_map_clear'])
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Cell', 'velocity'])
 
@@ -176,6 +178,49 @@ def PeakVelocity_Interface(trace: dict, spike_threshold: int or float = 30, vari
 
     return np.array(cell_id, dtype=np.int64), np.array(velocity, dtype=np.float64)
 
+
+def Coverage_Interface(trace: dict, spike_threshold: int or float = 30, 
+                           variable_names: list or None = None, 
+                           is_placecell: bool = False):   
+    KeyWordErrorCheck(trace, __file__, ['processed_pos_new'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Coverage', 'bin size', 'date'])
+
+    coverage = np.zeros(5, dtype=np.float64)
+    
+    coverage[0] = calc_coverage(trace['processed_pos_new'], 12, 12)*100
+    coverage[2] = calc_coverage(trace['processed_pos_new'], 19, 19)*100
+    coverage[1] = calc_coverage(trace['processed_pos_new'], 24, 24)*100
+    coverage[3] = calc_coverage(trace['processed_pos_new'], 36, 36)*100
+    coverage[4] = calc_coverage(trace['processed_pos_new'], 48, 48)*100
+    
+    return coverage, np.array(['8 cm','5 cm','4 cm','2.67 cm','2 cm']), np.repeat(trace['date'], 5)
+
+
+def Speed_Interface(trace: dict, spike_threshold: int or float = 30, 
+                           variable_names: list or None = None, 
+                           is_placecell: bool = False):
+    if 'smooth_speed' not in trace.keys():
+        behav_speed = calc_speed(behav_positions = trace['correct_pos']/10, behav_time = trace['correct_time'])
+        trace['smooth_speed'] = uniform_smooth_speed(behav_speed)
+        
+    KeyWordErrorCheck(trace, __file__, ['smooth_speed', 'correct_nodes', 'maze_type'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Speed', 'Maze Bin'])
+    
+    nodes = spike_nodes_transform(trace['correct_nodes'], nx = 12)
+    smooth_speed = trace['smooth_speed']
+    
+    if trace['maze_type'] != 0:
+        CP = CorrectPath_maze_1 if trace['maze_type'] == 1 else CorrectPath_maze_2
+    else:
+        CP = np.arange(1, 145)
+    
+    mean_speed = np.zeros(CP.shape[0], dtype = np.float64)    
+    for i in range(CP.shape[0]):
+        idx = np.where(nodes==CP[i])[0]
+        mean_speed[i] = np.nanmean(smooth_speed[idx])
+        
+    
+    return mean_speed, np.arange(1, CP.shape[0]+1)
 
 if __name__ == '__main__':
     with open(r'G:\YSY\Cross_maze\11095\20220830\session 3\trace.pkl', 'rb') as handle:

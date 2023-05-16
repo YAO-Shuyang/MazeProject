@@ -8,7 +8,7 @@ from mylib.Interfaces import FiringRateProcess_Interface, SpatialInformation_Int
 figpath = 'E:\Data\FinalResults'
 figdata = 'E:\Data\FigData'
 
-CM_path = 'E:\Data\CrossMazeBackUp'
+CM_path = 'E:\Data\Cross_maze'
 CM_path2 = 'E:\Data\Cross_maze2'
 #SM_path = 'E:\Data\Simple_maze'
 f1 = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'calcium')
@@ -17,10 +17,10 @@ f1_behav = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet
 
 #f_CellReg = pd.read_excel(os.path.join(CM_path, 'cell_reg_path.xlsx'), sheet_name = 'CellRegPath')
 
-#cellReg_95_maze1 = r'E:\Data\Cross_maze\11095\Maze1-footprint\Cell_reg\cellRegistered.mat'
-#cellReg_95_maze2 = r'E:\Data\Cross_maze\11095\Maze2-footprint\Cell_reg\cellRegistered.mat'
+cellReg_95_maze1 = r'E:\Data\Cross_maze\11095\Maze1-footprint\Cell_reg\cellRegistered.mat'
+cellReg_95_maze2 = r'E:\Data\Cross_maze\11095\Maze2-footprint\Cell_reg\cellRegistered.mat'
 order_95_maze1 = np.array([], dtype = np.int64)
-marker_list = ['o','s','^','*','+','x', 'p','1','v','D','h','p']
+
 
 def star(p:str):
     '''
@@ -75,7 +75,7 @@ def plot_star(left:list = [0.1], right:list = [0.9], height:list = [1.], delt_h:
     return ax
 
 # Get a collection of trace object(dict).
-def TraceFileSet(idx:np.ndarray = None, file:pd.DataFrame = f1, Behavior_Paradigm:str = 'Cross Maze'):
+def TraceFileSet(idx:np.ndarray = None, file:pd.DataFrame = f1, Behavior_Paradigm:str = 'CrossMaze', tp: str = r"G:\YSY\Cross_maze"):
     '''
     Author: YAO Shuyang
     Date: Jan 26th, 2023
@@ -90,11 +90,10 @@ def TraceFileSet(idx:np.ndarray = None, file:pd.DataFrame = f1, Behavior_Paradig
     - A list, contains several dicts (trace of each session) and the length of this list is equal to the length of idx.
     '''
     assert idx is not None and file is not None  #Error! Need an input idx list and a DataFrame!
-    ValueErrorCheck(Behavior_Paradigm, ['Cross Maze', 'Simple Maze', 'Reverse Maze'])
+    ValueErrorCheck(Behavior_Paradigm, ['CrossMaze', 'SimpleMaze', 'ReverseMaze'])
 
-    if Behavior_Paradigm == 'Cross Maze':
+    if Behavior_Paradigm == 'CrossMaze':
         KeyWordErrorCheck(file, ['MiceID', 'date', 'session'])
-        tp = 'G:\YSY\Cross_maze'
         trace_set = []
         print("Read trace file:")
         for i in tqdm(idx):
@@ -108,9 +107,8 @@ def TraceFileSet(idx:np.ndarray = None, file:pd.DataFrame = f1, Behavior_Paradig
             trace_set.append(trace)
         return trace_set
 
-    elif Behavior_Paradigm == 'Simple Maze':
+    elif Behavior_Paradigm == 'SimpleMaze':
         KeyWordErrorCheck(file, ['MiceID', 'date'])
-        tp = 'G:\YSY\YSY'
         trace_set = []
         print("Read trace file:")
         for i in tqdm(idx):
@@ -124,9 +122,8 @@ def TraceFileSet(idx:np.ndarray = None, file:pd.DataFrame = f1, Behavior_Paradig
             trace_set.append(trace)
         return trace_set
     
-    elif Behavior_Paradigm == 'Reverse Maze':
+    elif Behavior_Paradigm == 'ReverseMaze':
         KeyWordErrorCheck(file, ['MiceID', 'date'])
-        tp = 'G:\YSY\Reverse_maze'
         trace_set = []
         print("Read trace file:")
         for i in tqdm(idx):
@@ -254,8 +251,11 @@ def Add_NAN_Line(ax = None, incorrect_map = None, is_single = False, linewidth =
 
 
 # Generate data about some key variables. Generate all data from a behavior paragidm.
-def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function = None, file_name:str = 'default', behavior_paradigm:str = 'CrossMaze', 
-                       legal_maze_type:list = [0,1,2], f_member: list|None = None, file_idx:np.ndarray|list = None, func_kwgs:dict = {}):
+def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function = None, 
+                       file_name:str = 'default', behavior_paradigm:str = 'CrossMaze', 
+                       legal_maze_type:list = [0,1,2], f_member: list|None = None, 
+                       file_idx:np.ndarray|list = None, func_kwgs:dict = {}, 
+                       is_behav: bool = False):
     '''
     Author: YAO Shuyang
     Date: Jan 25th, 2023 (Modified)
@@ -290,8 +290,11 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
 
     for i in tqdm(file_idx):
         try: 
-            KeyWordErrorCheck(f, __file__, keys = ['Trace File'])
-            p = f['Trace File'][i]
+            KeyWordErrorCheck(f, __file__, keys = ['Trace File', 'Trace Behav File'])
+            if is_behav:
+                p = f['Trace Behav File'][i]
+            else:
+                p = f['Trace File'][i]
         except:
             KeyWordErrorCheck(f, __file__, keys = ['Data File'])
             p = f['Data File'][i]
@@ -335,7 +338,10 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
     print(np.shape(data['MiceID']))
 
     d = pd.DataFrame(data)
-    d.to_excel(os.path.join(figdata, file_name+'.xlsx'), sheet_name = 'data', index = False)
+    try:
+        d.to_excel(os.path.join(figdata, file_name+'.xlsx'), sheet_name = 'data', index = False)
+    except:
+        a = 1
 
     with open(os.path.join(figdata, file_name+'.pkl'), 'wb') as f:
         pickle.dump(data,f)

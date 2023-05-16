@@ -2,7 +2,8 @@ import pandas as pd
 from scipy.io import loadmat
 from mylib.maze_utils3 import *
 from matplotlib_venn import venn3, venn3_circles
-from mylib.dp_analysis import field_arange, plot_field_arange, DecisionPointAnalyzer
+from mylib.dp_analysis import field_arange, plot_field_arange, BehaviorEvents, BehaviorEventsAnalyzer
+from mylib.dp_analysis import plot_1day_line, plot_field_arange_all, FieldDisImage, ImageBase
 
 #  -------------------------------------------------------- Calsium ----------------------------------------------------------------------------
 # In some cases (for example, mice 10019, date 4_20, neuron 23), there're some 'silent neurons' which has indistinct 
@@ -608,7 +609,7 @@ def CombineMap(trace):
     ms_time_behav = trace['ms_time_behav']
     processed_pos_new, behav_time = Add_NAN(trace['correct_pos'], trace['correct_time'], maze_type = trace['maze_type'])
     smooth_map_all = trace['smooth_map_all']
-    old_map_clear = trace['old_map_all']
+    old_map_clear = trace['old_map_clear']
     quarter_map_smooth = trace['quarter_map_smooth']
     maze_type = trace['maze_type']
     
@@ -622,10 +623,12 @@ def CombineMap(trace):
     axes[1,0] = Clear_Axes(axes = axes[1][0])
     axes[1,1] = Clear_Axes(axes = axes[1][1])
     axes[0,0].plot(processed_pos_new[:,0]/20-0.5,processed_pos_new[:,1]/20-0.5,color = 'gray',zorder = 1, linewidth = 0.7)
+    axes[0,1].invert_yaxis()
+    axes[1,0].invert_yaxis()
+    axes[1,1].invert_yaxis()
     
     # keep trace map 'equal'
     axes[0,0].set_aspect('equal')
-    axes[0,0].invert_yaxis()
     
     if maze_type != 0:
         # rate map (48 x 48)
@@ -670,6 +673,7 @@ def CombineMap(trace):
         cbar.set_label('Firing Rate / Hz')
         # maze profile
         color = 'red' if trace['is_placecell'][k] == 1 else 'black'
+        axes[1,0].set_title(f"SI = {round(trace['SI_all'][k],2)}", color = color, fontsize = 16)
         ims.append(im)
         cbars.append(cbar)
         
@@ -762,9 +766,9 @@ def LocTimeCurve(trace, curve_type = 'Deconv', threshold = 3, isDraw = True):
 def DrawLocTimeCurve(behav_time = None, rand_nodes = None, spike_time = None, spike_location = None, Spikes =None, 
                      length = None, trace = None, curve_type = 'Raw', threshold = 3):
     # Plotting gray trajactory shadow
-    fig = plt.figure(figsize = (6,8))
+    fig = plt.figure(figsize = (3,4))
     ax = Clear_Axes(plt.axes(), close_spines = ['top','right'], ifxticks=True, ifyticks=True)
-    ax.plot(rand_nodes,behav_time/1000,'o', color = 'gray', markersize = 1)
+    ax.plot(rand_nodes,behav_time/1000,'.', color = 'gray', markersize = 1)
     ax.axis([0,145,0,np.nanmax(behav_time/1000)+10])
     ax.set_xticks(np.linspace(0,144,9))
     ax.set_xlabel('Maze ID (Linearized)')
@@ -1508,6 +1512,10 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', v_thr
     
     print("      4. Oldmap")
     trace = OldMap(trace, isDraw=False)
+    
+    path = os.path.join(p,"trace.pkl")
+    with open(path, 'wb') as f:
+        pickle.dump(trace, f)
     
     print("      5. PeakCurve")
     mkdir(os.path.join(trace['p'], 'PeakCurve'))

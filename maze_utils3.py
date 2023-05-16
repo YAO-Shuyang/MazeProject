@@ -23,6 +23,8 @@ import warnings
 figpath = 'F:\YSY\FinalResults'
 figdata = 'F:\YSY\FigData'
 
+marker_list = ['o','s','^','*','+','x', 'p','1','v','D','h','p']
+
 def location_to_idx(loc_x, loc_y, nx = 12, MaxLength = 960):
     length = MaxLength / nx
     cell_x = loc_x // length
@@ -1459,7 +1461,29 @@ def sort_dlc_file(dir_name: str):
 
     return sorted(files, key=lambda file: os.path.getctime(os.path.join(dir_name, file)))
 
+def NodesReorder(nodes: np.ndarray, maze_type: int):
+    """NodesReorder _summary_
+
+    sort the nodes with its spatial distribution
+
+    Parameters
+    ----------
+    nodes : np.ndarray
+        behav_nodes or spike_nodes
+    maze_type : int
+        maze type
+    """
+    assert maze_type != 0
+    nodes = nodes.astype(np.int64)
+    renodes = np.zeros_like(nodes)
+    RG = NodesReorderGraph1 if maze_type == 1 else NodesReorderGraph2
     
+    for i in range(nodes.shape[0]):
+        renodes[i] = RG[nodes[i]]
+        
+    return renodes
+        
+        
 
 def DLC_Concatenate(directory: str, find_chars: str = '.csv', body_part: list = ['bodypart1', 'bodypart2', 'bodypart3', 'bodypart4'],
                     **kwargs):

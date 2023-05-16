@@ -66,7 +66,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
 
     print("    B. Calculate putative spikes and correlated location from deconvolved signal traces. Delete spikes that evoked at interlaps gap and those spikes that cannot find it's clear locations.")
     # Calculating Spikes, than delete the interlaps frames
-    Spikes_original = SpikeType(Transients = DeconvSignal, threshold = 5)
+    Spikes_original = SpikeType(Transients = DeconvSignal, threshold = 3)
     spike_num_mon1 = np.nansum(Spikes_original, axis = 1) # record temporary spike number
     # Calculating correlated spike nodes
     spike_nodes_original = SpikeNodes(Spikes = Spikes_original, ms_time = ms_time, 
@@ -149,7 +149,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
 
     # Shuffle test
     trace = shuffle_test(trace, trace['Ms'])
-    plot_field_arange(trace, save_loc=os.path.join(trace['p'], 'PeakCurve'))
+    #plot_field_arange(trace, save_loc=os.path.join(trace['p'], 'PeakCurve'))
 
     path = os.path.join(p,"trace.pkl")
     with open(path, 'wb') as f:
@@ -167,6 +167,10 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     
     print("      4. Oldmap")
     trace = OldMap(trace, isDraw=False)
+    
+    path = os.path.join(p,"trace.pkl")
+    with open(path, 'wb') as f:
+        pickle.dump(trace, f)
     
     print("      5. PeakCurve")
     mkdir(os.path.join(trace['p'], 'PeakCurve'))
