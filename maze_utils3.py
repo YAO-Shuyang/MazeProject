@@ -17,6 +17,7 @@ import seaborn as sns
 import pandas as pd
 import matplotlib
 from matplotlib.axes import Axes
+from os.path import exists, join
 from mylib.AssertError import KeyWordErrorCheck, VariablesInputErrorCheck, ReportErrorLoc, ValueErrorCheck
 import warnings
 
@@ -69,19 +70,16 @@ def isSouthBorder(mazeID, nx = 12):
     else:
         return 0
 
-def WallMatrix(maze_type = 1):
+def WallMatrix(maze_type: int):
     # Wall matrix will return 2 matrix: w_m represents verticle walls which has a shape of 12*13; h_m represents horizontal walls 
     # with a shape of 13*12
 
     vertical_walls = np.ones((12,13), dtype = np.int64)
     horizont_walls = np.ones((13,12), dtype = np.int64)
     nx = 12
-    if maze_type == 0:
-        graph = OpenField_graph
-    elif maze_type == 1:
-        graph = maze1_graph
-    elif maze_type == 2:
-        graph = maze2_graph
+
+    if (maze_type, 12) in maze_graphs.keys():
+        graph = maze_graphs[(maze_type, 12)]
     else:
         assert False
 
@@ -89,7 +87,10 @@ def WallMatrix(maze_type = 1):
         if i == 1 and maze_type != 0:
             vertical_walls[0,0] = 0
         if i == 144 and maze_type != 0:
-            vertical_walls[11,12] = 0
+            if maze_type in [1, 2]:
+                vertical_walls[11, 12] = 0
+            elif maze_type == 3:
+                vertical_walls[11, 0] = 0
         
         x, y = idx_to_loc(i, nx = nx, ny = nx)
 
@@ -128,17 +129,22 @@ def DrawMazeProfile(maze_type = 1,axes = None, color = 'white',linewidth = 1, nx
     axes.axis([-1, nx, -1, nx])
     return axes
 
-def MazeSegments(maze_type: int = 1, path_type: str = 'cp'):
-    DP = DecisionPoint1_Linear if maze_type == 1 else DecisionPoint2_Linear
+def MazeSegments(maze_type: int, path_type: str = 'cp'):
     maze_seg = {}
+    assert maze_type in [1, 2, 3]
+
+    DP = DPs[maze_type]
     
     if path_type == 'cp':
-        graph = maze1_graph if maze_type == 1 else maze2_graph
+        graph = maze_graphs[(maze_type, 12)]
+
         Path = cp.deepcopy(DP)
         if DP[0] != 1:
             Path = np.concatenate([np.array([1]), Path])
-        if DP[-1] != 144:
+        if DP[-1] != 144 and maze_type in [1, 2]:
             Path = np.concatenate([Path, np.array([144])])
+        if DP[-1] != 133 and maze_type == 3:
+            Path = np.concatenate([Path, np.array([133])])
 
         seg_num = 1
         for i in range(len(Path)-1):
@@ -149,7 +155,7 @@ def MazeSegments(maze_type: int = 1, path_type: str = 'cp'):
         return maze_seg
     
     elif path_type == 'ip':
-        WG = DecisionPoint2WrongGraph1 if maze_type == 1 else DecisionPoint2WrongGraph2
+        WG = DP2WG[maze_type]
         for i in range(1, len(DP)+1):
             maze_seg[i] = np.array(WG[DP[i-1]], dtype = np.int64)
         return maze_seg
@@ -163,7 +169,7 @@ def DrawMazeTrack(ax: Axes, maze_type: int, color: str = 'black', linewidth: flo
                   fill_args: dict = {'alpha':0.5, 'color': 'gray'}, path_type: str = 'cp', 
                   **kwargs):
     
-    DP = DecisionPoint1 if maze_type == 1 else DecisionPoint2
+    DP = DPs[maze_type]
     for p in DP:
         x, y = (p-1)%12, (p-1)//12
         ax.fill_betweenx(y = np.linspace(y-0.5,y+0.5,2), x1 = x-0.5, x2 = x+0.5, **fill_args)
@@ -178,7 +184,6 @@ def DrawMazeTrack(ax: Axes, maze_type: int, color: str = 'black', linewidth: flo
     DrawMazeProfile(axes=ax, maze_type=maze_type, color=color, linewidth=linewidth, nx = 12)
     ax.imshow(np.reshape(maze_value, [12,12]), cmap=cmap, **kwargs)
     return ax, len(maze_seg.keys())
-    
         
 
 # make up dir
@@ -201,32 +206,13 @@ def mkdir(path:str):
 
 # calculate path between two points
 def DFS(start = 1, goal = 1, maze_type = 1, nx = 48):
-    if nx == 48:
-        if maze_type == 1:
-            graph = maze1_SonGraph 
-        elif maze_type == 2:
-            graph = maze2_SonGraph
-        elif maze_type == 0:
-            graph = OpenField_graph1
-    elif nx == 12:
-        if maze_type == 1:
-            graph = maze1_graph 
-        elif maze_type == 2:
-            graph = maze2_graph
-        elif maze_type == 0:
-            graph = OpenField_graph
-    elif nx == 24:
-        if maze_type == 1:
-            graph = maze1_QuarterGraph 
-        elif maze_type == 2:
-            graph = maze2_QuarterGraph
-        elif maze_type == 0:
-            graph = OpenField_graph4
+    if (maze_type, nx) in maze_graphs.keys():
+        graph = maze_graphs[(maze_type, nx)]
     else:
         assert False
 
     if maze_type == 0:
-        graph = OpenField_graph1
+        warnings.warn("We ![do not]! recommend you to use DFS in open field.")
 
     Area = [start]
     StepExpand = {0: [start]}
@@ -256,10 +242,10 @@ def FastDistance(start, goal, maze_type = 1, nx = 12):
         print("Warning! This funciton is specifically for old maze (12*12)")
         return
     
-    correct_path = CorrectPath_maze_1 if maze_type == 1 else CorrectPath_maze_2
-    incorrect_path = IncorrectPath_maze_1 if maze_type == 1 else IncorrectPath_maze_2
-    W2DPGraph = Wrong2DecisionPointGraph1 if maze_type == 1 else Wrong2DecisionPointGraph2
-    DP2WGraph = DecisionPoint2WrongGraph1 if maze_type == 1 else DecisionPoint2WrongGraph2
+    correct_path = correct_paths[maze_type]
+    incorrect_path = incorrect_paths[maze_type]
+    W2DPGraph = W2DPG[maze_type]
+    DP2WGraph = DP2WG[maze_type]
     
     if start in incorrect_path:
         if maze_type == 2 and start in [51,50,38,62,39,27,26]:
@@ -290,8 +276,6 @@ def FastDistance(start, goal, maze_type = 1, nx = 12):
     
     return wrong_start + wrong_goal + np.abs(idx_start - idx_goal)
 
-
-
 # Smooth
 # Define a Gaussian-based smooth method -------------------------------------------------------------------------------------------
 def Gaussian(x=0, sigma=2, pi=3.1416, nx = 48):
@@ -305,27 +289,8 @@ def Cartesian_distance(curr, surr, nx = 48):
     return np.sqrt((curr_x - surr_x)*(curr_x - surr_x)+(curr_y - surr_y)*(curr_y - surr_y))
 
 def SmoothMatrix(maze_type = 1, sigma = 2, _range = 7, nx = 48):
-    if nx == 48:
-        if maze_type == 1:
-            graph = maze1_SonGraph 
-        elif maze_type == 2:
-            graph = maze2_SonGraph
-        elif maze_type == 0:
-            graph = OpenField_graph1
-    elif nx == 12:
-        if maze_type == 1:
-            graph = maze1_graph 
-        elif maze_type == 2:
-            graph = maze2_graph
-        elif maze_type == 0:
-            graph = OpenField_graph
-    elif nx == 24:
-        if maze_type == 1:
-            graph = maze1_QuarterGraph 
-        elif maze_type == 2:
-            graph = maze2_QuarterGraph
-        elif maze_type == 0:
-            graph = OpenField_graph4
+    if (maze_type, nx) in maze_graphs.keys():
+        graph = maze_graphs[(maze_type, nx)]
     else:
         assert False
     
@@ -352,7 +317,7 @@ def SmoothMatrix(maze_type = 1, sigma = 2, _range = 7, nx = 48):
     return smooth_matrix
     
 def smooth(clear_map_all, maze_type = 1, nx = 48, _range = 7, sigma = 2):
-    if maze_type in [0,1,2]:
+    if maze_type in [0,1,2,3]:
         print("    Generate smooth matrix")
         Ms = SmoothMatrix(maze_type = maze_type, sigma = sigma, _range = _range, nx = nx)
     else:
@@ -377,7 +342,7 @@ def clear_NAN(rate_map_all:np.ndarray):
 # generate all subfield. ============================================================================
 # place field analysis, return a dict contatins all field. If you want to know the field number of a certain cell, you only need to get it by use 
 # len(trace['place_field_all'][n].keys())
-def GeneratePlaceField(maze_type = 1, nx = 48, smooth_map = None):
+def GeneratePlaceField(maze_type: int, nx: int = 48, smooth_map = None):
     # rate_map should be one without NAN value. Use function clear_NAN(rate_map_all) to process first.
     MAX = max(smooth_map)
     field_set = np.where(smooth_map >= 0.5*MAX)[0]+1
@@ -400,21 +365,9 @@ def GeneratePlaceField(maze_type = 1, nx = 48, smooth_map = None):
     
     return All_field
                
-def field(rate_map = None,point = 1, maze_type = 1, nx = 48,MAX = 0):
-    if nx == 12:
-        if maze_type == 0:
-            graph = OpenField_graph1
-        elif maze_type == 1:
-            graph = maze1_graph
-        elif maze_type == 2:
-            graph = maze2_graph
-    elif nx == 48:
-        if maze_type == 0:
-            graph = OpenField_graph1
-        elif maze_type == 1:
-            graph = maze1_SonGraph
-        elif maze_type == 2:
-            graph = maze2_SonGraph
+def field(rate_map = None, point = 1, maze_type = 1, nx = 48,MAX = 0):
+    if (maze_type, nx) in maze_graphs.keys():
+        graph = maze_graphs[(maze_type, nx)]
     else:
         assert False
             
@@ -696,18 +649,19 @@ def GetDMatrices(maze_type:int, nx:int):
     YAO Shuyang, Feb 10, 2023
     '''
     ValueErrorCheck(nx, [12,24,48])
-    ValueErrorCheck(maze_type, [1,2,0])
+    ValueErrorCheck(maze_type, [1,2,3,0])
     try:
-        with open('decoder_DMatrix.pkl', 'rb') as handle:
+        print(os.path.abspath('decoder_DMatrix.pkl'))
+        with open(r'D:\ProgramData\Anaconda3_2022\envs\maze\Lib\site-packages\mylib\decoder_DMatrix.pkl', 'rb') as handle:
             D_Matrice = pickle.load(handle)
     except:
         print('decoder_DMatrix.pkl is not exist!')
         assert False
 
     if nx == 12:
-        D = D_Matrice[6+maze_type] / nx * 12
+        D = D_Matrice[8+maze_type] / nx * 12
     elif nx == 24:
-        D = D_Matrice[3+maze_type] / nx * 12
+        D = D_Matrice[4+maze_type] / nx * 12
         #S2FGraph = Quarter2FatherGraph
     elif nx == 48:
         D = D_Matrice[maze_type] / nx * 12
@@ -719,7 +673,7 @@ def GetDMatrices(maze_type:int, nx:int):
 
 def DecodingChanceLevel(maze_type:int = 1, nx:int = 48, shuffle_frames:int = 40000, occu_time:np.ndarray = None, Ms:np.ndarray = np.zeros((2304,2304))):
     ValueErrorCheck(nx, [12,24,48])
-    ValueErrorCheck(maze_type, [1,2,0])
+    ValueErrorCheck(maze_type, [1,2,3,0])
 
     D = GetDMatrices(maze_type = maze_type, nx = nx)
 
@@ -773,18 +727,15 @@ def sortmap(rate_map_all, order = None):
     return cp.deepcopy(rate_map_all[order,:])
 
 def sort_peak_curve(rate_map_all, maze_type = 1, delete_idx = None, is_sort_x = True, is_sort_y = True, is_norm_y = True):
-    if maze_type == 0:
-        x_order = np.arange(144)
-    elif maze_type == 1:
-        x_order = np.concatenate([CorrectPath_maze_1-1, IncorrectPath_maze_1-1])
-    elif maze_type == 2:
-        x_order = np.concatenate([CorrectPath_maze_2-1, IncorrectPath_maze_2-1])
+    assert maze_type in [0, 1, 2, 3]
+
+    x_order = xorders[maze_type]
     
     # Clear NAN value
     rate_map_all, _ = clear_NAN(rate_map_all = rate_map_all)
     # Sort axis 1 (x axis)
     if is_sort_x == True:
-        rate_map_all = rate_map_all[:,x_order]
+        rate_map_all = rate_map_all[:, x_order]
 
     # Delete elements in axis 0 (y axis, neuron id)
     if delete_idx is not None:
@@ -935,13 +886,13 @@ def PeakCurveSplit(trace, p, order_type = 'A'):
     old_map_split = trace['old_map_split']
 
     if maze_type in [1,2]:
-        co_path = correct_path1 if maze_type == 1 else correct_path2
-        ic_path = incorrect_path1 if maze_type == 1 else incorrect_path2
+        co_path = correct_paths[maze_type]
+        ic_path = incorrect_paths[maze_type]
         length = co_path.shape[0]
-        order = np.concatenate([co_path,ic_path])
+        order = xorders[maze_type]
     else:
         length = 144
-        order = np.array(range(1,145))
+        order = xorders[0]
 
     if order_type == 'B':
         for k in range(laps):
@@ -1145,6 +1096,14 @@ def ColorBarsTicks(peak_rate:float = 10, intervals:float = 1, is_auto:bool = Fal
 
     return ticks
 
+def read_trace(loc: str):
+    if exists(loc):
+        with open(loc, 'rb') as handle:
+            return pickle.load(handle)
+    else:
+        raise ValueError(f"{loc} is not exist!")
+    
+
 # plot shadows on some area.
 def ax_shadow(ax = None, x1_list = np.array([]), x2_list = np.array([]), y = np.array([]), 
               colors: list = [], palette = 'muted', alpha = 0.5, **kwargs):
@@ -1156,7 +1115,7 @@ def ax_shadow(ax = None, x1_list = np.array([]), x2_list = np.array([]), y = np.
     areas_num = len(x1_list)
     # length (or density) of y axis points.
     y_len = len(y)
-    if colors is None:
+    if len(colors) == 0:
         colors = sns.color_palette(palette = palette, n_colors = areas_num)
 
     for i in range(areas_num):
@@ -1345,11 +1304,11 @@ def Get_X_Order(maze_type:int):
     - NDarray[int], (144,)
     - Separate Point, int
     '''
-    ValueErrorCheck(maze_type, [0,1,2])
+    ValueErrorCheck(maze_type, [0,1,2,3])
 
     order_list = [np.arange(144), np.concatenate([CorrectPath_maze_1, IncorrectPath_maze_1])-1, np.concatenate([CorrectPath_maze_2, IncorrectPath_maze_2])-1]
-    separate_list = [143.5, CorrectPath_maze_1.shape[0]-0.5, CorrectPath_maze_2.shape[0]-0.5]
-    return order_list[int(maze_type)], separate_list[int(maze_type)]
+    separate_list = [143.5, CorrectPath_maze_1.shape[0]-0.5, CorrectPath_maze_2.shape[0]-0.5, 143.5]
+    return xorders[int(maze_type)], separate_list[int(maze_type)]
 
 def calc_PVC(rate_map_all1:np.ndarray, rate_map_all2:np.ndarray):
     '''
@@ -1447,6 +1406,7 @@ def EqualPoissonFit(x, y, l0:float = 5):
     para = leastsq(EqualPoissonResiduals, x0 = l0, args = (x, y))
     return para[0][0]
 
+
 def sort_dlc_file(dir_name: str):
     """
     Sort dlc files with recording order before concatenating.
@@ -1476,7 +1436,7 @@ def NodesReorder(nodes: np.ndarray, maze_type: int):
     assert maze_type != 0
     nodes = nodes.astype(np.int64)
     renodes = np.zeros_like(nodes)
-    RG = NodesReorderGraph1 if maze_type == 1 else NodesReorderGraph2
+    RG = NRG[maze_type]
     
     for i in range(nodes.shape[0]):
         renodes[i] = RG[nodes[i]]

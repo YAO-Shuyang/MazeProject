@@ -11,7 +11,7 @@ import copy as cp
 import pickle
 from mylib.maze_utils3 import mkdir, plot_trajactory, Delete_NAN, Add_NAN, Clear_Axes, DrawMazeProfile
 from mylib.preprocessing_behav import plot_trajactory_comparison, clean_data, get_meanframe, calc_speed
-from mylib.preprocessing_behav import PolygonDrawer, Circulate_Checking, uniform_smooth_speed
+from mylib.preprocessing_behav import PolygonDrawer, uniform_smooth_speed, Circulate_Checking
 from mylib.maze_utils3 import position_transform, location_to_idx, occu_time_transform, DLC_Concatenate
 from mylib.maze_graph import Father2SonGraph
 
@@ -84,6 +84,9 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
     output_loc : str, optional
         _description_, by default None
     """
+    frames_num_tracker = np.zeros(5, np.int64)
+    tits = ['raw', 'delet\nNAN', 'clean', 'out\nrange', 'rectify']
+
     date = int(f['date'][i])
     MiceID = int(f['MiceID'][i])
     folder = str(f['recording_folder'][i])
@@ -117,7 +120,8 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
         return
     
     behav_position_original = dlc_position_generation(dlc, **dlc_args)
-    
+    frames_num_tracker[0] = behav_position_original.shape[0]
+
     trace = {'date':date,'MiceID':MiceID,'paradigm':behavior_paradigm,'session_path':p,'behav_folder':folder, 
              'maze_type':maze_type,'nx':48, 'ny':48, 'body_parts': list(dlc.keys()), 'dlc_position': dlc,
              'behav_position_original': cp.deepcopy(behav_position_original),
@@ -138,17 +142,20 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
                 file_name = 'Trajactory_DeleteNANOnly')
     print("    Figure 2 has done.")
     
+    frames_num_tracker[1] = behav_positions.shape[0]
     
     # 2. Data cleaning by deleting several frames near the start point and the end point.
     print("    Data cleaning...")
+    '''
     # data cleaning 1:
-    behav_positions, behav_time = clean_data(behav_positions, behav_time, maze_type = maze_type, delete_start=3, delete_end=3)
+    behav_positions, behav_time = clean_data(behav_positions, behav_time, maze_type = maze_type, delete_start=1, delete_end=1)
     # Add NAN value at the cross lap gap to plot the trajactory.
     behav_positions, behav_time = Add_NAN(behav_positions, behav_time, maze_type = maze_type)
     plot_trajactory(x = behav_positions[:,0], y = behav_positions[:,1], save_loc = p_behav,
                 file_name = 'Trajactory_DeleteWrongData', maze_type = maze_type)
     print("    Figure 3 has done.")
-    
+    '''
+    frames_num_tracker[2] = behav_positions.shape[0]
     
     # Get a modified behav_time_original for interpolated
     start_time = behav_time[0]
@@ -197,6 +204,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
 
     processed_pos, behav_time = Delete_NAN(processed_pos, behav_time)
     processed_pos, behav_time = Add_NAN(processed_pos, behav_time, maze_type = maze_type)    
+    frames_num_tracker[3] = processed_pos.shape[0]
         
     plt.figure(figsize = (6,6))
     ax = Clear_Axes(plt.axes())
@@ -210,8 +218,10 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
 
     if cam_degree == 0:
         trace['processed_pos_new'] = cp.deepcopy(processed_pos)
-    else:
+    elif cam_degree == 180:
         trace['processed_pos_new'] = [maxWidth, maxHeight] - processed_pos
+    else:
+        raise ValueError(f"Invalid value {cam_degree} for camera degree.")
 
     processed_pos_new = cp.deepcopy(trace['processed_pos_new'])
     trace['behav_time'] = cp.deepcopy(behav_time)
@@ -230,6 +240,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
     behav_nodes = location_to_idx(processed_pos_new[:,0], processed_pos_new[:,1], nx = trace['nx'])
     trace['behav_nodes'] = cp.deepcopy(behav_nodes)
 
+
     # For maze 1 and maze 2 sessions, a cross-wall correction should be performed. --------------------------------------------
     if maze_type in [1,2]:
         # Correct trajectory cross-wall events
@@ -244,12 +255,15 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
         plot_trajactory_comparison(behav_nodes, trace['correct_nodes'], is_node = True, maze_type = maze_type,
                                        save_loc = p_behav, file_name = 'CrossWall-Correction_Nodes')
         print("    Figure 8 has done.")
-    
+        frames_num_tracker[4] = trace['correct_nodes'].shape[0]
+        
     # For open field, nothing need to do. ------------------------------------------------------------------------------------
     elif maze_type == 0:
+
         trace['correct_pos'] = cp.deepcopy(trace['processed_pos_new'])
         trace['correct_nodes'] = cp.deepcopy(trace['behav_nodes'])
         trace['correct_time'] = cp.deepcopy(trace['behav_time'])
+        frames_num_tracker[3] = trace['correct_nodes'].shape[0]
 
     # =======================================================================================================================
     # calculating ratemap ----------------------------------------------------------------------------------------------------
@@ -315,6 +329,19 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
     trace['correct_speed'] = behav_speed
     trace['smooth_speed'] = smooth_speed
     
+    # Qualification control curve: step by step
+    plt.figure(figsize = (8,4))
+    ax = Clear_Axes(plt.axes(), close_spines = ['top','right'], ifxticks = True, ifyticks = True)
+    ax.plot(tits, frames_num_tracker, marker = '^', markerfacecolor = 'black',markeredgecolor = 'black')
+    for i in range(5):
+        ax.text(i, 100, str(frames_num_tracker[i]), va = 'center')
+    ax.set_ylabel('Frame counts')
+    ax.axis([-0.5, 4.5, 0, np.max(frames_num_tracker)+1000])
+    plt.savefig(os.path.join(p_behav,'qualify-control.png'),dpi=600)
+    plt.savefig(os.path.join(p_behav,'qualify-control.svg'),dpi=600)
+    plt.close()    
+
+
     # Save files
     with open(os.path.join(p,"trace_behav.pkl"), 'wb') as fs:
         pickle.dump(trace, fs)

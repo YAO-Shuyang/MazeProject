@@ -11,11 +11,12 @@ import scipy.stats
 from mylib.preprocessing_ms import plot_split_trajactory, Delete_InterLapSpike, Generate_SilentNeuron, calc_ratemap, place_field
 from mylib.preprocessing_ms import shuffle_test, RateMap, QuarterMap, OldMap, SimplePeakCurve, TraceMap, LocTimeCurve, PVCorrelationMap
 from mylib.preprocessing_ms import CrossLapsCorrelation, OldMapSplit, FiringRateProcess, calc_ms_speed, plot_spike_monitor
-from mylib.preprocessing_ms import half_half_correlation, odd_even_correlation, coverage_curve, CombineMap, plot_field_arange
+from mylib.preprocessing_ms import half_half_correlation, odd_even_correlation, coverage_curve, CombineMap, plot_field_arange 
+from mylib.preprocessing_ms import calc_speed, uniform_smooth_speed, field_specific_correlation
 from mylib.maze_utils3 import SpikeType, SpikeNodes, SmoothMatrix, mkdir
 
 def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, 
-                     v_thre: float = 2.5, cam_degree = 0):#p = None, folder = None, behavior_paradigm = 'CrossMaze'):
+                     v_thre: float = 2.5, cam_degree = 0, speed_sm_args = {}):#p = None, folder = None, behavior_paradigm = 'CrossMaze'):
     t1 = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
 
     date = int(f['date'][i])
@@ -54,6 +55,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
         RawTraces = np.array(ms['RawTraces'][0][0]).T
         DeconvSignal = np.array(ms['DeconvSignals'][0][0]).T
         ms_time = np.array(ms['time'][0])[0,].T[0]
+        
     if behavior_paradigm in ['ReverseMaze','DSPMaze']:
         with h5py.File(ms_path, 'r') as f:
             ms_mat = f['ms']
@@ -73,6 +75,9 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
                 behav_time = trace['correct_time'], behav_nodes = trace['correct_nodes'])
 
     # Filter the speed
+    if 'smooth_speed' not in trace.keys():
+        behav_speed = calc_speed(behav_positions = trace['correct_pos']/10, behav_time = trace['correct_time'])
+        trace['smooth_speed'] = uniform_smooth_speed(behav_speed, **speed_sm_args)
     ms_speed = calc_ms_speed(behav_speed=trace['smooth_speed'], behav_time=trace['correct_time'], 
                              ms_time=ms_time)
 
@@ -203,6 +208,8 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
         trace = odd_even_correlation(trace)
         print("      F. Calculate Half-half Correlation")
         trace = half_half_correlation(trace)
+        print("      G. In Field Correlation")
+        trace = field_specific_correlation(trace)
     
     trace['processing_time'] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
     path = os.path.join(trace['p'],"trace.pkl")

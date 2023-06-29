@@ -19,6 +19,7 @@ import matplotlib
 import os
 import matplotlib.pyplot as plt
 import warnings
+from scipy.stats import ttest_1samp, ttest_ind
 import seaborn as sns
 
 def field_arange(trace, is_pc: bool = True):
@@ -622,7 +623,7 @@ class ImageBase(MazeBase):
                             color = colors[i])
     
     def add_main_cp_data(self, data: np.ndarray, MAX: float, max_twin: float, is_addmean: bool = True, 
-                         labels: list = None, twin_data: np.ndarray = None,
+                         labels: list = None, twin_data: np.ndarray = None, is_legend = True,
                          twin_args: dict = {'ylabel':'', 'label': '', 'twin_type':'bar',
                                             'bar_args':{'width': 0.8, 'color': 'gray'}}):
         self.add_main_cp_top_band(MAX)
@@ -665,27 +666,19 @@ class ImageBase(MazeBase):
                 trans_data = transform_data(twin_data)
                 sns.lineplot(x = 'x', y = 'y', data = trans_data, ax=ay, marker = 's',
                              label = twin_args['label'], err_style='bars', palette='gray')
-                c = c + ay.get_label()
-                
-            legs = c
-            labs = [l.get_label() for l in legs]
-            ax.legend(legs, labs, facecolor = 'white', edgecolor = 'white', 
-                      loc='upper left', bbox_to_anchor=(1.1, 1), 
-                      fontsize = 8, title_fontsize = 8, ncol = 1)
             
             ay.set_ylabel(twin_args['label'])
             ay.axis([0,self._x2[-1]+1, 0, round(max_twin, 1)*1.1])
             ay.set_yticks(ColorBarsTicks(max_twin, is_auto=True, tick_number=4))
-        else:
-            ax.legend(facecolor = 'white', edgecolor = 'white', loc='upper left', 
-                      bbox_to_anchor=(1, 1), fontsize = 8, title_fontsize = 8, 
-                      ncol = 1)
-    
+
+        if is_legend:
+            ax.legend()
+        
         ax.set_yticks(ColorBarsTicks(peak_rate=round(MAX, 1), is_auto=True, tick_number=4))
         ax.axis([0, self._len+1, 0, MAX*1.1])
             
     def add_main_ip_data(self, data: np.ndarray, MAX: float, max_twin: float,
-                         twin_data: np.ndarray = None, labels: list = None,
+                         twin_data: np.ndarray = None, labels: list = None, is_legend = False,
                          twin_args: dict = {'ylabel':'', 'label': ''}):
         ax = self._ax4
         self.add_main_ip_top_band(MAX)
@@ -765,6 +758,7 @@ class ImageBase(MazeBase):
     def ay1(self):
         return self._ay1
     
+    @property
     def ay2(self):
         return self._ay2
     
@@ -841,7 +835,38 @@ class FieldDisImage(ImageBase):
             
         image.add_main_cp_data(data_cp, twin_data=twin_cp, MAX = np.nanmax(prop_pc), max_twin=max_twin, **cp_args)
         image.add_main_ip_data(prop_pc, twin_data=twin_ip, MAX = np.nanmax(prop_pc), max_twin=max_twin, **ip_args)
-        image.savefig(save_loc=save_loc, file_name=file_name)        
+        image.savefig(save_loc=save_loc, file_name=file_name)  
+        
+    def plot_with_open_field(maze_type: int, data: np.ndarray, 
+                             save_loc: str, file_name: str,
+                             open_field: np.ndarray = None, 
+                             cp_args = {},
+                             ip_args = {}):
+        
+        image = FieldDisImage(maze_type)
+        y_max = np.nanmax(data)
+        
+        mean = np.nanmean(data, axis=0)
+        p_value = np.zeros(data.shape[1], dtype=np.float64)
+        op_mean = np.nanmean(open_field, axis=0)
+        
+        for i in range(data.shape[1]):
+            _, p_value[i] = ttest_ind(op_mean, data[:, i], equal_var = False)
+            
+        data_cp = data[:, image.cp-1]
+        max_twin = 1
+        
+        image.add_main_cp_data(data_cp, MAX = y_max, max_twin=max_twin, twin_data=None, **cp_args)
+        image.add_main_ip_data(data, MAX = y_max, max_twin=max_twin, **ip_args)
+        ay = Clear_Axes(image.ax2.twinx(), close_spines=['top', 'left'], ifyticks=True, ifxticks=True)
+        color = sns.set_palette('rocket',1)
+        ay.plot(np.arange(1, image.cp.shape[0]+1), p_value[image.cp-1], marker = '^',color = 'purple')
+        ay.semilogy()
+        ay.axhline(0.05, ls='--', color = 'orange')
+        ay.axhline(0.01, ls='--', color = 'orange')
+        ay.axhline(0.001, ls='--', color = 'orange')
+        ay.axhline(0.0001, ls='--', color = 'orange')
+        image.savefig(save_loc=save_loc, file_name=file_name) 
         
 
 class DecisionPointAnalyzer(MazeBase):

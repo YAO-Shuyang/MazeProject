@@ -15,16 +15,24 @@ ny = 48
 # and 2 pickle files(.pickle).
 
 # behav data process ------------------------------------------------------------------------------------------------------------------
-def get_meanframe(video_name):
+def get_meanframe(video_name, start:int = 0, end: int = -1):
     cap = cv2.VideoCapture(video_name)
     length = np.int64(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    for i in range(length):    # Capture frame-by-frame
+    if end == -1:
+        _range = range(start, length)
+        lens = length-start
+    else:
+        _range = range(start, end)
+        lens = end - start
+
+    for i in tqdm(_range):    # Capture frame-by-frame
         ret, frame = cap.read()  # ret = 1 if the video is captured; frame is the image
-        if i == 0: # initialize mean frame
+        if i == start: # initialize mean frame
             mean_frame = np.zeros_like(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
+
         # Our operations on the frame come here    
-        img = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)/length
+        img = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)/(lens)
         # img = frame/length
         mean_frame = mean_frame + img
     
@@ -175,6 +183,7 @@ def transform_bin(bin_numbers, nx = 48):
     return np.array([x,y])
 
 # ---------------------------------------------------- Data Correction --------------------------------------------------------------
+
 # the version 3.0
 # Correct cross wall events.
 def CrossWallCheck(D, dt = 0.033, check_node =  1, targ_node = 2304):
@@ -209,7 +218,7 @@ def TrajectoryCorrection(trace):
     
     if trace['nx'] != 48:
         print("   Warning! only nx = 48 are valid value! Report by CrossWallCorrection()!")
-        return trace   
+        return trace
 
     print("      TraceCorrect initiate...")
     #processed_pos_new = trace['processed_pos_new']
@@ -221,7 +230,7 @@ def TrajectoryCorrection(trace):
     maze_type = trace['maze_type']
     behav_nodes = location_to_idx(pos_new[:,0], pos_new[:,1], nx = trace['nx'])
 
-    D = D_Matrice[maze_type]
+    D = GetDMatrices(maze_type, 48)
 
     for k in tqdm(range(behav_time.shape[0]-1)):
         if np.isnan(pos_new[k+1,0]) or np.isnan(pos_new[k+1,1]) or np.isnan(pos_new[k,0]) or np.isnan(pos_new[k,1]):
