@@ -258,7 +258,7 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
     Output:
     - A dict
     '''
-    ValueErrorCheck(behavior_paradigm, ['CrossMaze', 'ReverseMaze', 'SimpleMaze', 'decoding'])
+    ValueErrorCheck(behavior_paradigm, ['CrossMaze', 'ReverseMaze', 'DSPMaze', 'SimpleMaze', 'decoding'])
 
     # Initiate data dic
     data = {'MiceID':np.array([]), 'Training Day':np.array([]), 'Maze Type':np.array([])}

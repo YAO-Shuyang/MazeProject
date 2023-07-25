@@ -361,15 +361,27 @@ def plot_trajactory_comparison(pos_bef = None, pos_aft = None, save_loc = None, 
     ax = plot_trajactory(x_bef, y_bef, is_ExistAxes = True, ax = ax, is_GetAxes = True,
                     color = 'gray', linewidth = 2, is_inverty = True)
     plot_trajactory(x_aft, y_aft, is_ExistAxes = True, ax = ax, save_loc = save_loc, is_show = is_show,
-                        file_name = file_name, color = 'red', linewidth = 2)    
+                        file_name = file_name, color = 'red', linewidth = 2)
 
 # Clean data(during laps)
-def clean_data(behav_positions = None, behav_time = None, maze_type = 1, v_thre: float = 200.,
-               delete_start = 20, delete_end = 20):
+def clean_data(behav_positions: np.ndarray = None, behav_time: np.ndarray = None, maze_type: int = 1, v_thre: float = 300.,
+               delete_start = 20, delete_end = 20, save_loc = None) -> tuple[np.ndarray, np.ndarray]:
     if behav_positions is None or behav_time is None:
         print("    Wrong! Both behav_positions and behav_time are required!")
         return 
     
+    dx = np.ediff1d(behav_positions[:, 0])
+    dy = np.ediff1d(behav_positions[:, 1])
+    dt = np.ediff1d(behav_time)
+    v = np.sqrt(dx**2 + dy**2)/dt*1000
+    plt.hist(v, bins = 1000)
+    plt.axvline(v_thre, color = 'red')
+    if save_loc is not None:
+        plt.savefig(join(save_loc, 'clean data quality controled by velocity.png'), dpi=600)
+        plt.savefig(join(save_loc, 'clean data quality controled by velocity.svg'), dpi=600)
+        plt.close()
+
+
     # delete first and last 30 frames (~1s), when the mouse is not in the maze
     # should replace to exact starting time later!
     delete_start = delete_start
@@ -397,6 +409,7 @@ def clean_data(behav_positions = None, behav_time = None, maze_type = 1, v_thre:
         else:
             k -= 1
 
+
     behav_positions, behav_time = Delete_NAN(behav_positions_tmp, behav_time_tmp)
     
     behav_positions_tmp = cp.deepcopy(behav_positions)
@@ -405,7 +418,7 @@ def clean_data(behav_positions = None, behav_time = None, maze_type = 1, v_thre:
     curr_f, next_f = 0, 1  # current frame, next 1/more frame(s)
     while curr_f < behav_time_tmp.shape[0] - 1 and next_f < behav_time_tmp.shape[0]:
         if np.sqrt((behav_positions_tmp[next_f, 0] - behav_positions_tmp[curr_f, 0])**2 + (behav_positions_tmp[next_f, 1] - behav_positions[curr_f, 1])**2)/(behav_time[next_f] - behav_time[curr_f]) * 1000 < v_thre:
-            curr_f = next_f
+            curr_f = cp.copy(next_f)
             next_f += 1
         else:
             behav_positions_tmp[next_f] = [np.nan, np.nan]
@@ -434,15 +447,7 @@ def P_Matrice():
     return P1, P2
 """
 def LocomotionDirection(check_node = 1, targ_node = 1, maze_type = 1, nx = 48):
-    if nx == 12:
-        D = D_Matrice[6+maze_type] / nx * 12
-    elif nx == 24:
-        D = D_Matrice[3+maze_type] / nx * 12
-    elif nx == 48:
-        D = D_Matrice[maze_type] / nx * 12
-    else:
-        print("self.res value error! Report by mylib.maze_utils3.LocomotionDirection")
-        return
+    D = GetDMatrices(maze_type, nx)
     
     check_to_goal = D[check_node-1, 2303]
     targ_to_goal = D[targ_node-1, 2303]
@@ -621,7 +626,6 @@ def run_all_mice(mylist: list, behavior_paradigm = 'CrossMaze', P = None, cam_de
                         file_name = 'TraceOnMeanFrame', color = 'red', linewidth = 1, maze_type = maze_type)
     print("    Figure 5 has done.")
 
-
     if behavior_paradigm == 'SimpleMaze':
         trace['processed_pos_new'] = np.zeros_like(processed_pos)
         trace['processed_pos_new'] = cp.deepcopy(maxHeight - processed_pos[:,1])
@@ -764,17 +768,5 @@ def run_all_mice(mylist: list, behavior_paradigm = 'CrossMaze', P = None, cam_de
 
 
 if __name__ == '__main__':
-    totalpath = "G:\YSY\Reverse_maze"
-    print("Initiate key matrix that will be used in interpolated algorithm. It'll take tens of seconds.")
-    #P1, P2 = P_Matrice()
-    file = pd.read_excel(os.path.join(totalpath,"Back_and_Forth_metadata_time.xlsx"), sheet_name = "behavior")
-    
-    i = 1
-
-    print(i,"Mice "+str(int(file['MiceID'][i]))+" , date "+str(int(file['date'][i]))+", training_day "+str(int(file['training_day'][i]))
-          +", maze type "+str(int(file['maze_type'][i]))+"............................................................")
-    mylist = [str(int(file['date'][i])), str(int(file['MiceID'][i])), str(file['recording_folder'][i]), int(file['training_day'][i]),
-              int(file['maze_type'][i])]
-    #P = P1 if file['maze_type'][i] == 1 else P2
-    run_all_mice(mylist, behavior_paradigm = 'ReverseMaze')#, P = P)
-    print("Done.",end='\n\n\n')
+    with open(r"G:\YSY\Reverse_maze\10209\20230605\session 1\trace_behav.pkl", 'rb') as f:
+        trace = pickle.load(f)

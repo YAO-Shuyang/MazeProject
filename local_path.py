@@ -6,10 +6,10 @@ figpath = r'F:\YSY\FinalResults'
 figdata = r'F:\YSY\FigData'
 
 CM_path = r'G:\YSY\Cross_maze'
-SM_path = r'G:\YSY\previous data\Simple_maze'
+#SM_path = r'G:\YSY\previous_data\Simple_maze'
 f1 = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'calcium')
 f1_behav = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'behavior')
-f2 = pd.read_excel(os.path.join(SM_path,'simple_maze_paradigm.xlsx'), sheet_name = 'calcium')
+#f2 = pd.read_excel(os.path.join(SM_path,'simple_maze_paradigm.xlsx'), sheet_name = 'calcium')
 
 f_CellReg_opm1 = pd.read_excel(os.path.join(CM_path, 'cell_reg_path.xlsx'), sheet_name = 'op-m1')
 f_CellReg_opm2 = pd.read_excel(os.path.join(CM_path, 'cell_reg_path.xlsx'), sheet_name = 'op-m2')

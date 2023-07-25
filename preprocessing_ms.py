@@ -2,10 +2,11 @@ import pandas as pd
 from scipy.io import loadmat
 from mylib.maze_utils3 import *
 from matplotlib_venn import venn3, venn3_circles
-from mylib.dp_analysis import field_arange, plot_field_arange, BehaviorEvents, BehaviorEventsAnalyzer
+from mylib.dp_analysis import field_arange, plot_field_arange, BehaviorEventsAnalyzer
 from mylib.dp_analysis import plot_1day_line, plot_field_arange_all, FieldDisImage, ImageBase
 from mylib.diff_start_point import DSPMazeLapSplit
-from mylib.calcium.reverse import ReverseMazeLapSplit
+from mylib.divide_laps.lap_split import LapSplit
+from mylib.behavior.behavevents import BehavEvents
 
 #  -------------------------------------------------------- Calsium ----------------------------------------------------------------------------
 # In some cases (for example, mice 10019, date 4_20, neuron 23), there're some 'silent neurons' which has indistinct 
@@ -27,7 +28,7 @@ def Generate_SilentNeuron(Spikes, threshold = 30):
 # spatial information (all neurons)
 # Shuffle ISI: DOI: 10.1523/JNEUROSCI.19-21-09497.1999
 
-def calc_SI(spikes, rate_map, t_total, t_nodes_frac):
+def calc_SI(spikes: np.ndarray, rate_map: np.ndarray, t_total: float, t_nodes_frac: np.ndarray) -> np.ndarray:
     mean_rate = np.nansum(spikes, axis = 1) / t_total # mean firing rate
     logArg = (rate_map.T / mean_rate).T;
     logArg[np.where(logArg == 0)] = 1; # keep argument in log non-zero
@@ -62,7 +63,7 @@ def shuffle_test_isi(SI, spikes, spike_nodes, occu_time, shuffle_n = 1000, Ms = 
     t_total = np.nansum(occu_time)/1000
     t_nodes_frac = occu_time/1000/ (t_total+ 1E-6) 
     spike_ind = np.where(spikes==1)[0] # spike index
-    isi = np.append(spike_ind[0], np.ediff1d(spike_ind)) # get interspike interval  
+    isi = np.append(spike_ind[0], np.ediff1d(spike_ind)) # get interspike interval
 
     # shuffle random variable
     shuffle_isi = np.zeros((shuffle_n, len(isi)), dtype = np.int64)
@@ -120,7 +121,7 @@ def shuffle_test_all(SI, spikes, spike_nodes, occu_time, shuffle_n = 1000, Ms = 
     is_placecell = SI > np.percentile(SI_rand, percent)
     return is_placecell
 
-def shuffle_test(trace, Ms = None, shuffle_n = 1000, percent = 95):
+def shuffle_test(trace, Ms = None, shuffle_n = 1000, percent = 95, save_loc: str = None, file_name: str = "Shuffle_Venn"):
     n_neuron = trace['n_neuron']
     SI_all = np.zeros(n_neuron, dtype = np.float64)
     is_placecell_isi = np.zeros(n_neuron, dtype = np.int64)
@@ -157,71 +158,20 @@ def shuffle_test(trace, Ms = None, shuffle_n = 1000, percent = 95):
     print("      Percentage of Place cells:", round(subset[6]/n_neuron*100, 4),"%")
     
     plt.figure(figsize = (6,6))
+    if save_loc is None:
+        save_loc = join(trace['p'], 'Shuffle_Venn')
+
+    if not exists(save_loc):
+        mkdir(save_loc)
+        
     venn3(subsets = subset, set_labels = ('Inter Spike Intervle\nShuffle', 'Shift Spikes\nShuffle', 'Pure Random\nShuffle'))
-    mkdir(os.path.join(trace['p'], 'Shuffle_Venn'))
-    plt.savefig(os.path.join(trace['p'], 'Shuffle_Venn', 'Shuffle_Venn.png'), dpi = 600)
-    plt.savefig(os.path.join(trace['p'], 'Shuffle_Venn', 'Shuffle_Venn.svg'), dpi = 600)
+    plt.savefig(join(save_loc, file_name+'.png'), dpi = 600)
+    plt.savefig(join(save_loc, file_name+'.svg'), dpi = 600)
     print("    Done.")
     return trace
 
 
 # ============================================== Draw Figures ====================================================================
-
-# To judge that does a cell's field(s) (main field and, if existed, subfield(s)) locate at both correct path and incorrect path
-def FieldOnBothPath(place_field = {}, maze_type = 1, correct_path = None):
-    if correct_path is None:
-        print("    Error! arg 'correct_path' is required, or it'll raise up an calculating error! Reported by funciton FieldOnBothPath.")
-        return 0
-
-    count = np.array([0,0], dtype = np.int64)
-    for k in place_field.keys():
-        if k in correct_path:
-            count[0] = 1
-        else:
-            count[1] = 1
-
-    # if sum(ocunt) = 2, there must be at least 2 fields locate at correct and incorrect path, respectively.
-    if np.sum(count) == 2:
-        return 1
-    else:
-        return 0
-        
-
-# According to smoothed rate map, we divide cell populations into two groups: Main Field on Correct Path Cells and Main Field on Incorrect Path cells.
-def MainFieldOnWhichPath(trace = None,):
-    # Initiate
-    maze_type = trace['maze_type']
-    rate_map_all = trace['smooth_map_all']
-    place_field_all = trace['place_field_all']
-    n_neuron = rate_map_all.shape[0]
-    silent_idx = trace['SilentNeuron']
-
-    # value = 1 -> main field on correct path, value = 0 -> main field on incorrect path.
-    main_field_all = np.zeros(n_neuron, dtype = np.int64)
-    # if there're place field on both path, value -> 1, else value -> 0.
-    is_FieldOnBoth = np.zeros(n_neuron, dtype = np.int64)
-
-    # Generate max idx
-    max_idx = np.argmax(rate_map_all, axis = 1)
-    
-    correct_path = correct_paths[maze_type]
-    # main_field identified
-    for n in range(n_neuron):
-        # skip silent index.
-        if n in silent_idx:
-            continue
-        
-        # if max_idx[n] in correct path, set main_field_all[n] as 1, else keep it as 0.
-        if max_idx[n] in correct_path:
-            main_field_all[n] = 1
-
-        is_FieldOnBoth[n] = FieldOnBothPath(place_field = place_field_all[n], maze_type = maze_type, correct_path = correct_path)
-        
-    trace['is_FieldOnBoth'] = is_FieldOnBoth
-    trace['main_field_all'] = main_field_all
-    return trace
-
-
 # caculate firing rate in correct path and incorrect path
 def FiringRateProcess(trace, map_type = 'smooth', spike_threshold = 30, occu_time = None):
     if map_type == 'smooth':
@@ -254,9 +204,6 @@ def FiringRateProcess(trace, map_type = 'smooth', spike_threshold = 30, occu_tim
     maze_type = trace['maze_type']
     silent_idx = trace['SilentNeuron']
 
-    # Divide cell population into 2 groups: Main field on correct path cell and main field on incorrect path cell
-    trace = MainFieldOnWhichPath(trace = trace)
-
     if nx == 48:
         Correct_Graph = Correct_SonGraph1 if maze_type == 1 else Correct_SonGraph2
         Incorrect_Graph = Incorrect_SonGraph1 if maze_type == 1 else Incorrect_SonGraph2
@@ -276,66 +223,6 @@ def FiringRateProcess(trace, map_type = 'smooth', spike_threshold = 30, occu_tim
     mean_rate[silent_idx] *= np.nan
     trace['mean_rate'] = mean_rate
     trace['peak_rate'] = peak_rate
-
-    if maze_type == 0:
-        return trace
-
-    cor_nodes = []
-    inc_nodes = [] #np.setdiff1d(all_nodes,cor_nodes)
-    for k in range(spike_nodes.shape[0]):
-        if spike_nodes[k] in Correct_Graph:
-            cor_nodes.append(k)
-        else:
-            inc_nodes.append(k)
-    cor_nodes = np.array(cor_nodes, dtype = np.int64)
-    inc_nodes = np.array(inc_nodes, dtype = np.int64)
-    #cor_nodes = sum(cor_nodes,[])
-    #all_nodes = np.array(range(1,Spikes.shape[1]+1))
-    
-    peak_rate_onpath = np.zeros(n_neuron, dtype = np.float64)
-    mean_rate_onpath = np.zeros(n_neuron, dtype = np.float64)
-
-    main_field_all = trace['main_field_all']
-    cor_time = np.nansum(occu_time[Correct_Graph-1])
-    inc_time = np.nansum(occu_time[Incorrect_Graph-1])
-    for n in range(n_neuron):
-        # if n is silent, set it as np.nan to avoid effects.
-        if n in silent_idx:
-            peak_rate_onpath[n] = np.nan
-            mean_rate_onpath[n] = np.nan
-            continue
-
-        if main_field_all[n] == 1:
-            peak_rate_onpath[n] = np.nanmax(rate_map_all[n,Correct_Graph-1])
-            mean_rate_onpath[n] = np.nansum(Spikes[n, cor_nodes]) / cor_time * 1000
-        else:
-            peak_rate_onpath[n] = np.nanmax(rate_map_all[n,Incorrect_Graph-1])
-            mean_rate_onpath[n] = np.nansum(Spikes[n, inc_nodes]) / inc_time * 1000
-            
-    trace['peak_rate_on_path'] = peak_rate_onpath
-    trace['mean_rate_on_path'] = mean_rate_onpath
-        
-    # old version, Before Nov 20th, 2022.
-    '''
-    cor_mean_rate = np.zeros(n_neuron, dtype = np.float64)
-    inc_mean_rate = np.zeros(n_neuron, dtype = np.float64)
-    cor_peak_rate = np.zeros(n_neuron, dtype = np.float64)
-    inc_peak_rate = np.zeros(n_neuron, dtype = np.float64)
-
-    cor_mean_rate = np.nansum(Spikes[:,cor_nodes], axis = 1) / np.nansum(occu_time[Correct_Graph-1]) * 1000
-    inc_mean_rate = np.nansum(Spikes[:,inc_nodes], axis = 1) / np.nansum(occu_time[Incorrect_Graph-1]) * 1000
-    cor_peak_rate = np.nanmax(rate_map_all[:,Correct_Graph-1], axis = 1)
-    inc_peak_rate = np.nanmax(rate_map_all[:,Incorrect_Graph-1], axis = 1)
-    # print(round(peak_rate[k],4),"  ",round(mean_rate[k],4),"  ",round(cor_mean_rate[k],4),"  ",round(inc_mean_rate[k],4))
-    
-    
-    trace['cor_mean_rate'] = cor_mean_rate
-    trace['inc_mean_rate'] = inc_mean_rate
-    trace['cor_peak_rate'] = cor_peak_rate
-    trace['inc_peak_rate'] = inc_peak_rate
-    trace['cor_nodes'] = cor_nodes
-    trace['inc_nodes'] = inc_nodes
-    '''
     return trace
 
 # draw old_map, trace_map, rate_map
@@ -793,113 +680,6 @@ def DrawLocTimeCurve(behav_time = None, rand_nodes = None, spike_time = None, sp
     plt.clf()
     plt.close()
 
-# =============================================== Lap Split Analysis (For Cross Maze, Reveres Maze, DSP Maze (Different Start Point)) =================================
-def LapSplit(trace, behavior_paradigm = 'CrossMaze', **kwargs):
-    if behavior_paradigm == 'CrossMaze':
-        return CrossMazeLapSplit(trace, **kwargs)
-    elif behavior_paradigm == 'ReverseMaze':
-        return ReverseMazeLapSplit(trace, **kwargs)
-    elif behavior_paradigm == 'DSPMaze':
-        return DSPMazeLapSplit(trace, **kwargs)
-    elif behavior_paradigm == 'SimpleMaze':
-        return np.array([0], dtype = np.int64), np.array([trace['correct_time'].shape[0]-1], dtype = np.int64)
-
-def get_check_area(maze_type: int, start_point: int, check_length: int = 5):
-    if start_point > 144 or start_point < 1:
-        raise ValueError("Only values belong to set {1, 2, ..., 144} are valid! But "+f"{start_point} was inputt.")
-
-    area = [start_point]
-    graph = maze1_graph if maze_type == 1 else maze2_graph
-    surr = graph[start_point]
-    prev = 1
-
-    StepExpand = {1: [start_point]}
-    while prev <= check_length:
-        StepExpand[prev+1] = []
-        for j in StepExpand[prev]:
-            for k in graph[j]:
-                if k not in area:
-                    area.append(k)
-                    StepExpand[prev+1].append(k)
-        prev += 1
-
-    return area
-
-# This function has been proved to be suited for all session for cross maze paradigm.
-def CrossMazeLapSplit(trace, check_length = 5, mid_length = 5):
-    if trace['maze_type'] in [1,2,3]:
-        beg_idx = []
-        end_idx = []
-        if len(np.where(np.isnan(trace['correct_nodes']))[0]) != 0:
-            print('Error! correct_nodes contains NAN value!')
-            return [],[]
-
-        # Define start area, end area and check area with certain sizes that are defaultly set as 5(check_length).
-        co_path = correct_paths[trace['maze_type']]
-        start_area = get_check_area(maze_type=trace['maze_type'], start_point=1, check_length=check_length)
-        end_area = get_check_area(maze_type=trace['maze_type'], start_point=144, check_length=check_length)
-        mid = co_path[int(len(co_path) * 0.5)]
-        check_area = get_check_area(maze_type=trace['maze_type'], start_point=mid, check_length=mid_length)
-
-        behav_nodes = cp.deepcopy(trace['correct_nodes'])
-        behav_nodes = spike_nodes_transform(spike_nodes = behav_nodes, nx = 12)
-        switch = 0
-        check = 0
-
-        # Check if lap-start or lap-end point frame by frame
-        for k in range(behav_nodes.shape[0]):
-            # Define checking properties for check area. If recorded point change from end area to start area without passing by the check area, we identify it 
-            # as the start of a new lap
-            
-            if behav_nodes[k] in check_area:
-                # Enter check area from end area.
-                if switch == 2:
-                    check = 0
-
-                # Enter check area from start area.
-                if switch == 1: 
-                    check = 1
-
-                # Abnormal case: that mice does not occur at start area before they enter the check area.
-                if switch == 0:
-                    check = 1
-                    switch = 1 # Assume that switch state must be belong to {1,2}
-                    beg_idx.append(0)
-
-            if behav_nodes[k] in start_area:
-                # if switch = 0
-                if switch == 0:
-                    beg_idx.append(k)
-                    switch = 1
-                if switch == 2 and check == 1:
-                    end_idx.append(k-1)
-                    beg_idx.append(k)
-                    switch = 1
-
-            if behav_nodes[k] in end_area:
-                switch = 2   # state 2: at end area
-                check = 1    # check = 1 represents mice have passed the check area
-
-        if switch == 2:
-            end_idx.append(behav_nodes.shape[0]-1)
-            
-        if len(beg_idx) != len(end_idx):
-            # Abort when swith = 1
-            beg_idx.pop()
-        return np.array(beg_idx, dtype = np.int64), np.array(end_idx, dtype = np.int64)
-
-    elif trace['maze_type'] == 0:
-        behav_nodes = trace['correct_nodes']
-        unit = int(behav_nodes.shape[0] / 2)
-        beg_idx = [0, unit]
-        end_idx = [unit-1, behav_nodes.shape[0]-1]
-        return np.array(beg_idx, dtype = np.int64), np.array(end_idx, dtype = np.int64)
-    else:
-        print("    Error in maze_type! Report by mylib.maze_utils3.CrossMazeLapSplit")
-        return np.array([], dtype = np.int64), np.array([], dtype = np.int64)
-
-
-
 #======================================================================== Lap Analysis ================================================================================
 # Cross Lap Correlation for cross maze paradigm
 def CrossLapsCorrelation(trace, behavior_paradigm = 'CrossMaze'):
@@ -967,6 +747,19 @@ def CrossLapsCorrelation(trace, behavior_paradigm = 'CrossMaze'):
     trace['ms_idx_lap'] = ms_idx_lap
 
     return trace
+
+def get_spike_frame_label(ms_time, spike_nodes, trace = None, behavior_paradigm = 'CrossMaze'):
+    beg_idx, end_idx = LapSplit(trace, behavior_paradigm = behavior_paradigm) # Get Split TimeIndex Point
+    lap = len(beg_idx) # Number of inter-laps
+    # behav spike index
+    frame_labels = np.array([], dtype=np.int64)
+
+    for k in range(lap):
+        beg_idx, end_idx = np.where(ms_time >= trace['correct_time'][beg_idx[k]])[0][0], np.where(ms_time <= trace['correct_time'][end_idx[k]])[0][-1]
+        labels = BehavEvents.get_frame_labels(spike_nodes, trace['maze_type'])
+        frame_labels = np.concatenate([frame_labels, labels])
+
+    return frame_labels
 
 def Delete_InterLapSpike(behav_time, ms_time, ms_speed, Spikes, spike_nodes, dt: np.ndarray, trace = None, 
                          behavior_paradigm = 'CrossMaze'):
@@ -1081,7 +874,7 @@ def OldMapSplit(trace = None):
     trace['old_split_nanPos'] = old_split_nanPos
     return trace
 
-def plot_split_trajactory(trace, behavior_paradigm = 'CrossMaze', split_args: dict = {}, **kwargs):
+def plot_split_trajectory(trace, behavior_paradigm = 'CrossMaze', split_args: dict = {}, **kwargs):
     beg_idx, end_idx = LapSplit(trace, behavior_paradigm = behavior_paradigm, **split_args)
     laps = len(beg_idx)
     save_loc = os.path.join(trace['p'], 'behav','laps_trajactory')
@@ -1367,6 +1160,7 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', v_thr
         RawTraces = np.array(ms['RawTraces'][0][0]).T
         DeconvSignal = np.array(ms['DeconvSignals'][0][0]).T
         ms_time = np.array(ms['time'][0])[0,].T[0]
+
     if behavior_paradigm in ['SimpleMaze', 'ReverseMaze','DSPMaze']:
         with h5py.File(folder, 'r') as f:
             ms_mat = f['ms']
@@ -1375,13 +1169,7 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', v_thr
             DeconvSignal = np.array(ms_mat['DeconvSignals'])
             ms_time = np.array(ms_mat['time'],dtype = np.int64)[0,]
 
-    # Aligned wireless miniscope data with behavioral data. Only for wireless miniscope
-    if behavior_paradigm == 'ReverseMaze':
-        # need Aligned Information
-        align_frame = 679
-        ms_time += align_frame * 33
-
-    plot_split_trajactory(trace, behavior_paradigm = behavior_paradigm)
+    plot_split_trajectory(trace, behavior_paradigm = behavior_paradigm)
 
     print("    B. Calculate putative spikes and correlated location from deconvolved signal traces. Delete spikes that evoked at interlaps gap and those spikes that cannot find it's clear locations.")
     # Calculating Spikes, than delete the interlaps frames
@@ -1512,7 +1300,7 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', v_thr
     
     # Firing Rate Processing:
     print("      B. Firing rate Analysis")
-    trace = FiringRateProcess(trace, map_type = 'smooth', spike_threshold = 30)
+    #trace = FiringRateProcess(trace, map_type = 'smooth', spike_threshold = 30)
     
     # Cross-Lap Analysis
     if behavior_paradigm in ['ReverseMaze', 'CrossMaze', 'DSPMaze']:
@@ -1536,64 +1324,3 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', v_thr
     
     t2 = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
     print(t1,'\n',t2)
-
-
-if __name__ == '__main__':
-    import time
-    import pandas as pd
-    import os
-    import warnings
-    import h5py
-    import pickle
-    from scipy.io import loadmat
-
-    i = 23
-    f = pd.read_excel(r"G:\YSY\Reverse_maze\Reverse_maze_paradigm.xlsx", sheet_name='calcium')
-    work_flow = r'G:\YSY\Reverse_maze'
-
-    t1 = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-
-    date = int(f['date'][i])
-    MiceID = int(f['MiceID'][i])
-    folder = str(f['recording_folder'][i])
-    maze_type = int(f['maze_type'][i])
-    behavior_paradigm = str(f['behavior_paradigm'][i])
-    session = int(f['session'][i])
-
-    totalpath = work_flow
-    p = os.path.join(totalpath, str(MiceID), str(date),"session "+str(session))
-
-    if os.path.exists(os.path.join(p,'trace_behav.pkl')):
-        with open(os.path.join(p, 'trace_behav.pkl'), 'rb') as handle:
-            trace = pickle.load(handle)
-    else:
-        warnings.warn(f"{os.path.join(p,'trace_behav.pkl')} is not exist!")
-    
-    trace['p'] = p    
-    f.loc[i, 'Path'] = p
-    #coverage = coverage_curve(trace['processed_pos_new'], maze_type=trace['maze_type'], save_loc=os.path.join(p, 'behav'))
-    #trace['coverage'] = coverage
-
-    # Read File
-    print("    A. Read ms.mat File")
-    ms_path = os.path.join(folder, 'ms.mat')
-    if os.path.exists(ms_path) == False:
-        warnings.warn(f"{ms_path} is not exist!")
-
-    if behavior_paradigm == ['ReverseMaze', 'CrossMaze']:
-        ms_mat = loadmat(ms_path)
-        ms = ms_mat['ms']
-        #FiltTraces = np.array(ms['FiltTraces'][0][0]).T
-        RawTraces = np.array(ms['RawTraces'][0][0]).T
-        DeconvSignal = np.array(ms['DeconvSignals'][0][0]).T
-        ms_time = np.array(ms['time'][0])[0,].T[0]
-        
-    if behavior_paradigm in ['DSPMaze']:
-        with h5py.File(ms_path, 'r') as f:
-            ms_mat = f['ms']
-            FiltTraces = np.array(ms_mat['FiltTraces'])
-            RawTraces = np.array(ms_mat['RawTraces'])
-            DeconvSignal = np.array(ms_mat['DeconvSignals'])
-            ms_time = np.array(ms_mat['time'],dtype = np.int64)[0,]
-
-    plot_split_trajactory(trace, behavior_paradigm = behavior_paradigm, split_args={})

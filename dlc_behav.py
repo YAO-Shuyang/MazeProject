@@ -14,42 +14,8 @@ from mylib.preprocessing_behav import plot_trajactory_comparison, clean_data, ge
 from mylib.preprocessing_behav import PolygonDrawer, uniform_smooth_speed, Circulate_Checking
 from mylib.maze_utils3 import position_transform, location_to_idx, occu_time_transform, DLC_Concatenate
 from mylib.maze_graph import Father2SonGraph
+from mylib.behavior import read_time_stamp, dlc_position_generation
 
-
-def read_time_stamp(file_dir: str, key_word: str = 'Time Stamp (ms)') -> np.ndarray:
-    f = pd.read_csv(file_dir)
-    return np.array(f[key_word])
-
-def dlc_position_generation(dlc: dict, dtype: str = 'prefer', prefer_body_part: str = 'bodypart1'):
-    """dlc_position_generation _summary_
-
-    Generation of position from the dlc data
-
-    Parameters
-    ----------
-    dlc : dict
-        dlc coordinates dictionary, e.g.,  {'bodypart1': numpy.array([...]), 'bodypart2': numpy.array([...]), 
-                                            'bodypart3': numpy.array([...]), 'objectA': numpy.array([...])}
-    dtype : str, optional
-        The way to generate the position of mice, by default 'prefer'
-        Only {'prefer', 'mass'}
-        'prefer' method simply adopts the positions of one point (prefered point) among 
-          those bodyparts labeled as the position of a freely moving mouses.
-        'mass' method adopts the mass point of all bodyparts labeled as the position of
-          a freely moving mouse.
-    
-    """
-    
-    if dtype == 'prefer':
-        return cp.deepcopy(dlc[prefer_body_part])
-
-    elif dtype == 'mass':
-        pos = None
-        nkey = 0
-        for b in dlc.keys():
-            pos = pos + dlc[b] if pos is not None else dlc[b]
-            nkey += 1
-        return pos/nkey
 
 def RotateTrajectory(pos: np.ndarray, degree: float = 0, maxHeight = 960, maxWidth = 960):
     if degree == 0:
@@ -146,15 +112,15 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
     
     # 2. Data cleaning by deleting several frames near the start point and the end point.
     print("    Data cleaning...")
-    '''
+
     # data cleaning 1:
-    behav_positions, behav_time = clean_data(behav_positions, behav_time, maze_type = maze_type, delete_start=1, delete_end=1)
+    behav_positions, behav_time = clean_data(behav_positions, behav_time, maze_type = maze_type, delete_start=1, delete_end=1, save_loc=p_behav)
     # Add NAN value at the cross lap gap to plot the trajactory.
     behav_positions, behav_time = Add_NAN(behav_positions, behav_time, maze_type = maze_type)
     plot_trajactory(x = behav_positions[:,0], y = behav_positions[:,1], save_loc = p_behav,
                 file_name = 'Trajactory_DeleteWrongData', maze_type = maze_type)
     print("    Figure 3 has done.")
-    '''
+
     frames_num_tracker[2] = behav_positions.shape[0]
     
     # Get a modified behav_time_original for interpolated
@@ -229,7 +195,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
     # Plot the processed position ---------------------------------------------------------------------------------------------
     plt.figure(figsize = (6,6))
     ax = Clear_Axes(plt.axes())
-    if maze_type in [1,2]:
+    if maze_type in [1,2,3]:
         DrawMazeProfile(axes = ax, maze_type = maze_type, nx = trace['nx'], linewidth = 2, color = 'black')
     a = position_transform(processed_pos_new)
     plot_trajactory(x = a[:,0], y = a[:,1], save_loc = p_behav, is_ExistAxes = True, ax = ax, maze_type = maze_type,
@@ -241,8 +207,8 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
     trace['behav_nodes'] = cp.deepcopy(behav_nodes)
 
 
-    # For maze 1 and maze 2 sessions, a cross-wall correction should be performed. --------------------------------------------
-    if maze_type in [1,2]:
+    # For maze 1, maze 2 and hairpin maze sessions, a cross-wall correction should be performed. --------------------------------------------
+    if maze_type in [1,2,3]:
         # Correct trajectory cross-wall events
         trace = Circulate_Checking(trace, circulate_time = 5)
             
@@ -284,7 +250,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
     print("    Draw behavioral ratemap...")
     plt.figure(figsize = (8,6))
     ax = Clear_Axes(plt.axes())
-    if maze_type in [1,2]:
+    if maze_type in [1,2,3]:
         DrawMazeProfile(nx = 48, maze_type = trace['maze_type'], linewidth = 2, color = 'yellow', axes = ax)
     im = ax.imshow(np.reshape(occu_time/1000,[48,48]), vmax = 20, cmap = 'jet')
     cbar = plt.colorbar(im, ax = ax)

@@ -8,11 +8,12 @@ import copy as cp
 import warnings
 import pandas as pd
 import scipy.stats
-from mylib.preprocessing_ms import plot_split_trajactory, Delete_InterLapSpike, Generate_SilentNeuron, calc_ratemap, place_field
+from mylib.preprocessing_ms import plot_split_trajectory, Generate_SilentNeuron, calc_ratemap, place_field, Delete_InterLapSpike
 from mylib.preprocessing_ms import shuffle_test, RateMap, QuarterMap, OldMap, SimplePeakCurve, TraceMap, LocTimeCurve, PVCorrelationMap
 from mylib.preprocessing_ms import CrossLapsCorrelation, OldMapSplit, FiringRateProcess, calc_ms_speed, plot_spike_monitor
 from mylib.preprocessing_ms import half_half_correlation, odd_even_correlation, coverage_curve, CombineMap, plot_field_arange 
 from mylib.preprocessing_ms import calc_speed, uniform_smooth_speed, field_specific_correlation
+from mylib.preprocessing_ms import get_spike_frame_label
 from mylib.maze_utils3 import SpikeType, SpikeNodes, SmoothMatrix, mkdir
 
 def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, 
@@ -48,15 +49,14 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
         warnings.warn(f"{ms_path} is not exist!")
         return
 
-    if behavior_paradigm == 'CrossMaze':
+    try:
         ms_mat = loadmat(ms_path)
         ms = ms_mat['ms']
         #FiltTraces = np.array(ms['FiltTraces'][0][0]).T
         RawTraces = np.array(ms['RawTraces'][0][0]).T
         DeconvSignal = np.array(ms['DeconvSignals'][0][0]).T
         ms_time = np.array(ms['time'][0])[0,].T[0]
-        
-    if behavior_paradigm in ['ReverseMaze','DSPMaze']:
+    except:
         with h5py.File(ms_path, 'r') as f:
             ms_mat = f['ms']
             FiltTraces = np.array(ms_mat['FiltTraces'])
@@ -64,7 +64,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
             DeconvSignal = np.array(ms_mat['DeconvSignals'])
             ms_time = np.array(ms_mat['time'],dtype = np.int64)[0,]
 
-    plot_split_trajactory(trace, behavior_paradigm = behavior_paradigm, split_args={})
+    plot_split_trajectory(trace, behavior_paradigm = behavior_paradigm, split_args={})
 
     print("    B. Calculate putative spikes and correlated location from deconvolved signal traces. Delete spikes that evoked at interlaps gap and those spikes that cannot find it's clear locations.")
     # Calculating Spikes, than delete the interlaps frames
@@ -106,10 +106,11 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     spike_num_mon2 = np.nansum(Spikes, axis = 1)
 
     # Delete InterLap Spikes
-    print("      - Delete the inter-lap spikes.")
+    print("      - Delete the correct track spikes.")
     Spikes, spike_nodes, ms_time_behav, ms_speed_behav, dt = Delete_InterLapSpike(behav_time = trace['correct_time'], ms_time = ms_time_behav, 
                                                                               Spikes = Spikes, spike_nodes = spike_nodes, dt = dt, ms_speed=ms_speed_behav,
                                                                               behavior_paradigm = behavior_paradigm, trace = trace)
+
     n_neuron = Spikes.shape[0]
     spike_num_mon3 = np.nansum(Spikes, axis = 1)
 
@@ -162,10 +163,10 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     
     print("    Plotting:")
     print("      1. Ratemap")
-    #RateMap(trace)
+    RateMap(trace)
     
     print("      2. Tracemap")
-    #TraceMap(trace)      
+    TraceMap(trace)      
       
     print("      3. Quarter_map")
     trace = QuarterMap(trace, isDraw = False)
@@ -182,7 +183,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     SimplePeakCurve(trace, file_name = 'PeakCurve', save_loc = os.path.join(trace['p'], 'PeakCurve'))
     
     print("      6. Combining tracemap, rate map(48 x 48), old map(12 x 12) and quarter map(24 x 24)")
-    CombineMap(trace)
+    #CombineMap(trace)
     
     if trace['maze_type'] != 0:
         # LocTimeCurve

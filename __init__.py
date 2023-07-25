@@ -1,4 +1,4 @@
-from .maze_graph import *
-from .maze_utils3 import *
-from .statistic_test import *
-
+from mylib.calcium.axes.rate_map import RateMapAxes
+from mylib.calcium.axes.trace_map import TraceMapAxes
+from mylib.calcium.axes.peak_curve import PeakCurveAxes
+from mylib.calcium.axes.loc_time_curve import LocTimeCurveAxes

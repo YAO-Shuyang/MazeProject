@@ -8,6 +8,8 @@ from mylib.maze_utils3 import spike_nodes_transform
 from mylib.maze_graph import DSPLapSplitCheckPoint1_1, DSPLapSplitCheckPoint2_1, DSPLapSplitCheckPoint1_2, DSPLapSplitCheckPoint2_2
 
 def DSPMazeLapSplit(trace, check_length = 5):
+    raise ValueError("We strongly recommend you to use manually labeled data to get lap information.")
+
     if trace['maze_type'] in [1,2]:
         beg_idx = []
         end_idx = []

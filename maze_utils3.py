@@ -86,11 +86,10 @@ def WallMatrix(maze_type: int):
     for i in range(1,145):
         if i == 1 and maze_type != 0:
             vertical_walls[0,0] = 0
-        if i == 144 and maze_type != 0:
-            if maze_type in [1, 2]:
-                vertical_walls[11, 12] = 0
-            elif maze_type == 3:
-                vertical_walls[11, 0] = 0
+        if i == 144 and maze_type in [1, 2]:
+            vertical_walls[11, 12] = 0
+        elif i == 133 and maze_type in [3]:
+            vertical_walls[0, 12] = 0
         
         x, y = idx_to_loc(i, nx = nx, ny = nx)
 
@@ -282,13 +281,13 @@ def Gaussian(x=0, sigma=2, pi=3.1416, nx = 48):
     x = x * (48 / nx)
     return 1 / (sigma * np.sqrt(pi * 2)) * np.exp(- x * x / (sigma * sigma * 2))
 
-def Cartesian_distance(curr, surr, nx = 48):
+def CartesianDistance(curr, surr, nx = 48):
     # curr is the node id
     curr_x, curr_y = idx_to_loc(curr, nx = nx, ny = nx)
     surr_x, surr_y = idx_to_loc(surr, nx = nx, ny = nx)
     return np.sqrt((curr_x - surr_x)*(curr_x - surr_x)+(curr_y - surr_y)*(curr_y - surr_y))
 
-def SmoothMatrix(maze_type = 1, sigma = 2, _range = 7, nx = 48):
+def SmoothMatrix(maze_type: int, sigma: float = 3, _range: int = 7, nx: int = 48):
     if (maze_type, nx) in maze_graphs.keys():
         graph = maze_graphs[(maze_type, nx)]
     else:
@@ -307,7 +306,7 @@ def SmoothMatrix(maze_type = 1, sigma = 2, _range = 7, nx = 48):
             SurrMap[k] = np.array([],dtype = np.int32)
             for s in SurrMap[k-1]:
                 for j in range(len(graph[s])):
-                    length = Cartesian_distance(curr, graph[s][j], nx = nx)
+                    length = CartesianDistance(curr, graph[s][j], nx = nx)
                     if graph[s][j] not in Area and length <= _range:
                         Area.append(graph[s][j])
                         SurrMap[k] = np.append(SurrMap[k], graph[s][j])
@@ -316,7 +315,7 @@ def SmoothMatrix(maze_type = 1, sigma = 2, _range = 7, nx = 48):
     smooth_matrix = sklearn.preprocessing.normalize(smooth_matrix, norm = 'l1')
     return smooth_matrix
     
-def smooth(clear_map_all, maze_type = 1, nx = 48, _range = 7, sigma = 2):
+def smooth(clear_map_all, maze_type: int, nx: int = 48, _range = 7, sigma = 3):
     if maze_type in [0,1,2,3]:
         print("    Generate smooth matrix")
         Ms = SmoothMatrix(maze_type = maze_type, sigma = sigma, _range = _range, nx = nx)
@@ -651,7 +650,6 @@ def GetDMatrices(maze_type:int, nx:int):
     ValueErrorCheck(nx, [12,24,48])
     ValueErrorCheck(maze_type, [1,2,3,0])
     try:
-        print(os.path.abspath('decoder_DMatrix.pkl'))
         with open(r'D:\ProgramData\Anaconda3_2022\envs\maze\Lib\site-packages\mylib\decoder_DMatrix.pkl', 'rb') as handle:
             D_Matrice = pickle.load(handle)
     except:
@@ -676,6 +674,7 @@ def DecodingChanceLevel(maze_type:int = 1, nx:int = 48, shuffle_frames:int = 400
     ValueErrorCheck(maze_type, [1,2,3,0])
 
     D = GetDMatrices(maze_type = maze_type, nx = nx)
+    print(D.shape)
 
     assert occu_time.shape[0] == nx**2
 
