@@ -51,6 +51,9 @@ def SpatialInformation_Interface(trace = {}, spike_threshold = 30, variable_name
 
 # Generate learning curve for cross maze paradigm. Fig0020
 def LearningCurve_Interface(trace = {}, spike_threshold = 30, variable_names = None):
+    if 'laps' not in trace.keys():
+        trace = CrossLapsCorrelation(trace)
+        print(trace['p'])
     KeyWordErrorCheck(trace, __file__, ['laps','lap_begin_index','lap_end_index', 'correct_time'])
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['laps_id','explore_time'])
 
@@ -222,10 +225,160 @@ def Speed_Interface(trace: dict, spike_threshold: int or float = 30,
     
     return mean_speed, np.arange(1, CP.shape[0]+1)
 
-if __name__ == '__main__':
-    with open(r'G:\YSY\Cross_maze\11095\20220830\session 3\trace.pkl', 'rb') as handle:
-        trace = pickle.load(handle)
+def InterSessionCorrelation_Interface(trace: dict, spike_threshold: int or float = 30, 
+                           variable_names: list or None = None, 
+                           is_placecell: bool = False):
+    if 'laps' not in trace.keys():
+        trace = CrossLapsCorrelation(trace, behavior_paradigm = trace['paradigm'])
+        trace = OldMapSplit(trace)
+    if trace['laps'] == 1:
+        return np.array([]), np.array([]), np.array([])
+    if 'fir_sec_corr' not in trace.keys():
+        trace = half_half_correlation(trace)
+    if 'odd_even_corr' not in trace.keys():
+        trace = odd_even_correlation(trace)
     
-    print(trace.keys())
-    print(trace['behav_speed'].shape)
-    print(trace['behav_nodes'].shape)
+    print(np.nanmean(trace['odd_even_corr']), np.nanmean(trace['fir_sec_corr']), 'Maze '+str(trace['maze_type']))    
+    KeyWordErrorCheck(trace, __file__, ['fir_sec_corr', 'odd_even_corr', 'is_placecell'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Half-half Correlation', 'Odd-even Correlation', 'Cell Type'])
+    
+    return trace['fir_sec_corr'], trace['odd_even_corr'], trace['is_placecell']
+
+from scipy.stats import poisson
+# Fig0039
+def KSTestPoisson_Interface(trace: dict, spike_threshold: int or float = 30, 
+                           variable_names: list or None = None, 
+                           is_placecell: bool = True):
+    
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Statistic', 'PValue'])   
+    field_number_pc = field_number_session(trace, is_placecell = True, spike_thre = spike_threshold)
+    MAX = np.nanmax(field_number_pc)
+    density = plt.hist(field_number_pc, range=(0.5, MAX+0.5), bins = int(MAX), density=True)[0]
+    plt.close()
+    lam = EqualPoissonFit(np.arange(1,MAX+1), density)
+    sta, p = scipy.stats.kstest(field_number_pc, poisson.rvs(lam, size=1000), alternative='two-sided')
+    return [sta], [p]
+
+# Fig0040
+def FieldNumber_InSessionStability_Interface(trace: dict, spike_threshold: int or float = 30, 
+                                             variable_names: list or None = None, 
+                                             is_placecell: bool = True):
+    if 'laps' not in trace.keys():
+        trace = CrossLapsCorrelation(trace, behavior_paradigm = trace['paradigm'])
+        trace = OldMapSplit(trace)
+    if trace['laps'] == 1:
+        return np.array([]), np.array([]), np.array([])
+    if 'fir_sec_corr' not in trace.keys():
+        trace = half_half_correlation(trace)
+    if 'odd_even_corr' not in trace.keys():
+        trace = odd_even_correlation(trace)
+        
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Field Number', 'In-session OEC', 'In-session FSC'])
+    idx = np.where(trace['is_placecell']==1)[0]
+    field_number_pc = field_number_session(trace, is_placecell = False)
+    
+    return field_number_pc[idx], trace['odd_even_corr'][idx], trace['fir_sec_corr'][idx]
+
+
+# Fig0041
+def InFieldCorrelation_Interface(trace: dict, spike_threshold: int or float = 30, 
+                                             variable_names: list or None = None, 
+                                             is_placecell: bool = True):
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Center ID', 'Field Size', 'Center Rate', 
+                                                                                'In-field OEC', 'In-field FSC', 'Path Type'])
+    
+    n = trace['n_neuron']
+    
+    trace = field_specific_correlation(trace)
+    id, size, rate, OEC, FSC, path = [], [], [], [], [], []
+    
+    CP = Correct_SonGraph1 if trace['maze_type'] == 1 else Correct_SonGraph2
+    
+    for i in range(n):
+        if trace['is_placecell'][i] == 0:
+            continue
+        ks = trace['place_field_all'][i].keys()
+        for k in ks:
+            id.append(k)
+            size.append(len(trace['place_field_all'][i][k]))
+            rate.append(trace['smooth_map_all'][i][k-1])
+            OEC.append(trace['in_field_corr'][i][k][0])
+            FSC.append(trace['in_field_corr'][i][k][1])
+            if k in CP:
+                path.append(1)
+            else:
+                path.append(0)
+            
+    
+    return (np.array(id, dtype = np.int64), 
+            np.array(size, dtype = np.int64), 
+            np.array(rate, dtype = np.float64), 
+            np.array(OEC, dtype = np.float64), 
+            np.array(FSC, dtype = np.float64),
+            np.array(path, dtype = np.int64))
+
+# Fig0044
+def PVCorrelations_Interface(trace: dict, spike_threshold: int or float = 30, 
+                                             variable_names: list or None = None, 
+                                             is_placecell: bool = True):
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Std OEC', 'Mean OEC', 'CP Std OEC', 'CP Mean OEC', 'IP Std OEC', 'IP Mean OEC',
+                                                                                'Std FSC', 'Mean FSC', 'CP Std FSC', 'CP Mean FSC', 'IP Std FSC', 'IP Mean FSC'])
+
+    if 'laps' not in trace.keys():
+        trace = CrossLapsCorrelation(trace, behavior_paradigm = trace['paradigm'])
+        trace = OldMapSplit(trace)
+    if trace['laps'] == 1:
+        return np.array([]), np.array([]), np.array([]), np.array([]), np.array([]), np.array([])
+    if 'fir_sec_corr' not in trace.keys():
+        trace = half_half_correlation(trace)
+    if 'odd_even_corr' not in trace.keys():
+        trace = odd_even_correlation(trace)
+    
+    if is_placecell:
+        idx = np.where(trace['is_placecell'] == 1)[0]
+    else:
+        idx = np.arange(trace['n_neuron'])
+    
+    SpatialPVector_OEC = np.zeros(48**2, np.float64) 
+    for i in range(48**2):
+        SpatialPVector_OEC[i], _ = pearsonr(trace['smooth_map_fir'][idx, i], 
+                                            trace['smooth_map_sec'][idx, i])
+    
+    STD_OEC = np.nanstd(SpatialPVector_OEC)
+    MEAN_OEC = np.nanmean(SpatialPVector_OEC)
+        
+    SpatialPVector_FSC = np.zeros(48**2, np.float64) 
+    for i in range(48**2):
+        SpatialPVector_FSC[i], _ = pearsonr(trace['smooth_map_odd'][idx, i], 
+                                            trace['smooth_map_evn'][idx, i])
+        
+    STD_FSC = np.nanstd(SpatialPVector_FSC)
+    MEAN_FSC = np.nanmean(SpatialPVector_FSC)
+        
+    if trace['maze_type'] != 0:
+        CP = Correct_SonGraph1 if trace['maze_type'] == 1 else Correct_SonGraph2
+        IP = Incorrect_SonGraph1 if trace['maze_type'] == 1 else Incorrect_SonGraph2
+        
+        STD_OEC_CP = np.nanstd(SpatialPVector_OEC[CP-1])
+        MEAN_OEC_CP = np.nanmean(SpatialPVector_OEC[CP-1])
+        STD_OEC_IP = np.nanstd(SpatialPVector_OEC[IP-1])
+        MEAN_OEC_IP = np.nanmean(SpatialPVector_OEC[IP-1])
+        
+        STD_FSC_CP = np.nanstd(SpatialPVector_FSC[CP-1])
+        MEAN_FSC_CP = np.nanmean(SpatialPVector_FSC[CP-1])
+        STD_FSC_IP = np.nanstd(SpatialPVector_FSC[IP-1])
+        MEAN_FSC_IP = np.nanmean(SpatialPVector_FSC[IP-1])
+        return (np.array([STD_OEC]), np.array([MEAN_OEC]),
+                np.array([STD_OEC_CP]), np.array([MEAN_OEC_CP]), 
+                np.array([STD_OEC_IP]), np.array([MEAN_OEC_IP]), 
+                np.array([STD_FSC]), np.array([MEAN_FSC]), 
+                np.array([STD_FSC_CP]), np.array([MEAN_FSC_CP]), 
+                np.array([STD_FSC_IP]), np.array([MEAN_FSC_IP]))
+        
+    else:
+        return (np.array([STD_OEC]), np.array([MEAN_OEC]),
+                np.array([np.nan]), np.array([np.nan]), 
+                np.array([np.nan]), np.array([np.nan]), 
+                np.array([STD_FSC]), np.array([MEAN_FSC]), 
+                np.array([np.nan]), np.array([np.nan]), 
+                np.array([np.nan]), np.array([np.nan]))

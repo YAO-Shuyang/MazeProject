@@ -3,24 +3,10 @@ from mylib.preprocessing_ms import *
 from mylib.Interfaces import *
 import seaborn as sns
 import scipy.io
+from scipy.stats import ttest_1samp, ttest_ind
 from mylib.Interfaces import FiringRateProcess_Interface, SpatialInformation_Interface, LearningCurve_Interface, PlaceFieldNumber_Interface, PlaceCellPercentage_Interface, NeuralDecodingResults_Interface, PeakDistributionDensity_Interface
-
-figpath = 'E:\Data\FinalResults'
-figdata = 'E:\Data\FigData'
-
-CM_path = 'E:\Data\Cross_maze'
-CM_path2 = 'E:\Data\Cross_maze2'
-#SM_path = 'E:\Data\Simple_maze'
-f1 = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'calcium')
-f1_behav = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'behavior')
-#f2 = pd.read_excel(os.path.join(SM_path,'simple_maze_paradigm.xlsx'), sheet_name = 'calcium')
-
-#f_CellReg = pd.read_excel(os.path.join(CM_path, 'cell_reg_path.xlsx'), sheet_name = 'CellRegPath')
-
-cellReg_95_maze1 = r'E:\Data\Cross_maze\11095\Maze1-footprint\Cell_reg\cellRegistered.mat'
-cellReg_95_maze2 = r'E:\Data\Cross_maze\11095\Maze2-footprint\Cell_reg\cellRegistered.mat'
-order_95_maze1 = np.array([], dtype = np.int64)
-
+from mylib.local_path import *
+from scipy.stats import linregress
 
 def star(p:str):
     '''
@@ -272,7 +258,7 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
     Output:
     - A dict
     '''
-    ValueErrorCheck(behavior_paradigm, ['CrossMaze', 'ReverseMaze', 'SimpleMaze', 'decoding'])
+    ValueErrorCheck(behavior_paradigm, ['CrossMaze', 'ReverseMaze', 'DSPMaze', 'SimpleMaze', 'decoding'])
 
     # Initiate data dic
     data = {'MiceID':np.array([]), 'Training Day':np.array([]), 'Maze Type':np.array([])}
@@ -286,7 +272,10 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
         data[c] = np.array([], np.float64)
 
     if file_idx is None:
+        follow = True
         file_idx = np.arange(len(f))
+    else:
+        follow = False
 
     for i in tqdm(file_idx):
         try: 
@@ -307,11 +296,11 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
             continue
 
         # delete abnormal sessions.
-        if str(trace['date']) == '20220817' and trace['maze_type'] == 1:
+        if f['include'][i] == 0:
             continue
         
         # if maze_type is not we want, continue
-        if trace['maze_type'] not in legal_maze_type:
+        if trace['maze_type'] not in legal_maze_type and follow:
             continue
 
         # Running funcitons to get variables we want to analysis.
@@ -322,11 +311,32 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
             results = [results]
         else:
             length = len(results[0])
+
+        # Generate training Day
+        if f['Stage'][i] == 'Stage 2':
+            training_day = f['training_day'][i]
+        elif f['Stage'][i] == 'Stage 1':
+            training_day = 'P2'
+        elif f['Stage'][i] == 'PRE':
+            training_day = 'P1'
+        else:
+            warnings.warn(f"{f['Stage'][i]} is not valid value for 'Stage'.")
+
+        if f['Stage'][i] == 'Stage 2':
+            training_day_d = 'S2 '+f['training_day'][i]
+        elif f['Stage'][i] == 'Stage 1':
+            training_day_d = 'S1 '+f['training_day'][i]
+        elif f['Stage'][i] == 'PRE':
+            training_day_d = 'PRE'
+        else:
+            warnings.warn(f"{f['Stage'][i]} is not valid value for 'Stage'.")
+
         # Generating data.
         mazes = 'Maze '+str(trace['maze_type']) if trace['maze_type'] in [1,2] else 'Open Field'
         data['MiceID'] = np.concatenate([data['MiceID'], np.repeat(str(trace['MiceID']), length)])
         data['Maze Type'] = np.concatenate([data['Maze Type'], np.repeat(mazes, length)])
-        data['Training Day'] = np.concatenate([data['Training Day'], np.repeat(f['training_day'][i], length)])
+        data['Training Day'] = np.concatenate([data['Training Day'], np.repeat(training_day, length)])
+        data['Training Day Detailed'] = np.concatenate([data['Training Day'], np.repeat(training_day_d, length)])
         for c in range(len(variable_names)):
             data[variable_names[c]] = np.concatenate([data[variable_names[c]], results[c]])
         
@@ -494,6 +504,40 @@ def plot_diagonal_figure(f:pd.DataFrame = None, row:int = None, map1:int = 1, ma
     else:
         return True, classified_data
 
+def get_trace(i: int, f: pd.DataFrame, env1: str = 'op', env2: str = 'm1', f1: pd.DataFrame = f1, work_flow: str = r'G:\YSY\Cross_maze'):
+    j, k = int(f[env1][i]), int(f[env2][i])
+
+    idx1 = np.where((f1['MiceID'] == f['MiceID'][i])&(f1['date'] == f['date'][i])&(f1['session'] == j+1))[0][0]
+    idx2 = np.where((f1['MiceID'] == f['MiceID'][i])&(f1['date'] == f['date'][i])&(f1['session'] == k+1))[0][0]
+
+    if exists(f1['Trace File'][idx1]):
+        with open(f1['Trace File'][idx1], 'rb') as handle:
+            trace1 = pickle.load(handle)
+    else:
+        trace1 = None
+
+    if exists(f1['Trace File'][idx2]):
+        with open(f1['Trace File'][idx2], 'rb') as handle:
+            trace2 = pickle.load(handle)
+    else:
+        trace2 = None
+    
+    return trace1, trace2
+
+def get_placecell_pair(i: int, f: pd.DataFrame, env1: str = 'op', env2: str = 'm1', f1: pd.DataFrame = f1, work_flow: str = r'G:\YSY\Cross_maze'):
+    trace1, trace2 = get_trace(i, f, env1, env2, f1, work_flow)
+    if trace1 is None or trace2 is None:
+        return np.array([[],[]], dtype=np.float64)
+
+    index_map = ReadCellReg(f['Cell Reg Path'][i])
+    j, k = int(f[env1][i]), int(f[env2][i])
+
+    idx = np.where((index_map[j, :]!=0)&(index_map[k, :]!=0))[0]
+    index_map_pair = index_map[:, idx].astype(np.int64)
+
+    idx = np.where((trace1['is_placecell'][index_map_pair[j, :]-1]==1)&(trace2['is_placecell'][index_map_pair[k, :]-1]==1))[0]
+    index_map_pcpair = index_map_pair[:, idx]
+    return index_map_pcpair[np.array([j, k]), :]
 
 def ExclusivePeakRate_Interface(trace:dict = {}, spike_threshold:int = 30, variable_names:str = None, f_CellReg:pd.DataFrame = None, f_trace:pd.DataFrame = f1):
     '''
