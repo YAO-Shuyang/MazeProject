@@ -4,7 +4,11 @@ from mylib.preprocessing_behav import *
 # Fig0015/14
 # FiringRateProcess's interface for data analysis. Fig0015.
 def FiringRateProcess_Interface(trace = {}, spike_threshold = 30, variable_names = None, is_placecell = False):
-    trace = FiringRateProcess(trace, map_type = 'old', spike_threshold = spike_threshold)
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['peak_rate','mean_rate'])
+    KeyWordErrorCheck(trace, __file__, ['is_placecell', 'Spikes'])
+    
+    trace = FiringRateProcess(trace, map_type = 'smooth', spike_threshold = spike_threshold)
+
     Spikes = trace['Spikes']
     # delete those neurons with spike number less than 30
     spikes_num = np.nansum(Spikes, axis = 1)
@@ -13,23 +17,8 @@ def FiringRateProcess_Interface(trace = {}, spike_threshold = 30, variable_names
         idx = np.where((spikes_num >= spike_threshold)&(trace['is_placecell'] == 1))[0]
     else:
         idx = np.where((spikes_num >= spike_threshold))[0]
-
-    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['peak_rate','mean_rate','peak_rate_on_path','mean_rate_on_path','path_type'])
-    KeyWordErrorCheck(trace, __file__, ['peak_rate','main_field_all','peak_rate', 'mean_rate','is_placecell','Spikes'])
-
-    # generate field pattern
-    main_field_all = trace['main_field_all'][idx]
-    path_type = []
-    for n in range(main_field_all.shape[0]):
-        if main_field_all[n] == 0:
-            path_type.append('Correct path')
-        elif main_field_all[n] == 1:
-            path_type.append('Incorrect path')
-
-    if trace['maze_type'] in [1,2]:
-        return cp.deepcopy(trace['peak_rate'][idx]), cp.deepcopy(trace['mean_rate'][idx]), cp.deepcopy(trace['peak_rate_on_path'][idx]), cp.deepcopy(trace['mean_rate_on_path'][idx]), np.array(path_type)
-    else:
-        return cp.deepcopy(trace['peak_rate'][idx]), cp.deepcopy(trace['mean_rate'][idx]), np.repeat(np.nan, len(idx)), np.repeat(np.nan, len(idx)), np.repeat(np.nan, len(idx))
+    
+    return cp.deepcopy(trace['peak_rate'][idx]), cp.deepcopy(trace['mean_rate'][idx])
 
 # Fig0016&17
 # Generate spatial information map Fig0016
@@ -49,24 +38,40 @@ def SpatialInformation_Interface(trace = {}, spike_threshold = 30, variable_name
 
     return idx+1, cp.deepcopy(trace['SI_all'][idx])
 
+def NavigateLap(trace):
+    behav_nodes = spike_nodes_transform(trace['correct_nodes'], nx=12)
+    beg_point = StartPoints[int(trace['maze_type'])]
+    end_point = EndPoints[int(trace['maze_type'])]
+    
+    indices = np.where((behav_nodes==beg_point)|(behav_nodes==end_point))[0]
+    two_ends = behav_nodes[indices]
+    dn = np.ediff1d(two_ends)
+    
+    idx = np.where(dn > 0)[0]
+    return indices[idx], indices[idx+1]
+    
+
 # Generate learning curve for cross maze paradigm. Fig0020
 def LearningCurve_Interface(trace = {}, spike_threshold = 30, variable_names = None):
-    if 'laps' not in trace.keys():
-        trace = CrossLapsCorrelation(trace)
-        print(trace['p'])
-    KeyWordErrorCheck(trace, __file__, ['laps','lap_begin_index','lap_end_index', 'correct_time'])
-    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['laps_id','explore_time'])
+    KeyWordErrorCheck(trace, __file__, ['correct_time', 'paradigm'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Lap ID', 'Lap-wise time cost'])
 
-    correct_time = trace['correct_time']
-    beg_idx, end_idx = CrossMazeLapSplit(trace)
-    laps = len(beg_idx)
-
-    explore_time = np.zeros(laps, dtype = np.float64)
-    for i in range(laps):
-        explore_time[i] = (correct_time[end_idx[i]] - correct_time[beg_idx[i]]) / 1000
+    behav_time = trace['correct_time']
+    beg_idx, end_idx = NavigateLap(trace)
+    navigating_time = (behav_time[end_idx] - behav_time[beg_idx])/1000
     
-    laps_id = np.array(['Lap '+str(i) for i in range(1, laps + 1)])
-    return laps_id, explore_time
+    laps_id = np.array([i for i in range(1, beg_idx.shape[0] + 1)])
+    return laps_id, navigating_time
+
+from mylib.behavior.correct_rate import calc_behavioral_score
+def LearningCurveBehavioralScore_Interface(trace: dict, variable_names: list):
+    KeyWordErrorCheck(trace, __file__, ['correct_time', 'correct_nodes', 'maze_type'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Correct Rate', 'Pass Number', 'Error Number'])
+    
+    err_num, pass_num = calc_behavioral_score(trace)
+    
+    return np.array([1-err_num/pass_num], np.float64), np.array([pass_num], np.float64), np.array([err_num], np.float64)
+
 
 
 # Fig0021
@@ -127,7 +132,7 @@ def PeakDistributionDensity_Interface(trace = {}, spike_threshold = 30, variable
 # Fig0023 Place Cell Percentage
 def PlaceCellPercentage_Interface(trace = {}, spike_threshold = 30, variable_names = None, is_placecell = False):
     KeyWordErrorCheck(trace, __file__, ['is_placecell'])
-    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['percentage', 'place cell'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['percentage', 'place cell num'])
 
     return [np.nanmean(trace['is_placecell'])], [np.nansum(trace['is_placecell'])]
 
@@ -154,7 +159,7 @@ def NeuralDecodingResults_Interface(trace = {}, spike_threshold = 30, variable_n
 
 
 # Fig0033 Peak Velocity
-def PeakVelocity_Interface(trace: dict, spike_threshold: int or float = 30, 
+def PeakVelocity_Interface(trace: dict, spike_threshold: int or float = 10, 
                            variable_names: list or None = None, 
                            is_placecell: bool = False):
     KeyWordErrorCheck(trace, __file__, ['behav_nodes', 'behav_speed', 'n_neuron', 'old_map_clear'])
@@ -182,7 +187,7 @@ def PeakVelocity_Interface(trace: dict, spike_threshold: int or float = 30,
     return np.array(cell_id, dtype=np.int64), np.array(velocity, dtype=np.float64)
 
 
-def Coverage_Interface(trace: dict, spike_threshold: int or float = 30, 
+def Coverage_Interface(trace: dict, spike_threshold: int or float = 10, 
                            variable_names: list or None = None, 
                            is_placecell: bool = False):   
     KeyWordErrorCheck(trace, __file__, ['processed_pos_new'])
@@ -199,7 +204,7 @@ def Coverage_Interface(trace: dict, spike_threshold: int or float = 30,
     return coverage, np.array(['8 cm','5 cm','4 cm','2.67 cm','2 cm']), np.repeat(trace['date'], 5)
 
 
-def Speed_Interface(trace: dict, spike_threshold: int or float = 30, 
+def Speed_Interface(trace: dict, spike_threshold: int or float = 10, 
                            variable_names: list or None = None, 
                            is_placecell: bool = False):
     if 'smooth_speed' not in trace.keys():
@@ -225,7 +230,7 @@ def Speed_Interface(trace: dict, spike_threshold: int or float = 30,
     
     return mean_speed, np.arange(1, CP.shape[0]+1)
 
-def InterSessionCorrelation_Interface(trace: dict, spike_threshold: int or float = 30, 
+def InterSessionCorrelation_Interface(trace: dict, spike_threshold: int or float = 10, 
                            variable_names: list or None = None, 
                            is_placecell: bool = False):
     if 'laps' not in trace.keys():
@@ -246,7 +251,7 @@ def InterSessionCorrelation_Interface(trace: dict, spike_threshold: int or float
 
 from scipy.stats import poisson
 # Fig0039
-def KSTestPoisson_Interface(trace: dict, spike_threshold: int or float = 30, 
+def KSTestPoisson_Interface(trace: dict, spike_threshold: int or float = 10, 
                            variable_names: list or None = None, 
                            is_placecell: bool = True):
     
@@ -260,7 +265,7 @@ def KSTestPoisson_Interface(trace: dict, spike_threshold: int or float = 30,
     return [sta], [p]
 
 # Fig0040
-def FieldNumber_InSessionStability_Interface(trace: dict, spike_threshold: int or float = 30, 
+def FieldNumber_InSessionStability_Interface(trace: dict, spike_threshold: int or float = 10, 
                                              variable_names: list or None = None, 
                                              is_placecell: bool = True):
     if 'laps' not in trace.keys():
@@ -281,7 +286,7 @@ def FieldNumber_InSessionStability_Interface(trace: dict, spike_threshold: int o
 
 
 # Fig0041
-def InFieldCorrelation_Interface(trace: dict, spike_threshold: int or float = 30, 
+def InFieldCorrelation_Interface(trace: dict, spike_threshold: int or float = 10, 
                                              variable_names: list or None = None, 
                                              is_placecell: bool = True):
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Center ID', 'Field Size', 'Center Rate', 
@@ -318,7 +323,7 @@ def InFieldCorrelation_Interface(trace: dict, spike_threshold: int or float = 30
             np.array(path, dtype = np.int64))
 
 # Fig0044
-def PVCorrelations_Interface(trace: dict, spike_threshold: int or float = 30, 
+def PVCorrelations_Interface(trace: dict, spike_threshold: int or float = 10, 
                                              variable_names: list or None = None, 
                                              is_placecell: bool = True):
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Std OEC', 'Mean OEC', 'CP Std OEC', 'CP Mean OEC', 'IP Std OEC', 'IP Mean OEC',
@@ -382,3 +387,118 @@ def PVCorrelations_Interface(trace: dict, spike_threshold: int or float = 30,
                 np.array([STD_FSC]), np.array([MEAN_FSC]), 
                 np.array([np.nan]), np.array([np.nan]), 
                 np.array([np.nan]), np.array([np.nan]))
+
+
+from mylib.calcium.field_criteria import GetPlaceField
+#Fig0048 Place Field Criteria
+def PlaceFieldNumberWithCriteria_Interface(
+    trace: dict, 
+    spike_threshold: int or float = 10,
+    variable_names: list or None = None, 
+    is_placecell: bool = True
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Field Number', 'criteria', 'x'])
+
+    smooth_map_all = cp.deepcopy(trace['smooth_map_all'])
+    pc_idx = np.where(trace['is_placecell'] == 1)[0]
+
+    field_numberA = np.zeros((34, pc_idx.shape[0]), dtype=np.int64)
+    x = np.array([0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 
+                  0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 
+                  0.14, 0.15, 0.17, 0.2, 0.25, 0.3, 0.35, 
+                  0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 
+                  0.75, 0.8, 0.85, 0.9, 0.95, 1.0], dtype=np.float64)
+    x1 = np.repeat(x, pc_idx.shape[0])
+    criteria1 = np.repeat('A', pc_idx.shape[0]*34)
+
+    for i, j in enumerate(x):
+        for k, n in enumerate(pc_idx):
+            fields = GetPlaceField(trace['maze_type'], smooth_map=smooth_map_all[n, :], thre_type = 1, parameter=j)
+            field_numberA[i, k] = len(fields.keys())
+
+    field_numberB = np.zeros((27, pc_idx.shape[0]), dtype=np.int64)
+    x = np.array([0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.2,1.4,1.6,1.8,2.0,2.25,2.5,2.75,3.0,3.25,3.5,3.75,4.0,4.25,4.5,4.75,5.0])
+    x2 = np.repeat(x, pc_idx.shape[0])
+    criteria2 = np.repeat('B', pc_idx.shape[0]*27)
+
+    for i, j in enumerate(x):
+        for k, n in enumerate(pc_idx):
+            fields = GetPlaceField(trace['maze_type'], smooth_map=smooth_map_all[n, :], thre_type = 2, parameter=j)
+            field_numberB[i, k] = len(fields.keys())
+
+    return np.concatenate([field_numberA.flatten(), field_numberB.flatten()]), np.concatenate([criteria1, criteria2]), np.concatenate([x1, x2])
+    
+# Fig0048-2 First-second half stability
+def PlaceFieldFSCStabilityWithCriteria_Interface(
+    trace: dict, 
+    spike_threshold: int or float = 10,
+    variable_names: list or None = None, 
+    is_placecell: bool = True
+):
+
+    if 'laps' not in trace.keys():
+        trace = CrossLapsCorrelation(trace, behavior_paradigm = trace['paradigm'])
+        trace = OldMapSplit(trace)
+    if trace['laps'] == 1:
+        return np.array([]), np.array([]), np.array([])
+    if 'fir_sec_corr' not in trace.keys():
+        trace = half_half_correlation(trace)
+
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['FSC Stability', 'criteria', 'x'])
+
+    smooth_map_all = cp.deepcopy(trace['smooth_map_all'])
+    smooth_map_fir = cp.deepcopy(trace['smooth_map_fir'])
+    smooth_map_sec = cp.deepcopy(trace['smooth_map_sec'])
+    pc_idx = np.where(trace['is_placecell'] == 1)[0]
+
+    FSCStabilityA = []
+    x = np.array([0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 
+                  0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 
+                  0.14, 0.15, 0.17, 0.2, 0.25, 0.3, 0.35, 
+                  0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 
+                  0.75, 0.8, 0.85, 0.9, 0.95, 1.0], dtype=np.float64)
+    x1 = []
+    criteria1 = []
+    correct_path = Correct_SonGraph1 if trace['maze_type'] == 1 else Correct_SonGraph2
+
+    for i, j in enumerate(x):
+        for n in pc_idx:
+            fields = GetPlaceField(trace['maze_type'], smooth_map=smooth_map_all[n, :], thre_type = 1, parameter=j)
+            for k in fields.keys():
+                if k not in correct_path:
+                    continue
+
+                if len(fields[k]) <= 1:
+                    corr = np.nan
+                else:
+                    corr, _ = pearsonr(smooth_map_fir[n, np.array(fields[k])-1], smooth_map_sec[n, np.array(fields[k])-1])
+                FSCStabilityA.append(corr)
+                x1.append(j)
+                criteria1.append('A')
+
+    FSCStabilityB = []
+    x = np.array([0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.2,1.4,1.6,1.8,2.0,2.25,2.5,2.75,3.0,3.25,3.5,3.75,4.0,4.25,4.5,4.75,5.0])
+    x2 = []
+    criteria2 = []
+
+    for i, j in enumerate(x):
+        for n in pc_idx:
+            fields = GetPlaceField(trace['maze_type'], smooth_map=smooth_map_all[n, :], thre_type = 2, parameter=j)
+            for k in fields.keys():
+                if k not in correct_path:
+                    continue
+
+                father_bin = np.unique(S2F[np.array(fields[k])-1])
+                area = np.concatenate([Father2SonGraph[b] for b in father_bin])
+
+                if len(fields[k]) <= 1:
+                    corr = np.nan
+                else:
+                    corr, _ = pearsonr(smooth_map_fir[n, area-1], smooth_map_sec[n, area-1])
+
+                FSCStabilityB.append(corr)
+                x2.append(j)
+                criteria2.append('B')
+
+    return np.array(FSCStabilityA+FSCStabilityB, np.float64), np.array(criteria1+criteria2), np.array(x1+x2, np.float64)
+    

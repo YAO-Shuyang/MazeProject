@@ -4,21 +4,22 @@ import numpy as np
 from mylib.maze_utils3 import Clear_Axes
 from mylib.maze_graph import NRG, correct_paths
 
-def LocTimeCurveAxes(
+def ComplexLocTimeCurveAxes(
     ax: Axes,
     behav_time: np.ndarray,
     spikes: np.ndarray,
     spike_time: np.ndarray,
     maze_type: int,
     behav_nodes: np.ndarray | None = None,
+    temporal_mean_rate: np.ndarray | None = None,
+    temporal_stamp: np.ndarray | None = None,
     given_x: np.ndarray | None = None,
     title: str = "",
     title_color: str = "black",
-    is_invertx: bool = False,
-    line_kwargs: dict = {'markeredgewidth': 0, 'markersize': 1, 'color': 'black'},
-    bar_kwargs: dict = {'markeredgewidth': 1, 'markersize': 4}
+    is_invertx: bool = False
 ) -> tuple[Axes, list, list]:
 
+    
     ax = Clear_Axes(axes=ax, close_spines=['top', 'right'], ifxticks=True, ifyticks=True)
     ax.set_aspect("auto")
 
@@ -48,14 +49,12 @@ def LocTimeCurveAxes(
 
     t_max = int(np.nanmax(behav_time)/1000)
 
-    a = ax.plot(linearized_x, behav_time/1000, 'o', **line_kwargs)
-    b = ax.plot(x_spikes, t_spikes/1000, '|', color='red', **bar_kwargs)
+    a = ax.plot(linearized_x, behav_time/1000, 'o', markeredgewidth = 0, markersize = 1, color = 'black')
+    b = ax.plot(x_spikes, t_spikes/1000, '|', color='red', markeredgewidth = 1, markersize = 4)
 
     ax.set_title(title, color=title_color)
     ax.set_xticks([1, len(correct_paths[int(maze_type)])/2, len(correct_paths[int(maze_type)])], labels = ['start', 'correct track', 'end'])
-    ax.set_xlim([0, 145])
     ax.set_yticks([0, t_max])
-    ax.set_ylim([0, t_max])
     ax.set_ylabel("Time / s")
 
     if is_invertx:

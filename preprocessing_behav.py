@@ -365,7 +365,7 @@ def plot_trajactory_comparison(pos_bef = None, pos_aft = None, save_loc = None, 
 
 # Clean data(during laps)
 def clean_data(behav_positions: np.ndarray = None, behav_time: np.ndarray = None, maze_type: int = 1, v_thre: float = 300.,
-               delete_start = 20, delete_end = 20, save_loc = None) -> tuple[np.ndarray, np.ndarray]:
+               delete_start = 1, delete_end = 1, save_loc = None) -> tuple[np.ndarray, np.ndarray]:
     if behav_positions is None or behav_time is None:
         print("    Wrong! Both behav_positions and behav_time are required!")
         return 
@@ -395,20 +395,6 @@ def clean_data(behav_positions: np.ndarray = None, behav_time: np.ndarray = None
     # delete laps interval
     behav_time_tmp = behav_time
     behav_positions_tmp = behav_positions
-
-    k = behav_time.shape[0]-1
-    while k > 0:
-        # if the interval time is more than 4000ms, we set it as Arival_time.
-        if behav_time[k]-behav_time[k-1] > 4000:
-            # delete first 30 and last 30 frames of the
-            behav_time_tmp = np.delete(behav_time_tmp, range(k-delete_end,k+delete_end))
-            behav_positions_tmp = np.delete(behav_positions_tmp, range(k-delete_end,k+delete_end),0)
-            k = k - delete_end - 1
-            continue
-            
-        else:
-            k -= 1
-
 
     behav_positions, behav_time = Delete_NAN(behav_positions_tmp, behav_time_tmp)
     
