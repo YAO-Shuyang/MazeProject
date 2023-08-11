@@ -19,6 +19,8 @@ import matplotlib
 from matplotlib.axes import Axes
 from os.path import exists, join
 from mylib.AssertError import KeyWordErrorCheck, VariablesInputErrorCheck, ReportErrorLoc, ValueErrorCheck
+from mylib.behavior.behavevents import BehavEvents
+from mylib.divide_laps.lap_split import LapSplit
 import warnings
 
 figpath = 'F:\YSY\FinalResults'
@@ -78,9 +80,11 @@ def WallMatrix(maze_type: int):
     horizont_walls = np.ones((13,12), dtype = np.int64)
     nx = 12
 
-    if (maze_type, 12) in maze_graphs.keys():
-        graph = maze_graphs[(maze_type, 12)]
+    if (int(maze_type), 12) in maze_graphs.keys():
+        graph = cp.deepcopy(maze_graphs[(int(maze_type), 12)])
+        graph_copy = cp.deepcopy(graph)
     else:
+        print(maze_type)
         assert False
 
     for i in range(1,145):
@@ -93,6 +97,10 @@ def WallMatrix(maze_type: int):
         
         x, y = idx_to_loc(i, nx = nx, ny = nx)
 
+        if graph != graph_copy:
+            pass
+            # print(i, graph_copy, graph)
+            
         surr = graph[i]
         for s in surr:
             if s == i + 1:
@@ -104,11 +112,13 @@ def WallMatrix(maze_type: int):
             elif s == i - nx:
                 horizont_walls[y, x] = 0
             else:
-                assert False
+                pass
+                # print(f"Node {i}, nearby node {s}, Graph: {graph}")
+                # assert False
         
     return vertical_walls, horizont_walls
 
-def DrawMazeProfile(maze_type = 1,axes = None, color = 'white',linewidth = 1, nx = 48, v = [], h = []):
+def DrawMazeProfile(maze_type = 1,axes: Axes = None, color = 'white',linewidth = 1, nx = 48, v = [], h = []):
     if len(v) == 0:
         v,h = WallMatrix(maze_type = maze_type)
     else:
@@ -135,7 +145,7 @@ def MazeSegments(maze_type: int, path_type: str = 'cp'):
     DP = DPs[maze_type]
     
     if path_type == 'cp':
-        graph = maze_graphs[(maze_type, 12)]
+        graph = cp.deepcopy(maze_graphs[(maze_type, 12)])
 
         Path = cp.deepcopy(DP)
         if DP[0] != 1:
@@ -206,7 +216,7 @@ def mkdir(path:str):
 # calculate path between two points
 def DFS(start = 1, goal = 1, maze_type = 1, nx = 48):
     if (maze_type, nx) in maze_graphs.keys():
-        graph = maze_graphs[(maze_type, nx)]
+        graph = cp.deepcopy(maze_graphs[(maze_type, nx)])
     else:
         assert False
 
@@ -236,7 +246,7 @@ def DFS(start = 1, goal = 1, maze_type = 1, nx = 48):
     path.reverse()
     return path
 
-def FastDistance(start, goal, maze_type = 1, nx = 12):
+def FastDistance(start, goal, maze_type = 1, nx = 12) -> int:
     if nx != 12:
         print("Warning! This funciton is specifically for old maze (12*12)")
         return
@@ -289,7 +299,7 @@ def CartesianDistance(curr, surr, nx = 48):
 
 def SmoothMatrix(maze_type: int, sigma: float = 3, _range: int = 7, nx: int = 48):
     if (maze_type, nx) in maze_graphs.keys():
-        graph = maze_graphs[(maze_type, nx)]
+        graph = cp.deepcopy(maze_graphs[(maze_type, nx)])
     else:
         assert False
     
@@ -337,68 +347,6 @@ def clear_NAN(rate_map_all:np.ndarray):
     clear_map_all[nanPos] = 0
 
     return clear_map_all, nanPos
-    
-# generate all subfield. ============================================================================
-# place field analysis, return a dict contatins all field. If you want to know the field number of a certain cell, you only need to get it by use 
-# len(trace['place_field_all'][n].keys())
-def GeneratePlaceField(maze_type: int, nx: int = 48, smooth_map = None):
-    # rate_map should be one without NAN value. Use function clear_NAN(rate_map_all) to process first.
-    MAX = max(smooth_map)
-    field_set = np.where(smooth_map >= 0.5*MAX)[0]+1
-    search_set = []
-    All_field = {}
-
-    while len(np.setdiff1d(field_set, search_set))!=0:
-        diff = np.setdiff1d(field_set,search_set)
-        point = diff[0]
-        subfield = field(rate_map = smooth_map, point = point, maze_type = maze_type, nx = nx, MAX = MAX)
-        peak_loc = subfield[0]
-        peak = smooth_map[peak_loc-1]
-        # find peak idx as keys of place_field_all dict objects.
-        for k in subfield:
-            if smooth_map[k-1] > peak:
-                peak = smooth_map[k-1]
-                peak_loc = k
-        All_field[peak_loc] = subfield
-        search_set = sum([search_set, subfield],[])
-    
-    return All_field
-               
-def field(rate_map = None, point = 1, maze_type = 1, nx = 48,MAX = 0):
-    if (maze_type, nx) in maze_graphs.keys():
-        graph = maze_graphs[(maze_type, nx)]
-    else:
-        assert False
-            
-    MaxStep = 300
-    step = 0
-    Area = [point]
-    StepExpand = {0: [point]}
-    while step <= MaxStep:
-        StepExpand[step+1] = []
-        for k in StepExpand[step]:
-            surr = graph[k]
-            for j in surr:
-                if rate_map[j-1] >= 0.5*MAX and j not in Area:
-                    StepExpand[step+1].append(j)
-                    Area.append(j)
-        
-        # Generate field successfully! 
-        if len(StepExpand[step+1]) == 0:
-            break
-            
-        step += 1
-    return Area
-
-# get all cell's place field
-def place_field(n_neuron = None, smooth_map_all = None, maze_type = 1):
-    place_field_all = []
-    smooth_map_all = cp.deepcopy(smooth_map_all)
-    for k in tqdm(range(n_neuron)):
-        place_field = GeneratePlaceField(smooth_map = smooth_map_all[k], maze_type = maze_type, nx = 48)
-        place_field_all.append(place_field)
-    print("    Place field has been generated successfully.")
-    return place_field_all
 
 #  ========================================================================================================================
 
@@ -649,8 +597,10 @@ def GetDMatrices(maze_type:int, nx:int):
     '''
     ValueErrorCheck(nx, [12,24,48])
     ValueErrorCheck(maze_type, [1,2,3,0])
+    
+    from mylib.local_path import DMatrixPath
     try:
-        with open(r'D:\ProgramData\Anaconda3_2022\envs\maze\Lib\site-packages\mylib\decoder_DMatrix.pkl', 'rb') as handle:
+        with open(DMatrixPath, 'rb') as handle:
             D_Matrice = pickle.load(handle)
     except:
         print('decoder_DMatrix.pkl is not exist!')
@@ -1017,7 +967,7 @@ def Add_NAN(behav_positions = None, behav_time = None, behav_nodes = None, time_
     stay_time = np.append(np.ediff1d(behav_time),33)
     idx = np.where(stay_time > time_gap_interval)[0] # gap time index
     time_points = behav_time[idx]
-    time_points_add = time_points + 33
+    time_points_add = np.nan * np.zeros(idx.shape[0])
 
     # insert interpolated time point
     behav_time_modi = cp.deepcopy(behav_time)
@@ -1287,6 +1237,7 @@ def print_nan(l:list[list]|list[np.ndarray]):
     
         print(np.where(np.isnan(vec)))
 
+
         
 def Get_X_Order(maze_type:int):
     '''
@@ -1381,6 +1332,11 @@ def calc_speed(behav_positions = None, behav_time = None):
     #_, _, behav_speed = Add_NAN(behav_positions = behav_positions, behav_time = behav_time, behav_nodes = behav_speed)
     return behav_speed
 
+def SF2FF(sonfield: np.ndarray):
+    try:
+        return np.unique(S2F[sonfield-1])
+    except:
+        return np.unique(S2F[np.array(sonfield, dtype=np.int64)-1])
 
 # Fit equal poison distribution:
 from scipy.optimize import leastsq
@@ -1405,7 +1361,6 @@ def EqualPoissonFit(x, y, l0:float = 5):
     para = leastsq(EqualPoissonResiduals, x0 = l0, args = (x, y))
     return para[0][0]
 
-
 def sort_dlc_file(dir_name: str):
     """
     Sort dlc files with recording order before concatenating.
@@ -1417,8 +1372,21 @@ def sort_dlc_file(dir_name: str):
     """
 
     files = os.listdir(dir_name)
+    avi_num = 0
+    for file in files:
+        if '.avi' in file:
+            avi_num += 1
+    
+    prefix_list = [str(i)+"DLC" for i in range(avi_num)]
 
-    return sorted(files, key=lambda file: os.path.getctime(os.path.join(dir_name, file)))
+    sorted_file = []
+    for i, pref in enumerate(prefix_list):
+        pref_len = len(pref)
+        for file in files:
+            if file[0:pref_len] == pref:
+                sorted_file.append(file)
+
+    return sorted_file
 
 def NodesReorder(nodes: np.ndarray, maze_type: int):
     """NodesReorder _summary_
@@ -1588,6 +1556,19 @@ def uniform_smooth_speed(speed: np.ndarray, window: int = 30) -> np.ndarray:
     
     return np.dot(M, speed)
 
+
+def get_spike_frame_label(ms_time, spike_nodes, trace = None, behavior_paradigm = 'CrossMaze', **kwargs):
+    beg_idx, end_idx = LapSplit(trace, behavior_paradigm = behavior_paradigm) # Get Split TimeIndex Point
+    lap = len(beg_idx) # Number of inter-laps
+    # behav spike index
+    frame_labels = np.array([], dtype=np.int64)
+
+    for k in range(lap):
+        beg, end = np.where(ms_time >= trace['correct_time'][beg_idx[k]])[0][0], np.where(ms_time <= trace['correct_time'][end_idx[k]])[0][-1]
+        labels = BehavEvents.get_frame_labels(spike_nodes[beg:end+1], trace['maze_type'], **kwargs)
+        frame_labels = np.concatenate([frame_labels, labels])
+
+    return frame_labels
 
 if __name__ == '__main__':
     loc = r"E:\CC\MAZE_2\2022_08_30\11095\15_19_57\My_WebCam\dlc_process_file"

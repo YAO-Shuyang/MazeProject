@@ -12,7 +12,7 @@ import pickle
 from mylib.maze_utils3 import mkdir, plot_trajactory, Delete_NAN, Add_NAN, Clear_Axes, DrawMazeProfile
 from mylib.preprocessing_behav import plot_trajactory_comparison, clean_data, get_meanframe, calc_speed
 from mylib.preprocessing_behav import PolygonDrawer, uniform_smooth_speed, Circulate_Checking
-from mylib.maze_utils3 import position_transform, location_to_idx, occu_time_transform, DLC_Concatenate
+from mylib.maze_utils3 import position_transform, location_to_idx, occu_time_transform, DLC_Concatenate, sort_dlc_file
 from mylib.maze_graph import Father2SonGraph
 from mylib.behavior import read_time_stamp, dlc_position_generation
 
@@ -25,6 +25,37 @@ def RotateTrajectory(pos: np.ndarray, degree: float = 0, maxHeight = 960, maxWid
         newpos[:, 0] = maxWidth - pos[:, 0]
         newpos[:, 1] = maxHeight - pos[:, 1]
 
+def check_dlc_concatenate_order(dirname: str):
+    csv_list = []
+    if os.path.exists(dirname):
+        files = sort_dlc_file(dirname)
+        for f in files:
+            if '.csv' in f:
+                csv_list.append(f)
+
+    file_num = len(csv_list)
+    prefix = np.arange(file_num)
+    for i, file_name in enumerate(csv_list):
+        lef = int(np.log10(i))+1 if i > 1 else 1
+        if file_name[0:lef] != str(i):
+            print("DLC order is incorrect which has severe risk for errors in the analysis results!")
+            print("    Error occurred at:", file_name, i,f"{file_name[0:lef]} != {str(i)}")
+            print("Here are the order of the dlc files:")
+            print(csv_list)
+            return False
+    
+    return True
+
+from mylib.maze_utils3 import uniform_smooth_range
+def preliminary_smooth(data: np.ndarray):
+    smooth_data = np.zeros_like(data)
+    
+    for i in range(smooth_data.shape[0]):
+        lef, rig = uniform_smooth_range(i, smooth_data.shape[0], window=30)
+        smooth_data[i] = np.nanmean(data[lef:rig])
+        
+    return smooth_data
+    
 def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'window':30},
                      dlc_args = {'dtype':'mass', 'prefer_body_part': 'bodypart1'},
                      conc_args = {'find_chars': '.csv', 'body_part': ['bodypart1', 'bodypart2', 'bodypart3', 'bodypart4'], 'header':[1,2]},
@@ -66,25 +97,30 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
     p_behav = os.path.join(p,'behav')
     mkdir(p_behav)
 
-    # Concatenate DLC files
-    DLC_Concatenate(folder, **conc_args)
-
+        
     # read in behav_new.mat
     dlc_coord_path = os.path.join(folder, "dlc_coord.pkl")
     if os.path.exists(dlc_coord_path):
         with open(dlc_coord_path, 'rb') as handle:
             dlc = pickle.load(handle)
     else:
-        warnings.warn(f"Didn't find {dlc_coord_path}.")
-        return
+        # Concatenate DLC files
+        DLC_Concatenate(folder, **conc_args)
+        if os.path.exists(dlc_coord_path):
+            with open(dlc_coord_path, 'rb') as handle:
+                dlc = pickle.load(handle)
+        else:
+            warnings.warn(f"Didn't find {dlc_coord_path}.")
+            return
+
+    assert check_dlc_concatenate_order(os.path.join(folder, 'dlc_process_file'))
     
     time_stamp_path = os.path.join(folder, "timeStamps.csv")
     if os.path.exists(time_stamp_path):
         behav_time_original = read_time_stamp(time_stamp_path)
     else:
         warnings.warn(f"Didn't find {time_stamp_path}.")
-        return
-    
+        return   
     behav_position_original = dlc_position_generation(dlc, **dlc_args)
     frames_num_tracker[0] = behav_position_original.shape[0]
 
@@ -268,7 +304,10 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
                                                                           trace['correct_time'], trace['correct_nodes'])
     # behav_speed
     behav_speed = calc_speed(behav_positions = trace['correct_pos']/10, behav_time = trace['correct_time'])
-    smooth_speed = uniform_smooth_speed(behav_speed, **speed_sm_args)
+    try:
+        smooth_speed = uniform_smooth_speed(behav_speed, **speed_sm_args)
+    except:
+        smooth_speed = preliminary_smooth(behav_speed)
     
     plt.figure(figsize = (8,6))
     MAX_X = (np.nanmax(behav_speed) // 5 + 1) * 5

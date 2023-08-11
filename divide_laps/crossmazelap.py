@@ -26,7 +26,7 @@ def get_check_area(maze_type: int, start_point: int, check_length: int = 5):
 
 
 # This function has been proved to be suited for all session for cross maze paradigm.
-def CrossMazeLapSplit(trace, check_length = 5, mid_length = 5):
+def CrossMazeLapSplit(trace, check_length = 6, mid_length = 5):
     if trace['maze_type'] in [1,2,3]:
         beg_idx = []
         end_idx = []
@@ -43,6 +43,7 @@ def CrossMazeLapSplit(trace, check_length = 5, mid_length = 5):
 
         behav_nodes = cp.deepcopy(trace['correct_nodes'])
         behav_nodes = spike_nodes_transform(spike_nodes = behav_nodes, nx = 12)
+
         switch = 0
         check = 0
 

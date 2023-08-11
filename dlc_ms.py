@@ -11,10 +11,12 @@ import scipy.stats
 from mylib.preprocessing_ms import plot_split_trajectory, Generate_SilentNeuron, calc_ratemap, place_field, Delete_InterLapSpike
 from mylib.preprocessing_ms import shuffle_test, RateMap, QuarterMap, OldMap, SimplePeakCurve, TraceMap, LocTimeCurve, PVCorrelationMap
 from mylib.preprocessing_ms import CrossLapsCorrelation, OldMapSplit, FiringRateProcess, calc_ms_speed, plot_spike_monitor
-from mylib.preprocessing_ms import half_half_correlation, odd_even_correlation, coverage_curve, CombineMap, plot_field_arange 
-from mylib.preprocessing_ms import calc_speed, uniform_smooth_speed, field_specific_correlation
-from mylib.preprocessing_ms import get_spike_frame_label
+from mylib.preprocessing_ms import half_half_correlation, odd_even_correlation, coverage_curve, CombineMap, plot_field_arange
+from mylib.preprocessing_ms import calc_speed, uniform_smooth_speed, field_specific_correlation, Clear_Axes, DrawMazeProfile
+from mylib.preprocessing_ms import get_spike_frame_label, ComplexFieldAnalyzer
 from mylib.maze_utils3 import SpikeType, SpikeNodes, SmoothMatrix, mkdir
+from mylib.calcium.firing_rate import calc_rate_map_properties
+import matplotlib.pyplot as plt
 
 def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, 
                      v_thre: float = 2.5, cam_degree = 0, speed_sm_args = {}):#p = None, folder = None, behavior_paradigm = 'CrossMaze'):
@@ -116,6 +118,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
 
     plot_spike_monitor(spike_num_mon1, spike_num_mon2, spike_num_mon3, save_loc = os.path.join(trace['p'], 'behav'))
 
+    """
     print("    C. Calculating firing rate for each neuron and identified their place fields (those areas which firing rate >= 50% peak rate)")
     # Set occu_time <= 50ms spatial bins as nan to avoid too big firing rate
     _nbins = 2304
@@ -135,11 +138,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     Ms = SmoothMatrix(maze_type = maze_type, sigma = 2, _range = 7, nx = 48)
     rate_map_all, rate_map_clear, smooth_map_all, nanPos = calc_ratemap(Spikes = Spikes, spike_nodes = spike_nodes, 
                                                                         _nbins = 48*48, occu_time = occu_time, Ms = Ms, is_silent = SilentNeuron)
-
-    # Generate place field
-    place_field_all = place_field(n_neuron = n_neuron, smooth_map_all = smooth_map_all, maze_type = maze_type)
-    
-    
+ 
     print("    D. Shuffle test for spatial information of each cells to identified place cells. Shuffle method including 1) inter spike intervals(isi), 2) rigid spike shifts, 3) purely random rearrangement of spikes.")
     # total occupation time
     t_total = np.nansum(occu_time)/1000
@@ -150,29 +149,75 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     trace_ms = {'Spikes_original':Spikes_original, 'spike_nodes_original':spike_nodes_original, 'ms_speed_original': ms_speed, 'RawTraces':RawTraces,'DeconvSignal':DeconvSignal,
                 'ms_time':ms_time, 'Spikes':Spikes, 'spike_nodes':spike_nodes, 'ms_time_behav':ms_time_behav, 'ms_speed_behav':ms_speed_behav, 'n_neuron':n_neuron, 
                 't_total':t_total, 'dt': dt, 't_nodes_frac':t_nodes_frac, 'SilentNeuron':SilentNeuron, 'rate_map_all':rate_map_all, 'rate_map_clear':rate_map_clear, 
-                'smooth_map_all':smooth_map_all, 'nanPos':nanPos, 'Ms':Ms, 'place_field_all':place_field_all, 'ms_folder':folder, 'occu_time_spf': occu_time, 'speed_filter_results': spf_results}
+                'smooth_map_all':smooth_map_all, 'nanPos':nanPos, 'Ms':Ms, 'ms_folder':folder, 'occu_time_spf': occu_time, 'speed_filter_results': spf_results}
     trace.update(trace_ms)
 
     # Shuffle test
     trace = shuffle_test(trace, trace['Ms'])
     #plot_field_arange(trace, save_loc=os.path.join(trace['p'], 'PeakCurve'))
+    """
+    Ms = SmoothMatrix(maze_type = trace['maze_type'], sigma = 2, _range = 7, nx = 48)
+    
+    if maze_type != 0:
+        print("      - Delete the inter-lap spikes.")
+        frame_labels = get_spike_frame_label(
+            ms_time=ms_time_behav, 
+            spike_nodes=spike_nodes,
+            trace=trace, 
+            behavior_paradigm=behavior_paradigm
+        )
+        assert frame_labels.shape[0] == spike_nodes.shape[0]
+
+        # cis direction
+        idx = np.where(frame_labels == 1)[0]
+    else:
+        idx = np.arange(ms_time_behav.shape[0])
+        
+    trace_ms = calc_rate_map_properties(
+        trace['maze_type'],
+        ms_time_behav[idx],
+        Spikes[:, idx],
+        spike_nodes[idx],
+        ms_speed_behav[idx],
+        dt[idx],
+        Ms,
+        trace['p'],
+        kwargs = {'file_name': 'Place cell shuffle [cis]'}
+    )
+
+    trace_ms2 = {'Spikes_original':Spikes_original, 'spike_nodes_original':spike_nodes_original, 'ms_speed_original': ms_speed, 'RawTraces':RawTraces,'DeconvSignal':DeconvSignal,
+                'ms_time':ms_time, 'Ms':Ms, 'ms_folder':folder, 'speed_filter_results': spf_results}
+    trace.update(trace_ms2)
+    trace.update(trace_ms)
+
+    if trace['maze_type'] != 0:
+        print("      7. LocTimeCurve:")
+        LocTimeCurve(trace) 
 
     path = os.path.join(p,"trace.pkl")
     with open(path, 'wb') as f:
         pickle.dump(trace, f)
     
     print("    Plotting:")
-    print("      1. Ratemap")
+    print("      1. Oldmap")
+    trace = OldMap(trace, isDraw=False)
+    # Generate place field
+    print("      2. Complex Field Analyzer")
+    #if maze_type != 0:
+        #trace = ComplexFieldAnalyzer(trace)
+
+    print("      3. Ratemap")
     RateMap(trace)
     
-    print("      2. Tracemap")
+    print("      4. Tracemap")
     TraceMap(trace)      
       
-    print("      3. Quarter_map")
+    print("      5. Quarter_map")
     trace = QuarterMap(trace, isDraw = False)
     
-    print("      4. Oldmap")
-    trace = OldMap(trace, isDraw=False)
+    #if maze_type != 0:
+        #LocTimeCurve(trace) 
+    #trace = OldMap(trace, isDraw=False)
     
     path = os.path.join(p,"trace.pkl")
     with open(path, 'wb') as f:
@@ -188,7 +233,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     if trace['maze_type'] != 0:
         # LocTimeCurve
         print("      7. LocTimeCurve:")
-        LocTimeCurve(trace, curve_type = 'Deconv', threshold = 3) 
+        #LocTimeCurve(trace) 
         print("    Analysis:")
         print("      A. Calculate Population Vector Correlation")
         #population vector correaltion
@@ -221,3 +266,5 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     
     t2 = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
     print(t1,'\n',t2)
+    
+    

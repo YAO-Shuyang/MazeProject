@@ -24,7 +24,11 @@ def TraceMapAxes(
     is_plot_maze_walls: bool = True,
     title: str="",
     is_inverty: bool=False,
-    maze_args={'linewidth':1, 'color': 'black'},
+    maze_kwargs: dict = {'linewidth':1, 'color': 'black'},
+    traj_kwargs: dict = {},
+    markeredgewidth: float=0, 
+    markersize: float=3,
+    **kwargs
 ) -> tuple:
     """
     TraceMapAxes: plot the trajectory of the animal and project the detected events onto the trajectory.
@@ -69,7 +73,7 @@ def TraceMapAxes(
     trajectory[:, 1] = trajectory[:, 1]/20 - 0.5
     trajectory, behav_time = insert_temporary_nan(trajectory, behav_time)
 
-    a = ax.plot(trajectory[:, 0], trajectory[:, 1], 'gray')
+    a = ax.plot(trajectory[:, 0], trajectory[:, 1], 'gray', **traj_kwargs)
     
     spike_burst_time = spike_time[np.where(spikes == 1)[0]]
     spike_loc_id = np.zeros_like(spike_burst_time, dtype=np.int64)
@@ -82,10 +86,10 @@ def TraceMapAxes(
 
     x_spike, y_spike = trajectory[spike_loc_id, 0], trajectory[spike_loc_id, 1]
 
-    b = ax.plot(x_spike, y_spike, 'o', color = 'black', markeredgewidth=0, markersize=4)
+    b = ax.plot(x_spike, y_spike, 'o', color = 'black', markersize=markersize, markeredgewidth=markeredgewidth, **kwargs)
 
     if is_plot_maze_walls:
-        ax = DrawMazeProfile(axes=ax, maze_type=maze_type, nx = 48, **maze_args)
+        ax = DrawMazeProfile(axes=ax, maze_type=maze_type, nx = 48, **maze_kwargs)
 
     if is_inverty:
         ax.invert_yaxis()

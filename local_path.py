@@ -2,13 +2,15 @@ import os
 import pandas as pd
 import numpy as np
 
-figpath = r'F:\YSY\FinalResults'
-figdata = r'F:\YSY\FigData'
+figpath = r'E:\Data\FinalResults'
+figdata = r'E:\Data\FigData'
 
-CM_path = r'G:\YSY\Cross_maze'
+DMatrixPath = r"E:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder_DMatrix.pkl"
+
+CM_path = r'E:\Data\Cross_maze'
 #SM_path = r'G:\YSY\previous_data\Simple_maze'
 f1 = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'calcium')
-f1_behav = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'behavior')
+f1_behav = pd.read_excel(os.path.join(CM_path,'behavior_only.xlsx'), sheet_name = 'behavior')
 #f2 = pd.read_excel(os.path.join(SM_path,'simple_maze_paradigm.xlsx'), sheet_name = 'calcium')
 
 f_CellReg_opm1 = pd.read_excel(os.path.join(CM_path, 'cell_reg_path.xlsx'), sheet_name = 'op-m1')
@@ -16,8 +18,17 @@ f_CellReg_opm2 = pd.read_excel(os.path.join(CM_path, 'cell_reg_path.xlsx'), shee
 f_CellReg_m1m2 = pd.read_excel(os.path.join(CM_path, 'cell_reg_path.xlsx'), sheet_name = 'm1-m2')
 f_CellReg_opop = pd.read_excel(os.path.join(CM_path, 'cell_reg_path.xlsx'), sheet_name = 'op-op')
 
-cellReg_95_maze1 = r'G:\YSY\Cross_maze\11095\Maze1-footprint\Cell_reg\cellRegistered.mat'
-cellReg_95_maze2 = r'G:\YSY\Cross_maze\11095\Maze2-footprint\Cell_reg\cellRegistered.mat'
+cellReg_95_maze1 = r'E:\Data\Cross_maze\11095\Maze1-footprint\Cell_reg\cellRegistered.mat'
+cellReg_95_maze2 = r'E:\Data\Cross_maze\11095\Maze2-footprint\Cell_reg\cellRegistered.mat'
+cellReg_95_openf = r'E:\Data\Cross_maze\11095\Open Field-footprint\Cell_reg\cellRegistered.mat'
+cellReg_92_maze1 = r'E:\Data\Cross_maze\11092\Maze1-footprint\Cell_reg\cellRegistered.mat'
+cellReg_92_maze2 = r'E:\Data\Cross_maze\11092\Maze2-footprint\Cell_reg\cellRegistered.mat'
+cellReg_92_openf = r'E:\Data\Cross_maze\11092\Open Field-footprint\Cell_reg\cellRegistered.mat'
+cellReg_09_maze1 = r'E:\Data\Cross_maze\10209\Maze1-footprint\Cell_reg\cellRegistered.mat'
+cellReg_09_openf = r'E:\Data\Cross_maze\10209\Open Field-footprint\Cell_reg\cellRegistered.mat'
+cellReg_12_maze1 = r'E:\Data\Cross_maze\10212\Maze1-footprint\Cell_reg\cellRegistered.mat'
+cellReg_12_openf = r'E:\Data\Cross_maze\10212\Open Field-footprint\Cell_reg\cellRegistered.mat'
+
 order_95_maze1 = np.array([], dtype = np.int64)
 
 recording_sessions_95 = pd.read_excel(os.path.join(CM_path,'recording_sessions.xlsx'), sheet_name = '11095')

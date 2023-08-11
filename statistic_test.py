@@ -134,7 +134,13 @@ def Generate_IndexMatrix(file, dateset = ['20220830'], beg_idx = None, end_idx =
         IndexMatrix[:,d] = np.array(file[dateset[d]][beg_idx:end_idx], dtype = np.int64)
     return IndexMatrix
 
-def Read_and_Sort_IndexMap(path:str = None, occur_num:int = 6, align_type:str = 'cross_day', name_label:str = 'SFP2022'):
+def Read_and_Sort_IndexMap(
+    path:str = None, 
+    occur_num:int = 6, 
+    align_type:str = 'cross_day', 
+    name_label:str = 'SFP2022',
+    order = np.array(['20220820', '20220822', '20220824', '20220826', '20220828', '20220830']) # if align_type == 'cross_day' else np.array(['1','2','3','4'])
+) -> np.ndarray:
     '''
     Author: YAO Shuyang
     Date: Jan 25th, 2023 (Modified)
@@ -153,7 +159,6 @@ def Read_and_Sort_IndexMap(path:str = None, occur_num:int = 6, align_type:str = 
     - <class 'numpy.ndarray'>
     '''
     ValueErrorCheck(align_type, ['cross_day','cross_session']) # InputContentError! Only 'cross_day' and 'cross_session' are valid value!
-    order = np.array(['20220820', '20220822', '20220824', '20220826', '20220828', '20220830']) if align_type == 'cross_day' else np.array(['1','2','3','4'])
 
     if align_type == 'cross_session' and occur_num == 6:
         occur_num = 4
@@ -235,7 +240,6 @@ def Add_NAN_Line(ax = None, incorrect_map = None, is_single = False, linewidth =
     return ax
 
 
-
 # Generate data about some key variables. Generate all data from a behavior paragidm.
 def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function = None, 
                        file_name:str = 'default', behavior_paradigm:str = 'CrossMaze', 
@@ -261,7 +265,7 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
     ValueErrorCheck(behavior_paradigm, ['CrossMaze', 'ReverseMaze', 'DSPMaze', 'SimpleMaze', 'decoding'])
 
     # Initiate data dic
-    data = {'MiceID':np.array([]), 'Training Day':np.array([]), 'Maze Type':np.array([])}
+    data = {'MiceID':np.array([]), 'Training Day':np.array([]), 'Maze Type':np.array([]), 'Stage': np.array([])}
     
     # Initiate additive member:
     if f_member is not None:
@@ -278,6 +282,10 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
         follow = False
 
     for i in tqdm(file_idx):
+        # delete abnormal sessions.
+        if f['include'][i] == 0:
+            continue
+        
         try: 
             KeyWordErrorCheck(f, __file__, keys = ['Trace File', 'Trace Behav File'])
             if is_behav:
@@ -295,16 +303,12 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
             print(p,' is not exist!')
             continue
 
-        # delete abnormal sessions.
-        if f['include'][i] == 0:
-            continue
-        
         # if maze_type is not we want, continue
         if trace['maze_type'] not in legal_maze_type and follow:
             continue
 
         # Running funcitons to get variables we want to analysis.
-        results = function(trace, spike_threshold = 30, variable_names = variable_names, **func_kwgs)
+        results = function(trace, variable_names = variable_names, **func_kwgs)
         # length of each variables in dictionary 'data' must be the same with others.
         if len(variable_names) == 1:
             length  = len(results)
@@ -312,31 +316,16 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
         else:
             length = len(results[0])
 
-        # Generate training Day
-        if f['Stage'][i] == 'Stage 2':
-            training_day = f['training_day'][i]
-        elif f['Stage'][i] == 'Stage 1':
-            training_day = 'P2'
-        elif f['Stage'][i] == 'PRE':
-            training_day = 'P1'
-        else:
-            warnings.warn(f"{f['Stage'][i]} is not valid value for 'Stage'.")
-
-        if f['Stage'][i] == 'Stage 2':
-            training_day_d = 'S2 '+f['training_day'][i]
-        elif f['Stage'][i] == 'Stage 1':
-            training_day_d = 'S1 '+f['training_day'][i]
-        elif f['Stage'][i] == 'PRE':
-            training_day_d = 'PRE'
-        else:
-            warnings.warn(f"{f['Stage'][i]} is not valid value for 'Stage'.")
+        training_day = str(f['training_day'][i])
+        stage = str(f['Stage'][i])
 
         # Generating data.
         mazes = 'Maze '+str(trace['maze_type']) if trace['maze_type'] in [1,2] else 'Open Field'
         data['MiceID'] = np.concatenate([data['MiceID'], np.repeat(str(trace['MiceID']), length)])
         data['Maze Type'] = np.concatenate([data['Maze Type'], np.repeat(mazes, length)])
         data['Training Day'] = np.concatenate([data['Training Day'], np.repeat(training_day, length)])
-        data['Training Day Detailed'] = np.concatenate([data['Training Day'], np.repeat(training_day_d, length)])
+        data['Stage'] = np.concatenate([data['Stage'], np.repeat(stage, length)])
+
         for c in range(len(variable_names)):
             data[variable_names[c]] = np.concatenate([data[variable_names[c]], results[c]])
         
@@ -351,7 +340,7 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
     try:
         d.to_excel(os.path.join(figdata, file_name+'.xlsx'), sheet_name = 'data', index = False)
     except:
-        a = 1
+        pass
 
     with open(os.path.join(figdata, file_name+'.pkl'), 'wb') as f:
         pickle.dump(data,f)
