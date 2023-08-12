@@ -222,6 +222,20 @@ class PiecewiseConstantRegression:
         plt.legend()
         plt.show()
 
+from numba import jit
+import time
+
+@jit(nopython=True)
+def _loss(x, y, breakpoint: float, constants: list):
+    y_pred = np.where(x<=breakpoint, constants[0], constants[1])
+    return np.sum((y - y_pred)**2)
+
+@jit(nopython=True)
+def _twopiece_fit(init_breakpoints, x, y):
+    total_losses = np.zeros_like(init_breakpoints, dtype=np.float64)
+    for i, b in enumerate(init_breakpoints):
+        total_losses[i] = _loss(x, y, b, (np.nanmean(y[np.where(x<=b)[0]]), np.nanmean(y[np.where(x>b)[0]])))
+    return total_losses
 
 class TwoPiecesPiecewiseSigmoidRegression:
     def __init__(self) -> None:
@@ -284,14 +298,19 @@ class TwoPiecesPiecewiseSigmoidRegression:
         uniq_x = np.unique(x)
         dx = np.ediff1d(uniq_x)
         break_point_candidates = uniq_x[:-1] + dx/2
+        
+        
+        """        
         total_losses = np.zeros_like(break_point_candidates, dtype=np.float64)
 
         for i, b in enumerate(break_point_candidates):
             self.breakpoints = b
             self.constants = [np.nanmean(y[np.where(x<=b)[0]]), np.nanmean(y[np.where(x>b)[0]])]
             total_losses[i] = self._loss(x, y)
-
+        """
+        total_losses = _twopiece_fit(break_point_candidates, x, y)
         best_idx = np.nanargmin(total_losses)
+
         b = break_point_candidates[best_idx]
         self.breakpoints = b
         self.constants = [np.nanmean(y[np.where(x<=b)[0]]), np.nanmean(y[np.where(x>b)[0]])]

@@ -19,8 +19,6 @@ import matplotlib
 from matplotlib.axes import Axes
 from os.path import exists, join
 from mylib.AssertError import KeyWordErrorCheck, VariablesInputErrorCheck, ReportErrorLoc, ValueErrorCheck
-from mylib.behavior.behavevents import BehavEvents
-from mylib.divide_laps.lap_split import LapSplit
 import warnings
 
 figpath = 'F:\YSY\FinalResults'
@@ -1557,18 +1555,7 @@ def uniform_smooth_speed(speed: np.ndarray, window: int = 30) -> np.ndarray:
     return np.dot(M, speed)
 
 
-def get_spike_frame_label(ms_time, spike_nodes, trace = None, behavior_paradigm = 'CrossMaze', **kwargs):
-    beg_idx, end_idx = LapSplit(trace, behavior_paradigm = behavior_paradigm) # Get Split TimeIndex Point
-    lap = len(beg_idx) # Number of inter-laps
-    # behav spike index
-    frame_labels = np.array([], dtype=np.int64)
 
-    for k in range(lap):
-        beg, end = np.where(ms_time >= trace['correct_time'][beg_idx[k]])[0][0], np.where(ms_time <= trace['correct_time'][end_idx[k]])[0][-1]
-        labels = BehavEvents.get_frame_labels(spike_nodes[beg:end+1], trace['maze_type'], **kwargs)
-        frame_labels = np.concatenate([frame_labels, labels])
-
-    return frame_labels
 
 if __name__ == '__main__':
     loc = r"E:\CC\MAZE_2\2022_08_30\11095\15_19_57\My_WebCam\dlc_process_file"
