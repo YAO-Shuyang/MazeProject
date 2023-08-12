@@ -5,10 +5,11 @@ from matplotlib_venn import venn3, venn3_circles
 from mylib.dp_analysis import field_arange, plot_field_arange, BehaviorEventsAnalyzer
 from mylib.dp_analysis import plot_1day_line, plot_field_arange_all, FieldDisImage, ImageBase
 from mylib.diff_start_point import DSPMazeLapSplit
-from mylib.divide_laps.lap_split import LapSplit
-from mylib.behavior.behavevents import BehavEvents
 from mylib.calcium.field_criteria import place_field
 from mylib import LocTimeCurveAxes
+
+from mylib.behavior.behavevents import BehavEvents
+from mylib.divide_laps.lap_split import LapSplit
 
 #  -------------------------------------------------------- Calsium ----------------------------------------------------------------------------
 # In some cases (for example, mice 10019, date 4_20, neuron 23), there're some 'silent neurons' which has indistinct 
@@ -816,19 +817,6 @@ def CrossLapsCorrelation(trace, behavior_paradigm = 'CrossMaze'):
 
     return trace
 
-def get_spike_frame_label(ms_time, spike_nodes, trace = None, behavior_paradigm = 'CrossMaze', **kwargs):
-    beg_idx, end_idx = LapSplit(trace, behavior_paradigm = behavior_paradigm) # Get Split TimeIndex Point
-    lap = len(beg_idx) # Number of inter-laps
-    # behav spike index
-    frame_labels = np.array([], dtype=np.int64)
-
-    for k in range(lap):
-        beg, end = np.where(ms_time >= trace['correct_time'][beg_idx[k]])[0][0], np.where(ms_time <= trace['correct_time'][end_idx[k]])[0][-1]
-        labels = BehavEvents.get_frame_labels(spike_nodes[beg:end+1], trace['maze_type'], **kwargs)
-        frame_labels = np.concatenate([frame_labels, labels])
-
-    return frame_labels
-
 def Delete_InterLapSpike(behav_time, ms_time, ms_speed, Spikes, spike_nodes, dt: np.ndarray, trace = None, 
                          behavior_paradigm = 'CrossMaze'):
     beg_idx, end_idx = LapSplit(trace, behavior_paradigm = behavior_paradigm) # Get Split TimeIndex Point
@@ -1224,7 +1212,21 @@ def get_fatherfield_range(fatherfield: list | np.ndarray, maze_type: int):
     else:
         return np.nanmin(ip_idx), np.nanmax(ip_idx)
 
-def ComplexFieldAnalyzer(trace: dict) -> dict:
+
+def get_spike_frame_label(ms_time, spike_nodes, trace = None, behavior_paradigm = 'CrossMaze', **kwargs):
+    beg_idx, end_idx = LapSplit(trace, behavior_paradigm = behavior_paradigm) # Get Split TimeIndex Point
+    lap = len(beg_idx) # Number of inter-laps
+    # behav spike index
+    frame_labels = np.array([], dtype=np.int64)
+
+    for k in range(lap):
+        beg, end = np.where(ms_time >= trace['correct_time'][beg_idx[k]])[0][0], np.where(ms_time <= trace['correct_time'][end_idx[k]])[0][-1]
+        labels = BehavEvents.get_frame_labels(spike_nodes[beg:end+1], trace['maze_type'], **kwargs)
+        frame_labels = np.concatenate([frame_labels, labels])
+
+    return frame_labels
+
+def ComplexFieldAnalyzer(trace: dict, is_draw: bool = True, shuffle_times = 5000, **kwargs) -> dict:
     Spikes = cp.deepcopy(trace['Spikes'])
     spike_nodes = cp.deepcopy(trace['spike_nodes'])
     old_map_clear = cp.deepcopy(trace['old_map_clear'])
@@ -1242,15 +1244,59 @@ def ComplexFieldAnalyzer(trace: dict) -> dict:
 
     maze_type = trace['maze_type']
     save_loc = join(trace['p'], 'ComplexLocTimeCurve')
-    mkdir(save_loc)
+        
     Graph = NRG[int(maze_type)]
+
+    frame_labels = get_spike_frame_label(
+        ms_time=cp.deepcopy(trace['correct_time']), 
+        spike_nodes=cp.deepcopy(trace['correct_nodes']),
+        trace=trace, 
+        behavior_paradigm='CrossMaze',
+        window_length = 1
+    )
     
-    old_nodes = spike_nodes_transform(trace['spike_nodes'], nx = 12)
-    linearized_x = np.zeros_like(trace['spike_nodes'], np.float64)
+    behav_indices = np.where(frame_labels==1)[0]
+    old_nodes = spike_nodes_transform(trace['correct_nodes'], nx = 12)[behav_indices]
+    
+    if exists(save_loc):
+        shutil.rmtree(save_loc)
+        mkdir(save_loc)
+    
+    place_fields_info = {}
+    for i in tqdm(range(n_neuron)):
+        for j, k in enumerate(place_field_all[i].keys()):
+            father_field = SF2FF(place_field_all[i][k])
+            try:
+                model = InFieldRateChangeModel.analyze_field(
+                    trace, 
+                    i, 
+                    father_field, 
+                    behav_time=cp.deepcopy(trace['correct_time'])[behav_indices], 
+                    behav_nodes=old_nodes, 
+                    behav_pos=cp.deepcopy(trace['correct_pos'])[behav_indices, :],
+                    shuffle_times=shuffle_times,
+                    **kwargs
+                )
+                if is_draw:
+                    if os.path.exists(join(save_loc, "Cell "+str(i+1))) == False:
+                        os.mkdir(join(save_loc, "Cell "+str(i+1)))
+                
+                    model.visualize_shuffle_result(save_loc=join(save_loc, "Cell "+str(i+1)), file_name=f'field {j+1} - ')
+                place_fields_info[(i, j)] = cp.deepcopy(model.get_info())
+            except:
+                print(i, j)
+                pass
+
+    trace['place_fields_info'] = cp.deepcopy(place_fields_info)
+    
+    if is_draw == False:    
+        return trace
+    
+    linearized_x = np.zeros_like(old_nodes, np.float64)
 
     for i in range(old_nodes.shape[0]):
-        linearized_x[i] = Graph[int(old_nodes[i])]
-        
+        linearized_x[i] = Graph[int(old_nodes[i])] 
+               
     CP = correct_paths[maze_type]
     
     linearized_x = linearized_x + np.random.rand(old_nodes.shape[0]) - 0.5
@@ -1261,37 +1307,29 @@ def ComplexFieldAnalyzer(trace: dict) -> dict:
     fig, axes = plt.subplots(ncols=2, nrows=2, figsize=(6,7.5), gridspec_kw={'width_ratios':[4,1], 'height_ratios':[1,4]})
     ax1, ax2, ax3, ax4 = axes[0, 0], axes[0,1], axes[1,0], axes[1,1]
     ax2 = Clear_Axes(ax2)
-    #ax1.axhline(0.4, ls=':', color = 'gray', linewidth=0.3)
 
-    place_fields_info = {}
+    print("Plot figures")
+    for k in tqdm(place_fields_info.keys()):
 
-
-    for i in tqdm(range(n_neuron)):
-        if i in trace['SilentNeuron']:
-            continue
-
-        if len(place_field_all[i].keys()) == 0:
-            continue
-
-        loc = join(save_loc, "Cell "+str(i+1))
-        if os.path.exists(loc) == False:
+        loc = join(save_loc, "Cell "+str(k[0]+1))
+        if os.path.exists(loc) == False and is_draw:
             os.mkdir(loc)
 
         ax1, a = LinearizedRateMapAxes(
             ax=ax1,
-            content=old_map_clear[i],
+            content=old_map_clear[k[0]],
             maze_type=maze_type,
             M=MTOP
         )
         
         ax1.set_xlim([0, len(CP)+1])
 
-        y_max = np.nanmax(old_map_clear[i])
+        y_max = np.nanmax(old_map_clear[k[0]])
 
         ax3, b, c = LocTimeCurveAxes(
             ax=ax3, 
-            behav_time=ms_time, 
-            spikes=Spikes[i, :], 
+            behav_time=cp.deepcopy(trace['correct_time'][behav_indices]), 
+            spikes=Spikes[k[0], :], 
             spike_time=ms_time, 
             maze_type=maze_type, 
             given_x=linearized_x
@@ -1300,66 +1338,44 @@ def ComplexFieldAnalyzer(trace: dict) -> dict:
 
         t_max = ms_time[-1]/1000
 
-        lef, rig = np.zeros(len(place_field_all[i].keys()), dtype=np.float64), np.zeros(len(place_field_all[i].keys()), dtype=np.float64)
-        for j, k in enumerate(place_field_all[i].keys()):
-            father_field = SF2FF(place_field_all[i][k])
+        lef, rig, fds = np.zeros(len(place_field_all[k[0]].keys()), dtype=np.float64), np.zeros(len(place_field_all[k[0]].keys()), dtype=np.float64), np.zeros(len(place_field_all[k[0]].keys()), dtype=np.int64)
+        for j, key in enumerate(place_field_all[k[0]].keys()):
+            father_field = SF2FF(place_field_all[k[0]][key])
             lef[j], rig[j] = set_range(maze_type=maze_type, field=father_field)
-        
-        lef = np.sort(lef + 0.5)
-        rig = np.sort(rig + 1.5)
+            lef[j] = lef[j] + 0.5
+            rig[j] = rig[j] + 1.5
 
-        colors = sns.color_palette("rainbow", 10) if lef.shape[0] < 10 else sns.color_palette("rainbow", lef.shape[0])
-        for k in range(lef.shape[0]):
-            temp = ax1.plot([lef[k], rig[k]], [-y_max*0.09, -y_max*0.09], color = colors[k])
+
+        colors = sns.color_palette("rainbow", 10) if lef.shape[0] < 10-4 else sns.color_palette("rainbow", lef.shape[0]+4)
+        for j in range(lef.shape[0]):
+            temp = ax1.plot([lef[j], rig[j]], [-y_max*0.09, -y_max*0.09], color = colors[j+2], linewidth=0.8)
             a = a + temp
-        
+          
+        shad = ax3.fill_betweenx(y = [0, t_max], x1=lef[k[1]], x2=rig[k[1]], color = colors[k[1]+2], edgecolor=None, alpha=0.5)
+            
+        ax4 = InstantRateCurveAxes(
+            ax=ax4,
+            time_stamp=place_fields_info[k]['cal_events_time'],
+            content=place_fields_info[k]['cal_events_rate'],
+            M=MRIG,
+            t_max=t_max*1000,
+            title=place_fields_info[k]['ctype']
+        )
 
-        for j, k in enumerate(place_field_all[i].keys()):
-            if lef[j] >= correct_paths[maze_type].shape[0]:
-                continue
+        fill_list = []
+        fill_list.append(shad)
+        for err in place_fields_info[k]['err_events']:
+            z = ax3.fill_betweenx([err[2]/1000-5, err[3]/1000+5], x1=lef[k[1]], x2=rig[k[1]], color = 'grey', edgecolor = None, alpha=0.8)
+            fill_list.append(z)
 
-            father_field = SF2FF(place_field_all[i][k])
+        plt.savefig(join(loc, "field "+str(k[1]+1)+'.png'), dpi=600)
+        plt.savefig(join(loc, "field "+str(k[1]+1)+'.svg'), dpi=600)
+            
+        ax4.clear()
 
-            model = InFieldRateChangeModel.analyze_field(trace, i, father_field)
-            cal_events_rate, cal_events_time, err_events = model.cal_events_rate.flatten(), model.cal_events_time.flatten(), model.err_events
-
-            place_fields_info[(i, j)] = cp.deepcopy(model.get_info())
-
-            if place_fields_info[(i, j)]['significance'] is None or place_fields_info[(i,j)]['total_events_num'][-1] <= 10:
-                del trace['place_field_all'][i][k]
-                del place_fields_info[(i,j)]
-                continue
-
-            model.visualize_shuffle_result(save_loc=loc, file_name=f'field {j+1} - ')
-
-            ax4 = InstantRateCurveAxes(
-                ax=ax4,
-                time_stamp=cal_events_time,
-                content=cal_events_rate,
-                M=MRIG,
-                t_max=t_max*1000,
-                title=model.ctype+" "+place_fields_info[(i, j)]['significance']
-            )
-
-            fill_list = []
-            h = ax3.fill_betweenx([0, t_max], x1=lef[j], x2=rig[j], color = colors[j], edgecolor = None, alpha=0.4)
-            fill_list.append(h)
-            for err in err_events:
-                z = ax3.fill_betweenx([err[2]/1000-5, err[3]/1000+5], x1=lef[j], x2=rig[j], color = 'grey', edgecolor = None, alpha=0.8)
-                fill_list.append(z)
-
-            plt.savefig(join(loc, "field "+str(j+1)+'.png'), dpi=600)
-            plt.savefig(join(loc, "field "+str(j+1)+'.svg'), dpi=600)
-
-            ax4.clear()
-            for h in fill_list:
-                h.remove()
-
-        for r in a+b+c:
+        for r in a+b+c+fill_list:
             r.remove()
 
-
-    trace['place_fields_info'] = place_fields_info
     return trace
 
 # ------------------------------------------------------------------------ 主程序 -------------------------------------------------------------------------------------
@@ -1563,14 +1579,11 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', v_thr
 if __name__ == '__main__':
     import pickle
 
-    with open(r"E:\Data\Cross_maze\10209\20230426\session 2\trace.pkl", 'rb') as handle:
+    with open(r"E:\Data\Cross_maze\10209\20230728\session 2\trace.pkl", 'rb') as handle:
         trace = pickle.load(handle)
     
-    trace['p'] = r"E:\Data\Cross_maze\10209\20230426\session 2"
-    """
-    trace['place_field_all'] = place_field(
-        trace=trace,
-        thre_type=2,
-        parameter=0.4,
-    )"""
-    trace = TraceMap(trace)
+    trace['p'] = r"E:\Data\Cross_maze\10209\20230728\session 2"
+    trace = ComplexFieldAnalyzer(trace=trace, shuffle_times=10000)
+    
+    with open(r"E:\Data\Cross_maze\10209\20230728\session 2\trace.pkl", 'wb') as fs:
+        pickle.dump(trace, fs)

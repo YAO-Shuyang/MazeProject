@@ -4,3 +4,4 @@ from mylib.calcium.axes.peak_curve import PeakCurveAxes
 from mylib.calcium.axes.loc_time_curve import LocTimeCurveAxes
 from mylib.calcium.axes.linearized_rate_curve import LinearizedRateMapAxes
 from mylib.calcium.axes.instant_rate_curve import InstantRateCurveAxes
+from mylib.calcium.axes.LapwiseCalciumTraceAxes import LapwiseCalciumTraceAxes
