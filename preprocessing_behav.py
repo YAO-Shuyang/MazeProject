@@ -363,6 +363,12 @@ def plot_trajactory_comparison(pos_bef = None, pos_aft = None, save_loc = None, 
     plot_trajactory(x_aft, y_aft, is_ExistAxes = True, ax = ax, save_loc = save_loc, is_show = is_show,
                         file_name = file_name, color = 'red', linewidth = 2)
 
+def linearized_position(nodes: np.ndarray, maze_type: int, nx: int) -> np.ndarray:
+    nodes = nodes.astype(np.int64)
+    D = GetDMatrices(maze_type, nx)
+    
+    return D[nodes-1, 0]
+
 # Clean data(during laps)
 def clean_data(behav_positions: np.ndarray = None, behav_time: np.ndarray = None, maze_type: int = 1, v_thre: float = 300.,
                delete_start = 1, delete_end = 1, save_loc = None) -> tuple[np.ndarray, np.ndarray]:

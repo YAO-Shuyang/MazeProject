@@ -652,6 +652,9 @@ def LocTimeCurve(trace):
             
     return trace
 
+
+        
+
 """
 def LocTimeCurve(trace, curve_type = 'Deconv', threshold = 3, isDraw = True):
     # curve_type: str, determines the resource of spikes
@@ -1086,6 +1089,37 @@ def calc_ms_speed(behav_speed: np.ndarray, behav_time: np.ndarray,
                 ms_speed[i] = behav_speed[idx]
                 
     return ms_speed
+
+def calc_ms_position(behav_pos: np.ndarray, behav_time: np.ndarray, ms_time: np.ndarray, 
+                  time_thre: float = 500):
+    """calc_ms_position: Calculate the position of mice according with the
+      time stamp of the imaging.
+
+    Parameters
+    ----------
+    behav_pos : np.ndarray
+        The position of mice at each recorded frame.
+    behav_time : np.ndarray
+        The time stamps of the behavioral frames.
+    ms_time : np.ndarray
+        The time stamps of the imaging data.
+    time_thre : float, optional
+        The maximal time difference between behavioral and imaging frames, by default 500
+    """
+    assert behav_pos.shape[0] == behav_time.shape[0]
+
+    ms_pos = np.zeros((ms_time.shape[0], 2), np.float64)
+    
+    for i in range(ms_pos.shape[0]):
+        if ms_time[i] <= behav_time[0]:
+            continue
+        else:
+            idx = np.where(behav_time < ms_time[i])[0][-1]
+            
+            if ms_time[i] - behav_time[idx] <= time_thre:
+                ms_pos[i, :] = behav_pos[idx, :]
+                
+    return ms_pos
 
 def calc_coverage(processed_pos, xbin = 12, ybin = 12, maxHeight = 960, maxWidth = 960):
     x = processed_pos[:, 0] // (maxWidth/xbin)
@@ -1581,9 +1615,3 @@ if __name__ == '__main__':
 
     with open(r"E:\Data\Cross_maze\10209\20230728\session 2\trace.pkl", 'rb') as handle:
         trace = pickle.load(handle)
-    
-    trace['p'] = r"E:\Data\Cross_maze\10209\20230728\session 2"
-    trace = ComplexFieldAnalyzer(trace=trace, shuffle_times=10000)
-    
-    with open(r"E:\Data\Cross_maze\10209\20230728\session 2\trace.pkl", 'wb') as fs:
-        pickle.dump(trace, fs)

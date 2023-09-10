@@ -1,8 +1,4 @@
-from mylib.maze_utils3 import clear_NAN, SmoothMatrix
-import numpy as np
-import pickle
-import tqdm
-import scipy
+from mylib.maze_utils3 import *
 
 class PolyFieldsPCSimulator():
     '''
@@ -217,27 +213,3 @@ class PolyFieldsPCSimulator():
         self.smooth_map_simulated = smooth_map_simulated
         print("    Rate map has been generated from simulated spike sequence.")
 
-
-# Usage
-if __name__ == '__main__':
-    # from mylib.PolyFieldsPCSimulation import PolyFieldsPCSimulator
-
-    # Read the file:
-    '''
-    with open('...', 'rb) as handle:
-        PCPopulation = pickle.load(handle)
-    '''
-    # Or generate a new group of cells and their Spikes.
-    PCPopulation = PolyFieldsPCSimulator(n = 400) # Number of cells. There's no problem to keep other parameters as default.
-    PCPopulation.Generate_TrainingSet(T = 20000) # Number of frames
-
-    # Use for decoding.
-    Spikes = PCPopulation.Spikes_sequence
-    spike_nodes = PCPopulation.MazeID_sequence
-    # -> further processing
-
-    # Save the simulator object
-    with open('Simulator-default.pkl', 'wb') as f: # The directory can be altered.
-        pickle.dump(PCPopulation, f)
-
-    

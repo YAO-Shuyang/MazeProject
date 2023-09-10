@@ -521,7 +521,9 @@ maze_graphs = {
 correct_paths = {
     1: CorrectPath_maze_1,
     2: CorrectPath_maze_2,
-    3: CorrectPath_maze_3
+    3: CorrectPath_maze_3,
+    (1, 48): Correct_SonGraph1,
+    (2, 48): Correct_SonGraph2
 }
 
 incorrect_paths = {

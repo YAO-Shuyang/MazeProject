@@ -254,7 +254,7 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
     Input: 
     - variable_names: list, represent the variables that will be saved in data.
     - f: pandas.DataFrame, files that save information of sessions.
-    - funciton: processing function. the function must have args 'trace', 'spike_threshold'.
+    - function: processing function. the function must have args 'trace', 'spike_threshold'.
     - file_name: str, file_name of saved pkl file.
     - behavior_paradigm: str, 'CrossMaze','SimpleMaze','ReverseMaze' are 3 valid data.
     - f_member: str or None. If it gets an input (str), it delivers the member of list f_member to f, and get correlated value from f.

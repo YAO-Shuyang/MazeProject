@@ -20,6 +20,7 @@ from matplotlib.axes import Axes
 from os.path import exists, join
 from mylib.AssertError import KeyWordErrorCheck, VariablesInputErrorCheck, ReportErrorLoc, ValueErrorCheck
 import warnings
+from mylib.calcium.smooth.gaussian import gaussian_smooth_matrix1d
 
 figpath = 'F:\YSY\FinalResults'
 figdata = 'F:\YSY\FigData'
@@ -295,12 +296,15 @@ def CartesianDistance(curr, surr, nx = 48):
     surr_x, surr_y = idx_to_loc(surr, nx = nx, ny = nx)
     return np.sqrt((curr_x - surr_x)*(curr_x - surr_x)+(curr_y - surr_y)*(curr_y - surr_y))
 
+from numba import jit
 def SmoothMatrix(maze_type: int, sigma: float = 3, _range: int = 7, nx: int = 48):
     if (maze_type, nx) in maze_graphs.keys():
         graph = cp.deepcopy(maze_graphs[(maze_type, nx)])
     else:
         assert False
     
+    D = GetDMatrices(maze_type, nx)
+    scale = nx/12
     smooth_matrix = np.zeros((nx*nx,nx*nx), dtype = np.float64)
     
     for curr in range(1,nx*nx+1):
@@ -314,7 +318,7 @@ def SmoothMatrix(maze_type: int, sigma: float = 3, _range: int = 7, nx: int = 48
             SurrMap[k] = np.array([],dtype = np.int32)
             for s in SurrMap[k-1]:
                 for j in range(len(graph[s])):
-                    length = CartesianDistance(curr, graph[s][j], nx = nx)
+                    length = D[curr-1, graph[s][j]-1]/scale#CartesianDistance([curr-1, graph[s][j]-1])
                     if graph[s][j] not in Area and length <= _range:
                         Area.append(graph[s][j])
                         SurrMap[k] = np.append(SurrMap[k], graph[s][j])
@@ -597,12 +601,13 @@ def GetDMatrices(maze_type:int, nx:int):
     ValueErrorCheck(maze_type, [1,2,3,0])
     
     from mylib.local_path import DMatrixPath
+    PATH = os.path.join(DMatrixPath, f"D{nx}_{maze_type}.pkl")
     try:
-        with open(DMatrixPath, 'rb') as handle:
+        with open(PATH, 'rb') as handle:
             D_Matrice = pickle.load(handle)
+            return D_Matrice
     except:
-        print('decoder_DMatrix.pkl is not exist!')
-        assert False
+        raise ValueError(f'{PATH} is not exist!')
 
     if nx == 12:
         D = D_Matrice[8+maze_type] / nx * 12
@@ -1163,7 +1168,7 @@ def InterFieldCenterDistance(center_list1:np.ndarray, center_list2:np.ndarray, m
     return IFCD
 
 # Return Field Number Vector of A Session
-def field_number_session(trace:dict, is_placecell = True, spike_thre = None):
+def field_number_session(trace:dict, is_placecell = True, spike_thre: int = 10):
     '''
     Parameter
     ---------
@@ -1171,7 +1176,7 @@ def field_number_session(trace:dict, is_placecell = True, spike_thre = None):
 
     spike_thre: int
         Default None, the number of spikes. If a cell has total spikes less than spike_thre, delete it.
-        - 30 is recommended.
+        - 10 is recommended.
     '''
     # Check if crucial keys exist.
     KeyWordErrorCheck(trace, __file__, keys = ['is_placecell', 'place_field_all', 'SilentNeuron'],)
@@ -1181,10 +1186,9 @@ def field_number_session(trace:dict, is_placecell = True, spike_thre = None):
     else:
         idx = np.arange(trace['is_placecell'].shape[0])
 
-    if spike_thre:
-        spike_num = np.nansum(trace['Spikes'], axis = 1)
-        cell_idx = np.where(spike_num >= spike_thre)[0]
-        idx = np.intersect1d(cell_idx, idx)
+    spike_num = np.nansum(trace['Spikes'], axis = 1)
+    cell_idx = np.where(spike_num >= spike_thre)[0]
+    idx = np.intersect1d(cell_idx, idx)
     
     field_number = np.zeros(len(idx), dtype = np.float64)
     for i in range(idx.shape[0]):
@@ -1407,8 +1411,52 @@ def NodesReorder(nodes: np.ndarray, maze_type: int):
         renodes[i] = RG[nodes[i]]
         
     return renodes
-        
-        
+
+
+def temporal_events_rate(spike_train: np.ndarray, spike_time: np.ndarray, time_bins: int = 5, sigma: float = 3, folder:float=1):
+    firing_rate = np.zeros_like(spike_train)
+    mean_dt = np.nanmedian(np.ediff1d(spike_time))
+    
+    for i in range(spike_time.shape[0] - time_bins):
+        firing_rate[:, i] = np.nansum(spike_train[:, i:i+time_bins], axis=1) / (spike_time[i+time_bins] - spike_time[i]) * 1000
+    
+    for i in range(spike_time.shape[0] - time_bins, spike_time.shape[0]):
+        firing_rate[:, i] = np.nansum(spike_train[:, i:], axis=1) / (spike_time[-1] - spike_time[i] + mean_dt) * 1000
+    
+    M = gaussian_smooth_matrix1d(firing_rate.shape[1], window=time_bins, sigma=sigma, folder=folder)
+    
+    return np.dot(M, firing_rate.T).T
+
+def calc_ms_position(behav_pos: np.ndarray, behav_time: np.ndarray, ms_time: np.ndarray, 
+                  time_thre: float = 500):
+    """calc_ms_position: Calculate the position of mice according with the
+      time stamp of the imaging.
+
+    Parameters
+    ----------
+    behav_pos : np.ndarray
+        The position of mice at each recorded frame.
+    behav_time : np.ndarray
+        The time stamps of the behavioral frames.
+    ms_time : np.ndarray
+        The time stamps of the imaging data.
+    time_thre : float, optional
+        The maximal time difference between behavioral and imaging frames, by default 500
+    """
+    assert behav_pos.shape[0] == behav_time.shape[0]
+
+    ms_pos = np.zeros((ms_time.shape[0], 2), np.float64)
+    
+    for i in range(ms_pos.shape[0]):
+        if ms_time[i] <= behav_time[0]:
+            continue
+        else:
+            idx = np.where(behav_time < ms_time[i])[0][-1]
+            
+            if ms_time[i] - behav_time[idx] <= time_thre:
+                ms_pos[i, :] = behav_pos[idx, :]
+                
+    return ms_pos 
 
 def DLC_Concatenate(directory: str, find_chars: str = '.csv', body_part: list = ['bodypart1', 'bodypart2', 'bodypart3', 'bodypart4'],
                     **kwargs):

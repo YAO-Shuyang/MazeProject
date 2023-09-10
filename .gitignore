@@ -8,6 +8,10 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+dismat/
+decoder/Decoding*
+*test.py
+
 build/
 develop-eggs/
 dist/

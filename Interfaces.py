@@ -1,6 +1,27 @@
 from mylib.preprocessing_ms import *
 from mylib.preprocessing_behav import *
 
+# Fig0011 Session duration
+def SessionDuration_Interface(trace: dict, spike_threshold = 30, variable_names = None, is_placecell = False):
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Duration'])
+    KeyWordErrorCheck(trace, __file__, ['correct_time'])
+    
+    return np.array([trace['correct_time'][-1]/1000/60], dtype=np.float64)
+
+def TotalPathLength_Interface(trace: dict, spike_threshold = 30, variable_names = None, is_placecell = False):
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Path Length', 'Lap'])
+    KeyWordErrorCheck(trace, __file__, ['correct_pos', 'lap_begin_index', 'lap_end_index'])
+    
+    lap = trace['lap_begin_index'].shape[0]
+    dis = np.zeros(lap, np.float64)
+    for i in range(lap):
+        beg, end = trace['lap_begin_index'][i], trace['lap_end_index'][i]
+        dx = np.ediff1d(trace['correct_pos'][beg:end, 0])
+        dy = np.ediff1d(trace['correct_pos'][beg:end, 1])
+        dis[i] = np.nansum(np.sqrt(dx**2+dy**2))
+    
+    return dis, np.arange(1, lap+1)   
+
 # Fig0015/14
 # FiringRateProcess's interface for data analysis. Fig0015.
 def FiringRateProcess_Interface(trace = {}, spike_threshold = 30, variable_names = None, is_placecell = False):
@@ -22,7 +43,7 @@ def FiringRateProcess_Interface(trace = {}, spike_threshold = 30, variable_names
 
 # Fig0016&17
 # Generate spatial information map Fig0016
-def SpatialInformation_Interface(trace = {}, spike_threshold = 30, variable_names = None, is_placecell = False):
+def SpatialInformation_Interface(trace = {}, spike_threshold = 10, variable_names = None, is_placecell = True):
     KeyWordErrorCheck(trace, __file__, ['SI_all','is_placecell','is_placecell_isi','Spikes'])
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Cell','SI'])
     
@@ -130,11 +151,32 @@ def PeakDistributionDensity_Interface(trace = {}, spike_threshold = 30, variable
 
 
 # Fig0023 Place Cell Percentage
-def PlaceCellPercentage_Interface(trace = {}, spike_threshold = 30, variable_names = None, is_placecell = False):
+def PlaceCellPercentage_Interface(trace = {}, spike_threshold = 10, variable_names = None, is_placecell = False):
     KeyWordErrorCheck(trace, __file__, ['is_placecell'])
-    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['percentage', 'place cell num'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['percentage', 'place cell num', 'total cell num'])
 
-    return [np.nanmean(trace['is_placecell'])], [np.nansum(trace['is_placecell'])]
+    return [np.nanmean(trace['is_placecell'])], [np.nansum(trace['is_placecell'])], [trace['n_neuron']]
+
+# Fig0029 Field Centers to Start (distance, unit: m)
+from mazepy.behav.graph import Graph
+def FieldCentersToStart_Interface(trace = {}, spike_threshold = 30, variable_names = None, is_placecell = True, Gs: None = None):
+    assert Gs is not None
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Distance To Start', 'Cell'])
+    
+    dis = []
+    cells = []
+    G = Gs[trace['maze_type']-1]
+    
+    idx = np.where(trace['is_placecell'] == 1)[0]
+    
+    for i in tqdm(idx):
+        for k in trace['place_field_all'][i].keys():
+            x, y = ((k - 1)%48 + 0.5)/4, ((k - 1)//48 + 0.5)/4
+            
+            dis.append(G.shortest_distance((x, y), (0.125, 0.125))*8)
+            cells.append(i+1)
+    
+    return np.array(dis, dtype = np.float64), np.array(cells, dtype = np.int64)   
 
 
 # Fig0030 Decoding Error Figure

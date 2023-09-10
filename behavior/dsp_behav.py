@@ -64,8 +64,11 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
     maze_type = int(f['maze_type'][i])
     behavior_paradigm = str(f['behavior_paradigm'][i])   #" CrossMaze", "ReverseMaze", "DSPMaze"
     session = int(f['session'][i])
-    start_from = str(f['Start From'][i])
-
+    try:
+        start_from = str(f['Start From'][i])
+    except:
+        start_from = None
+    
     totalpath = work_flow
     p = os.path.join(totalpath, str(MiceID), str(date),"session "+str(session))
 

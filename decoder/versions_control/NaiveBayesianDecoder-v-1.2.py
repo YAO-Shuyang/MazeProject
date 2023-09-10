@@ -1,48 +1,10 @@
-from mylib.maze_utils3 import GetDMatrices, clear_NAN, SmoothMatrix
-from mylib.maze_graph import Quarter2FatherGraph, Son2FatherGraph
-from tqdm import tqdm
-import pickle
-import scipy.stats
-import numpy as np
-from numba import jit
-import time
-
-@jit(nopython=True)
-def _generate_tuning_curve(
-    Spikes: np.ndarray, 
-    spike_nodes: np.ndarray,
-    nx: int = 48
-):
-    rate_map = np.zeros((Spikes.shape[0], nx**2), dtype=np.float64)
-    for i in range(nx**2):
-        indices = np.where(spike_nodes==i)[0]
-        frame_num = len(indices)
-        if frame_num == 0:
-            continue
-        rate_map[:, i] = np.sum(Spikes[:, indices], axis=1) / frame_num
-        
-    return rate_map
-
-@jit(nopython=True)
-def _get_post_prob(Spikes_test: np.ndarray, pext: np.ndarray, pext_A: np.ndarray, nx: int = 48):
-    P = np.ones((nx*nx, Spikes_test.shape[1]), dtype = np.float64)
-    log_A = np.log(pext_A)
-  
-    # generate P matrix.
-    print("    Generating P matirx...")
-    for t in range(Spikes_test.shape[1]):
-        spike_idx = np.where(Spikes_test[:,t]==1)[0]
-        nonspike_idx = np.where(Spikes_test[:,t]==0)[0]
-        p = np.log(np.concatenate((pext[spike_idx,:],(1-pext[nonspike_idx,:])), axis=0))
-        P[:,t] = np.sum(p, axis = 0) + log_A
-        
-    return P
+from mylib.maze_utils3 import *
 
 class NaiveBayesDecoder(object):
     '''
-    version: 1.3
+    version: 1.
     Author: YAO Shuyang
-    Date: August 18th, 2023
+    Date: August 30th, 2022
     -------------------------------------
     
     A naive Bayesian decoder based on new priciples which aims at decoding neural signals.
@@ -57,25 +19,9 @@ class NaiveBayesDecoder(object):
         1. Revert D matrix to its prototype (Correspond to 0-1 function). For convience, we compare the True Naive Bayesian method with
         self-defined(modified) naive Bayesian method and set a parameter to simply perform a switch between them.
         2. Add an optional parameter to modulate whether smooth or not.
-
-    Log(-v1.3):
-        1. More precise method to calculate the distance errors.
-        2. Use jit to accelerate the decoding process.
-        3. More precise decoding performance.
-    
     '''
 
-    def __init__(
-        self,
-        maze_type: int, 
-        res: int=12, 
-        l: float = 0.01,
-        _version: float = 1.3, 
-        Loss_function: str = '0-1', 
-        smooth_matrix: np.ndarray | None = None, 
-        is_smooth: bool = True,
-        frame_range: list | np.ndarray = []
-    ) -> None:
+    def __init__(self, maze_type = 1, res=12, l = 0.01, _version = 1.2, Loss_function = '0-1', is_smooth = True):
         '''
         This decoder is compatible with open field and different maze type. Some parameters is set to modulate the decoding efficiency.
         -----------------------------
@@ -101,7 +47,6 @@ class NaiveBayesDecoder(object):
         self.version = 'NaiveBayesDecoder v '+str(_version)
         self.Loss_function = Loss_function
         self.is_smooth = is_smooth
-        self.frame_range = frame_range
         return
     
     # broadth first search (BFS) to calculating the distance of 2 maze bin
@@ -112,8 +57,19 @@ class NaiveBayesDecoder(object):
         print("    Generate D matrix")
         maze_type = self.maze_type
         nx = self.res
-        D = GetDMatrices(maze_type=maze_type, nx=nx)
-        D2 = D**2
+        with open('decoder_DMatrix.pkl', 'rb') as handle:
+            D_Matrice = pickle.load(handle)
+            if nx == 12:
+                D = D_Matrice[6+maze_type] / nx * 12
+            elif nx == 24:
+                D = D_Matrice[3+maze_type] / nx * 12
+            elif nx == 48:
+                D = D_Matrice[maze_type] / nx * 12
+            else:
+                self.is_cease = True
+                print("self.res value error! Report by self._dis")
+                return
+            D2 = D**2
         self.D2 = D2
         self.D = D
 
@@ -138,7 +94,7 @@ class NaiveBayesDecoder(object):
 
     # ----------------------------------- FITTING ------------------ Fitting ----------------------------------------------
     
-    def fit(self, Spikes_train, MazeID_train):
+    def fit(self,Spikes_train,MazeID_train):
         if self.is_cease == True:
             print("    Fitting aborts! self.is_cease has been set as True for some reasons.")
             return
@@ -146,7 +102,7 @@ class NaiveBayesDecoder(object):
         # basic length
         T = Spikes_train.shape[1] # Total time frames of training set.
         n = Spikes_train.shape[0] # number of neurons.
-        nx = self.res # maze length
+        nx = self.res             # maze length
 
         # generate distance matrix;
         d = self._Generate_D_Matrix()
@@ -158,7 +114,6 @@ class NaiveBayesDecoder(object):
     # Generate tuning curve matrix (pext in previous versions) to equavalently substitute probability matrix.
     def _Generate_TuningCurve(self):
         print("    Generating tuning curve")
-        t1 = time.time()
         _nbins = self.res**2
         _coords_range = [0, _nbins +0.0001 ]
         n_neuron = self.Spikes_train.shape[0]
@@ -175,25 +130,19 @@ class NaiveBayesDecoder(object):
                 range=_coords_range)
             
         count_freq ,_ ,_= scipy.stats.binned_statistic(
-            self.MazeID_train,
-            self.Spikes_train[i,:],
-            bins=_nbins,
-            statistic="count",
-            range=_coords_range)
+                self.MazeID_train,
+                self.Spikes_train[i,:],
+                bins=_nbins,
+                statistic="count",
+                range=_coords_range)
 
         count_freq[count_freq < 1] = 1  # 1/25
         pext = spike_freq_all / count_freq
-        print(time.time()-t1)
-        t2 = time.time()
-        #pext = _generate_tuning_curve(self.Spikes_train, self.MazeID_train, self.res)
-        print(list(pext[0, :]))
-        print(time.time()-t2)
-        peak = np.nanmax(pext, axis=1)
+        
+        clear_pext = clear_NAN(pext)[0]   # clear_NAN value
 
         if self.is_smooth == True:
-            Ms = SmoothMatrix(self.maze_type, sigma=4, _range = 20, nx=self.res)
-            """
-            with open(r'E:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\decoder_SmoothMatrix.pkl','rb') as handle:
+            with open('decoder_SmoothMatrix.pkl','rb') as handle:
                 ms_set = pickle.load(handle)
         
             if self.res == 12:
@@ -205,21 +154,15 @@ class NaiveBayesDecoder(object):
         
             self.smooth_matrix = ms
             smooth_pext = np.dot(clear_pext, ms)
-            """
-            print("hello, world")
-            smooth_pext = np.dot(pext, Ms.T)
-            
         else:
-            smooth_pext = pext
+            smooth_pext = clear_pext
 
         pext_A = count_freq / np.nansum(count_freq)
         
-        smooth_pext[np.where(smooth_pext < 0.000001)] = 0.000001
-        smooth_pext[np.where(smooth_pext > 0.999999)] = 0.999999
-        
-        smooth_peak = np.nanmax(smooth_pext, axis=1)
-        smooth_pext = (smooth_pext.T * peak/smooth_peak).T
-        print(list(smooth_pext[0, :]))
+        x_idx, y_idx = np.where(smooth_pext == 0)
+        for i in range(len(x_idx)):
+            smooth_pext[x_idx[i],y_idx[i]] = 0.004 
+            
         pext_A = pext_A / np.nansum(pext_A)
         self.pext = smooth_pext
         self.pext_A = pext_A
@@ -241,10 +184,8 @@ class NaiveBayesDecoder(object):
             self.is_cease = True
             return
 
-        
-        pext, pext_A = self._Generate_TuningCurve()
-        
         P = np.ones((nx*nx,T_test), dtype = np.float64)
+        pext, pext_A = self._Generate_TuningCurve()
         self.pext = pext
         self.pext_A = pext
         log_A = np.log(pext_A)
@@ -256,15 +197,14 @@ class NaiveBayesDecoder(object):
             nonspike_idx = np.where(Spikes_test[:,t]==0)[0]
             p = np.concatenate((pext[spike_idx,:],(1-pext[nonspike_idx,:])),axis=0)
             P[:,t] = np.nanprod(p, axis = 0) * pext_A
-        """   
-        P = _get_post_prob(Spikes_test, pext, pext_A, self.res) 
-        """
+            
         self.P = P
         return P
 
     def predict(self,Spikes_test, MazeID_test):
         if self.is_cease == True:
-            raise ValueError("    Prediction aborts! self.is_cease has been set as True for some reasons.")
+            print("    Prediction aborts! self.is_cease has been set as True for some reasons.")
+            return
 
         #Get values saved in "fit" function
         P = self._BayesianEstimation(Spikes_test = Spikes_test, l = self.l, Sj = 2)
@@ -294,19 +234,18 @@ class NaiveBayesDecoder(object):
 
         abd = np.zeros_like(self.MazeID_predicted,dtype = np.float64)
         for k in range(abd.shape[0]):
-            abd[k] = D[int(self.MazeID_predicted[k])-1,int(self.MazeID_test[k])-1] * 8
+            abd[k] = D[self.MazeID_predicted[k]-1,self.MazeID_test[k]-1] * 8
         
         # average of AbD
         MAE = np.nanmean(abd)
-        std_mae = np.std(abd)
         MSE = np.nanmean(abd**2)
         std_abd = np.std(abd**2)
         RMSE = np.sqrt(MSE)
-        print("  ", RMSE, MAE)
+        print("  ",RMSE, MAE)
         self.RMSE = RMSE
         self.MAE = MAE
 
-        return MSE, std_abd, RMSE, MAE, std_mae
+        return MSE, std_abd, RMSE, MAE
     
     def metrics_Accuracy(self):
         print("Accuracy")

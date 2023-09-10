@@ -9,6 +9,7 @@ import sklearn.preprocessing
 from tqdm import tqdm
 import time
 from scipy.stats import ttest_1samp
+from mylib.field.in_field import InFieldRateChangeModel, set_range, temporal_analysis, parallel_shuffle
 
 LOWER_BOUND = 5
 UPPER_BOUND = 95
@@ -18,194 +19,7 @@ FAIL_TO_PASS = False
 from numba import jit
 import time
 
-@jit(nopython=True)
-def _loss(x, y, breakpoint: float, constants: list):
-    y_pred = np.where(x<=breakpoint, constants[0], constants[1])
-    return np.sum((y - y_pred)**2)
 
-@jit(nopython=True)
-def _twopiece_fit(init_breakpoints, x, y):
-    total_losses = np.zeros_like(init_breakpoints, dtype=np.float64)
-    for i, b in enumerate(init_breakpoints):
-        total_losses[i] = _loss(x, y, b, (np.nanmean(y[np.where(x<=b)[0]]), np.nanmean(y[np.where(x>b)[0]])))
-    return total_losses
-
-@jit(nopython=True)
-def parallel_shuffle(
-    trial_num, 
-    total_events_num, 
-    frames_set, 
-    cal_events_time,
-    durations: np.ndarray,
-    shuffle_times: int=5000,
-):
-    dt = np.ediff1d(np.unique(cal_events_time))
-    init_break_points = np.unique(cal_events_time)[0:-1] + dt
-    const1, const2, bps = np.zeros(shuffle_times, np.float64), np.zeros(shuffle_times, np.float64), np.zeros(shuffle_times, np.float64)
-    
-    for i in range(shuffle_times):
-        rand_events_num = np.zeros(trial_num)
-        rand_events_frame = np.random.choice(frames_set, total_events_num, replace=False)
-        for frame in rand_events_frame:
-            rand_events_num[frame] += 1
-            
-        rand_events_rate = (rand_events_num / durations * 1000)
-            
-        rand_events_rate = rand_events_rate / np.nanmax(rand_events_rate)
-        rand_events_rate[np.where(np.isnan(rand_events_rate))[0]] = 0
-        
-        total_losses = _twopiece_fit(init_break_points, cal_events_time, rand_events_rate)
-        
-        total_losses[np.where(np.isnan(total_losses))[0]] = 100000
-   
-        idx =  np.argmin(total_losses)
-        if np.min(total_losses) == 100000:
-            bps[i] = -1000
-        else:
-            bps[i] = init_break_points[idx]
-        const1[i] = np.nanmean(rand_events_rate[np.where(cal_events_time<=bps[i])[0]])
-        const2[i] = np.nanmean(rand_events_rate[np.where(cal_events_time>bps[i])[0]])
-
-    return const1, const2, bps
-
-@jit(nopython=True)
-def _set_range_jit(maze_type: int, father_field: np.ndarray, CP: np.ndarray) -> tuple[float, float]:
-    """
-    set_range: set the range of the field on the correct track.
-
-    Parameters
-    ----------
-    maze_type : int
-        Maze type
-    father_field : np.ndarray
-        The bins in the field.
-
-    Returns
-    -------
-    tuple[float, float]
-        The range of the field on the correct track, (min, max).
-        Return (np.nan, np.nan) if all of the bins in the field are 
-        situated at incorrect track.
-    """
-    
-    field_range = np.zeros(len(father_field), dtype=np.float64)
-
-    IS_INCORRECT_TRACK_FIELDS = True
-
-    for i, n in enumerate(father_field):
-        if n not in CP:
-            field_range[i] = np.nan
-        else:
-            IS_INCORRECT_TRACK_FIELDS = False
-            field_range[i] = np.where(CP == n)[0][0]
-    
-    if IS_INCORRECT_TRACK_FIELDS:
-        return (np.nan, np.nan)
-    else:
-        return (np.nanmin(field_range), np.nanmax(field_range))    
-
-@jit(nopython=True)
-def temporal_analysis(
-    ms_time_original: np.ndarray,
-    deconv_signal: np.ndarray,
-    in_field_nodes: np.ndarray,
-    in_field_time: np.ndarray,
-    interval_indices: np.ndarray,
-    father_field: np.ndarray,
-    maze_type: int,
-    CP: np.ndarray,
-    signal_folder: np.ndarray = np.linspace(1, 3, 11),
-    t_thre: float = 500.,
-    t_unit: float = 1000.,
-) -> np.ndarray:
-            
-    field_range = _set_range_jit(maze_type=maze_type, father_field=father_field, CP=CP)
-    
-    if np.isnan(field_range[0]) or np.isnan(field_range[1]):
-        return
-    
-    signal_std = np.nanstd(deconv_signal)
-    thre_num = signal_folder.shape[0]
-    err_events = np.zeros((interval_indices.shape[0]-1, 5), np.float64)
-    cal_events_rate = np.zeros((interval_indices.shape[0]-1, thre_num), dtype=np.float64)
-    cal_events_time = np.zeros((interval_indices.shape[0]-1, thre_num), dtype=np.float64)
-    cal_events_num = np.zeros((interval_indices.shape[0]-1, thre_num), dtype=np.float64)
-    cal_frames_num = np.zeros(interval_indices.shape[0]-1, dtype=np.int64)
-    durations = np.zeros(interval_indices.shape[0]-1, dtype=np.float64)
-    
-    for i in range(interval_indices.shape[0]-1):
-        
-        beg, end = interval_indices[i], interval_indices[i+1]
-        beg_node, end_node = in_field_nodes[beg], in_field_nodes[end-1]
-        ms_indices = np.where((ms_time_original >= in_field_time[beg])&(ms_time_original <= in_field_time[end-1]))[0]
-        SUITABLE_FRAME_NUM = len(ms_indices) > 1
-        if beg_node == CP[int(field_range[0])] and end_node == CP[int(field_range[1])] and SUITABLE_FRAME_NUM:
-
-            cal_frames_num[i] = len(ms_indices)
-            durations[i] = (ms_indices[-1]-ms_indices[0])/1000*t_unit + 0.05*t_unit
-            for j in range(thre_num):
-                cal_events_num[i, j] = len(np.where(deconv_signal[ms_indices] >= signal_folder[j]*np.nanstd(deconv_signal))[0])
-                cal_events_time[i, j] = (in_field_time[beg] + in_field_time[end-1])/2
-                cal_events_rate[i, j] = cal_events_num[i, j] / durations[i] * 1000
-        else:
-            err_events[i, 0] = 1
-            err_events[i, 1] = field_range[0]
-            err_events[i, 2] = field_range[1]
-            err_events[i, 3] = in_field_time[beg]/1000
-            err_events[i, 4] = in_field_time[end-1]/1000
-            continue
-    
-    err_indices = np.where(err_events[:, 0] == 1)[0]
-    cal_events_indices = np.where(err_events[:, 0] == 0)[0]
-    return (
-        cal_events_num[cal_events_indices, :],
-        cal_events_time[cal_events_indices, :],
-        cal_events_rate[cal_events_indices, :],
-        durations[cal_events_indices],
-        cal_frames_num[cal_events_indices],
-        err_events[err_indices, :],
-        field_range
-    )
-        
-    
-def set_range(maze_type: int, field: list | np.ndarray) -> tuple[float, float]:
-    """
-    set_range: set the range of the field on the correct track.
-
-    Parameters
-    ----------
-    maze_type : int
-        Maze type
-    field : list | np.ndarray
-        The bins in the field.
-
-    Returns
-    -------
-    tuple[float, float]
-        The range of the field on the correct track, (min, max).
-        Return (np.nan, np.nan) if all of the bins in the field are 
-        situated at incorrect track.
-    """
-    
-
-    correct_path = correct_paths[maze_type]
-    field_range = np.zeros(len(field), dtype=np.float64)
-
-    IS_INCORRECT_TRACK_FIELDS = True
-
-    for i, n in enumerate(field):
-        if n not in correct_path:
-            field_range[i] = np.nan
-        else:
-            IS_INCORRECT_TRACK_FIELDS = False
-            field_range[i] = np.where(correct_path == n)[0][0]
-    
-    if IS_INCORRECT_TRACK_FIELDS:
-        return (np.nan, np.nan)
-    else:
-        return (np.nanmin(field_range), np.nanmax(field_range))    
-    
-            
 def _star(p:str):
     '''
     Note: notations of significance according to the input p value.
@@ -227,9 +41,7 @@ def _star(p:str):
     elif p <= 0.0001:
         return '****'
 
-
-
-class InFieldRateChangeModel:
+class MultiDayInFieldRateChangeModel:
     def __init__(self) -> None:
         self.total_events_num = 0
         self.total_durations = 0
@@ -248,25 +60,62 @@ class InFieldRateChangeModel:
         self.rand_L, self.rand_k, self.rand_x0, self.rand_b = None, None, None, None
         self.is_change = False
         self._ctype = 'retain'
-
-    def _init_deconv_signal(
-        self, 
-        deconv_signal: np.ndarray,
-        ms_time_original: np.ndarray,
-        ms_time_behav: np.ndarray
-    ) -> np.ndarray:
-        deconv_signal_behav = np.zeros_like(ms_time_behav, dtype=np.float64)
-
-        for i, t in enumerate(ms_time_behav):
-            if np.isnan(t):
-                deconv_signal_behav[i] = np.isnan
-            else:
-                t_idx = np.where(ms_time_original >= t)[0][0]
-                deconv_signal_behav[i] = deconv_signal[t_idx]
-
-        self.signal_std = np.std(deconv_signal)
         
-        return deconv_signal_behav
+        
+    def concat_behav(
+        self,
+        behav_nodes1: np.ndarray,
+        behav_nodes2: np.ndarray,
+        behav_time1: np.ndarray,
+        behav_time2: np.ndarray,
+        base_time: float
+    ):
+        """
+        Concatenates two arrays of behavior nodes and two arrays of behavior times, and returns the concatenated arrays.
+
+        Parameters:
+            behav_nodes1 (np.ndarray): The first array of behavior nodes.
+            behav_nodes2 (np.ndarray): The second array of behavior nodes.
+            behav_time1 (np.ndarray): The first array of behavior times.
+            behav_time2 (np.ndarray): The second array of behavior times.
+            base_time (float): The base time value.
+
+        Returns:
+            np.ndarray: The concatenated array of behavior nodes.
+            np.ndarray: The concatenated array of behavior times.
+        """
+        return np.concatenate([behav_nodes1, behav_nodes2]), np.concatenate([behav_time1, behav_time2 + base_time])
+
+    def concat_image(
+        self,
+        deconv_signal1: np.ndarray,
+        deconv_signal2: np.ndarray,
+        ms_time_original1: np.ndarray,
+        ms_time_original2: np.ndarray,
+        base_time: float
+    ):
+        """
+        Concatenates two image signals and their corresponding time arrays.
+
+        Parameters
+        ----------
+        deconv_signal1 : np.ndarray
+            The first image signal to be concatenated.
+        deconv_signal2 : np.ndarray
+            The second image signal to be concatenated.
+        ms_time_original1 : np.ndarray
+            The time array corresponding to the first image signal.
+        ms_time_original2 : np.ndarray
+            The time array corresponding to the second image signal.
+        base_time : float
+            The base time to be added to the second time array.
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray]
+            A tuple containing the concatenated image signals and their corresponding time arrays.
+        """
+        return np.concatenate([deconv_signal1, deconv_signal2]), np.concatenate([ms_time_original1, ms_time_original2 + base_time])
 
     def temporal_analysis(self,
         field: np.ndarray | list,
@@ -305,92 +154,7 @@ class InFieldRateChangeModel:
             t_unit=t_unit,
             maze_type=maze_type
         )
-        """
-        maze_type = trace['maze_type']
-        ms_time_behav = cp.deepcopy(trace['ms_time_behav'])
-        deconv_signal = cp.deepcopy(trace['DeconvSignal'][n, :])
-        ms_time = cp.deepcopy(trace['ms_time'])
 
-        self.in_field_indices = np.array([], dtype=np.int64)
-
-        # set field range
-        field_range = set_range(maze_type=maze_type, field=field)
-
-        # get in field data
-        in_field_time, in_field_nodes, in_field_pos = self.in_field_trajectory(behav_nodes=behav_nodes, behav_time=behav_time, behav_pos=behav_pos, field=field, t_thre = t_thre)
-        deconv_signal_behav = self._init_deconv_signal(deconv_signal=deconv_signal, ms_time_original=ms_time, ms_time_behav=ms_time_behav)
-        self.deconv_signal = deconv_signal_behav
-
-        break_points = np.concatenate([[-1], np.where(np.isnan(in_field_time))[0], [in_field_time.shape[0]]])
-        include_indices = []
-        err_events = []
-        CP = correct_paths[maze_type]
-        for i in range(break_points.shape[0]-1):
-            beg, end = break_points[i]+1, break_points[i+1]-1
-
-            beg_behav_idx = np.where(behav_time==in_field_time[beg])[0][0]
-            end_behav_idx = np.where(behav_time==in_field_time[end])[0][0]
-
-            prev_idx = beg_behav_idx-1 if beg_behav_idx != 0 else 0
-            next_idx = end_behav_idx+1 if end_behav_idx != behav_time.shape[0]-1 else behav_time.shape[0]-1
-
-            prev_node = behav_nodes[prev_idx]
-            next_node = behav_nodes[next_idx]
-
-            INCLUDE_START_OR_END_POINT = StartPoints[maze_type] in field or EndPoints[maze_type] in field or prev_node == EndPoints[maze_type] or next_node == StartPoints[maze_type]
-
-            # Unsuccess events
-            ENTER_INCORRECT_PATH = prev_node not in CP or next_node not in CP
-            TOO_LESS_FRAME = beg == end # only 1 frame.
-            t_min, t_max = behav_time[prev_idx], behav_time[next_idx]
-            if ENTER_INCORRECT_PATH:
-                print("ENTER INCORRECT PATH")
-                err_events.append((field_range[0], field_range[1], t_min, t_max, "ENTER INCORRECT PATH"))
-                continue
-
-            INCLUDE_START_OR_END_POINT = StartPoints[maze_type] in field or EndPoints[maze_type] in field or prev_node == EndPoints[maze_type] or next_node == StartPoints[maze_type]
-            TURN_AROUND_EVENT = prev_node == next_node and not INCLUDE_START_OR_END_POINT
-            WRONG_DIRECTION = np.where(CP==prev_node)[0][0] > np.where(CP==next_node)[0][0] and not INCLUDE_START_OR_END_POINT
-
-            if TOO_LESS_FRAME:
-                #print("TOO LESS FRAM")
-                err_events.append((field_range[0], field_range[1], t_min, t_max, "TOO LESS FRAM"))
-                continue
-            if TURN_AROUND_EVENT:
-                #print("TURN AROUND")
-                err_events.append((field_range[0], field_range[1], t_min, t_max, "TURN AROUND"))
-                
-            if WRONG_DIRECTION:
-                #print("WRONG DIRECTION")
-                err_events.append((field_range[0], field_range[1], t_min, t_max, "WRONG DIRECTION"))
-                
-            cal_events_indices = np.where((ms_time_behav >= in_field_time[beg])&(ms_time_behav <= in_field_time[end]))[0]
-            if len(cal_events_indices) <= 1:
-                #print("CALCIUM FRAME LESS THAN 1")
-                err_events.append((field_range[0], field_range[1], t_min, t_max, "CALCIUM FRAME LESS THAN 1"))
-                continue
-                     
-            include_indices.append(i)
- 
-        
-        cal_events_rate = np.zeros((len(include_indices), len(signal_folder)), dtype=np.float64)
-        cal_events_time = np.zeros((len(include_indices), len(signal_folder)), dtype=np.float64)
-        cal_events_num = np.zeros((len(include_indices), len(signal_folder)), dtype=np.float64)
-        cal_frames_num = np.zeros(len(include_indices), dtype=np.int64)
-        durations = np.zeros(len(include_indices), dtype=np.float64)
-        
-        for i, idx in enumerate(include_indices):
-            beg, end = break_points[idx]+1, break_points[idx+1]-1
-            cal_events_indices = np.where((ms_time_behav >= in_field_time[beg])&(ms_time_behav <= in_field_time[end]))[0]
-            cal_frames_num[i] = len(cal_events_indices)
-            durations[i] = (cal_events_indices[-1] - cal_events_indices[0])/1000*t_unit + 1*0.05*t_unit
-            self.in_field_indices = np.concatenate([self.in_field_indices, cal_events_indices])
-
-            for j, thre in enumerate(signal_folder): # len(np.where(spikes[cal_events_indices]==1)[0])
-                cal_events_num[i, j] = len(np.where(deconv_signal_behav[cal_events_indices]>=thre*self.signal_std)[0])
-                cal_events_time[i, j] = (in_field_time[end] + in_field_time[beg])/2
-                cal_events_rate[i, j] = cal_events_num[i, j] / durations[i] * 1000
-        """ 
         cal_events_rate = cal_events_rate / np.nanmax(cal_events_rate, axis=0)
         cal_events_rate[np.where(np.isnan(cal_events_rate))[0]] = 0
 
@@ -644,41 +408,55 @@ class InFieldRateChangeModel:
 
     @staticmethod
     def analyze_field(
-        trace: dict,
-        n: int,
+        fir_trace: dict,
+        i: int,
+        sec_trace: dict,
+        j:int,
+        behav_nodes1: np.ndarray,
+        behav_nodes2: np.ndarray,
+        behav_time1: np.ndarray,
+        behav_time2: np.ndarray,
         field: np.ndarray | list,
-        shuffle_times: int = 1000,
+        shuffle_times: int = 10000,
         signal_folder: list | np.ndarray = np.linspace(1,3,11),
         num_pieces_range: list | np.ndarray = [1,2],
         lam : float = 0,
         k_default: float = 0.0005,
         t_thre: float = 500,
         t_unit: float = 1000, # ms
-        behav_time: np.ndarray | None = None,
-        behav_nodes: np.ndarray | None = None,
-        behav_pos: np.ndarray | None = None
+        behav_dir: int = 1
     ):  
-        #t1 = time.time()
-        model = InFieldRateChangeModel()
-        # = time.time()
-        #print("Initialization time cost", t2-t1)
+        model = MultiDayInFieldRateChangeModel()
+
+        behav_nodes, behav_time = model.concat_behav(
+            behav_nodes1=cp.deepcopy(behav_nodes1),
+            behav_nodes2=cp.deepcopy(behav_nodes2),
+            behav_time1=cp.deepcopy(behav_time1),
+            behav_time2=cp.deepcopy(behav_time2),
+            base_time=behav_time1[-1]+10000
+        )
+        
+        deconv_signal, ms_time = model.concat_image(
+            cp.deepcopy(fir_trace['DeconvSignal'][i, :]),
+            cp.deepcopy(sec_trace['DeconvSignal'][j, :]),
+            ms_time_original1=cp.deepcopy(fir_trace['ms_time']),
+            ms_time_original2=cp.deepcopy(sec_trace['ms_time']),
+            base_time=behav_time1[-1]+10000
+        )
+        
         model.temporal_analysis(
             field=field, 
-            maze_type=cp.deepcopy(trace['maze_type']),
+            maze_type=fir_trace['maze_type'],
             t_thre=t_thre,
             t_unit=t_unit, 
-            ms_time_original=cp.deepcopy(trace['ms_time']),
-            deconv_signal=cp.deepcopy(trace['DeconvSignal'][n, :]),
+            ms_time_original=ms_time,
+            deconv_signal=deconv_signal,
             signal_folder=signal_folder, 
-            behav_nodes=cp.deepcopy(behav_nodes), 
-            behav_time=cp.deepcopy(behav_time)
+            behav_nodes=behav_nodes, 
+            behav_time=behav_time
         )
-        #t3 = time.time()
-        #print("temporal analysis time cost", t3-t2)
         model.fit(num_pieces_range=num_pieces_range, lam=lam, k_default=k_default)
         #t4 = time.time()
         #print("fit time cost:", t4-t3)
         model.shuffle_test(shuffle_times=shuffle_times, num_pieces_range=num_pieces_range, lam=lam, k_default=k_default)
-        #t5 = time.time()
-        #print("shuffle time cost:", t5-t4, end='\n\n')
         return model
