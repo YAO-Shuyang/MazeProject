@@ -1,4 +1,4 @@
-from mylib.maze_utils3 import GetDMatrices, clear_NAN, SmoothMatrix
+from mylib.maze_utils3 import GetDMatrices, clear_NAN, SmoothMatrix, spike_nodes_transform
 from mylib.maze_graph import Quarter2FatherGraph, Son2FatherGraph
 from tqdm import tqdm
 import pickle
@@ -183,15 +183,12 @@ class NaiveBayesDecoder(object):
 
         count_freq[count_freq < 1] = 1  # 1/25
         pext = spike_freq_all / count_freq
-        print(time.time()-t1)
         t2 = time.time()
         #pext = _generate_tuning_curve(self.Spikes_train, self.MazeID_train, self.res)
-        print(list(pext[0, :]))
-        print(time.time()-t2)
         peak = np.nanmax(pext, axis=1)
 
         if self.is_smooth == True:
-            Ms = SmoothMatrix(self.maze_type, sigma=4, _range = 20, nx=self.res)
+            Ms = SmoothMatrix(self.maze_type, sigma=1, _range = 20, nx=self.res)
             """
             with open(r'E:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\decoder_SmoothMatrix.pkl','rb') as handle:
                 ms_set = pickle.load(handle)
@@ -206,7 +203,6 @@ class NaiveBayesDecoder(object):
             self.smooth_matrix = ms
             smooth_pext = np.dot(clear_pext, ms)
             """
-            print("hello, world")
             smooth_pext = np.dot(pext, Ms.T)
             
         else:
@@ -219,7 +215,7 @@ class NaiveBayesDecoder(object):
         
         smooth_peak = np.nanmax(smooth_pext, axis=1)
         smooth_pext = (smooth_pext.T * peak/smooth_peak).T
-        print(list(smooth_pext[0, :]))
+        
         pext_A = pext_A / np.nansum(pext_A)
         self.pext = smooth_pext
         self.pext_A = pext_A
@@ -284,17 +280,35 @@ class NaiveBayesDecoder(object):
 
 
     # Ab(solute) D(istance), predicted error, added by YAO Shuyang, August 26th, 2022
-    def metrics_MSE(self):
-        print("MSE")
-        maze_type = self.maze_type
-        nx = self.res
-        D = self.D
-        if self.MazeID_predicted.shape[0] != self.MazeID_test.shape[0]:
-            print("    Warning! MazeID_test shares different dimension with MazeID_prediected.")
+    def metrics_mae(self, y_test: np.ndarray, y_pred: np.ndarray) -> tuple[float, float, float, float, float, float]:
+        """metrics_mae
 
-        abd = np.zeros_like(self.MazeID_predicted,dtype = np.float64)
+        Parameters
+        ----------
+        y_test : np.ndarray
+            The testing data
+        y_pred : np.ndarray
+            The predicted data
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            MSE, std_abd, RMSE, MAE
+
+        Raises
+        ------
+        ValueError
+            If y_test shares different dimension with y_pred
+        """
+        if y_pred.shape[0] != y_test.shape[0]:
+            raise ValueError("y_test shares different dimension with MazeID_prediected.")
+
+        
+        D = GetDMatrices(maze_type=self.maze_type, nx=self.res)
+        print(f"  Maze Type: {self.maze_type}, nx {self.res}, max value in DistanceMatrix is {np.nanmax(D)}")
+        abd = np.zeros_like(y_pred,dtype = np.float64)
         for k in range(abd.shape[0]):
-            abd[k] = D[int(self.MazeID_predicted[k])-1,int(self.MazeID_test[k])-1] * 8
+            abd[k] = D[int(y_pred[k])-1,int(y_test[k])-1]
         
         # average of AbD
         MAE = np.nanmean(abd)
@@ -302,31 +316,43 @@ class NaiveBayesDecoder(object):
         MSE = np.nanmean(abd**2)
         std_abd = np.std(abd**2)
         RMSE = np.sqrt(MSE)
-        print("  ", RMSE, MAE)
-        self.RMSE = RMSE
-        self.MAE = MAE
+        print("  RMSE: ",RMSE, "MAE: ", MAE)
+        RMSE = RMSE
+        MAE = MAE
 
-        return MSE, std_abd, RMSE, MAE, std_mae
+        return MSE, std_abd, RMSE, MAE, std_mae, abd
     
-    def metrics_Accuracy(self):
-        print("Accuracy")
-        abHit = np.zeros(self.Spikes_test.shape[1], dtype = np.float64)
-        for i in range(abHit.shape[0]):
-            if self.MazeID_test[i] == self.MazeID_predicted[i]:
-                abHit[i] = 1
+    def metrics_accuracy(self, y_test: np.ndarray, y_pred: np.ndarray) -> float:
+        """metrics_accuracy
+
+        Parameters
+        ----------
+        y_test : np.ndarray
+            The testing data
+        y_pred : np.ndarray
+            The predicted data
+
+        Returns
+        -------
+        float
+            Accuracy
+
+        Raises
+        ------
+        ValueError
+            If y_test shares different dimension with y_pred
+        """
+        if y_pred.shape[0] != y_test.shape[0]:
+            raise ValueError("y_test shares different dimension with MazeID_prediected.")
         
-        # if hits the same father node we think it is a general hit event.
-        if self.res in [24,48]:
-            geHit = np.zeros(self.Spikes_test.shape[1], dtype = np.float64)
-            S2FGraph = Quarter2FatherGraph if self.res == 24 else Son2FatherGraph
-            for i in range(geHit.shape[0]):
-                if S2FGraph[int(self.MazeID_test[i])] == S2FGraph[int(self.MazeID_predicted[i])]:
-                    geHit[i] = 1
-            self.abHit = np.nanmean(abHit)
-            self.geHit = np.nanmean(geHit)
-            print("  ",self.abHit,self.geHit)
-            return np.nanmean(abHit), np.nanmean(geHit)
+        abHit = np.mean(np.where(y_pred - y_test == 0, 1, 0))
+        geHit = np.nan
         
-        print("  ",self.abHit)
-        self.abHit = np.nanmean(abHit)
-        return np.nanmean(abHit)
+        if self.res in [48]:
+            y_pred_old = spike_nodes_transform(y_pred, 12)
+            y_test_old = spike_nodes_transform(y_test, 12)
+            
+            geHit = np.mean(np.where(y_pred_old - y_test_old == 0, 1, 0))
+
+        print(f"  Absolute Accuracy: {round(abHit*100, 2)}% General Accuracy: {round(geHit*100, 2)}%")
+        return abHit, geHit

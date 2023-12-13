@@ -18,6 +18,7 @@ def LinearizedRateMapAxes(
     folder: float = 1,
     M: np.ndarray = None,
     smooth_kwarg: dict = {'kind':'slinear', 'insert_num':1000},
+    color: str = 'k',
     **kwargs
 ) -> tuple[Axes, list]:
     """
@@ -61,7 +62,7 @@ def LinearizedRateMapAxes(
 
     y_max = (int(np.nanmax(content)*100))/100
 
-    a = ax.plot(smooth_x, smooth_content, color = 'k', **kwargs)
+    a = ax.plot(smooth_x, smooth_content, color = color, **kwargs)
     #a = ax.plot(np.arange(1, corr_content.shape[0]+1), corr_content, color = 'k')
 
     ax.set_ylabel("Events Rate / Hz")

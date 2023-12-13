@@ -3,10 +3,11 @@ from mylib.preprocessing_ms import *
 from mylib.Interfaces import *
 import seaborn as sns
 import scipy.io
-from scipy.stats import ttest_1samp, ttest_ind
-from mylib.Interfaces import FiringRateProcess_Interface, SpatialInformation_Interface, LearningCurve_Interface, PlaceFieldNumber_Interface, PlaceCellPercentage_Interface, NeuralDecodingResults_Interface, PeakDistributionDensity_Interface
+from scipy.stats import ttest_1samp, ttest_ind, levene
 from mylib.local_path import *
-from scipy.stats import linregress
+from scipy.stats import linregress, pearsonr
+from matplotlib.gridspec import GridSpec
+import gc
 
 def star(p:str):
     '''
@@ -61,145 +62,55 @@ def plot_star(left:list = [0.1], right:list = [0.9], height:list = [1.], delt_h:
     return ax
 
 # Get a collection of trace object(dict).
-def TraceFileSet(idx:np.ndarray = None, file:pd.DataFrame = f1, Behavior_Paradigm:str = 'CrossMaze', tp: str = r"G:\YSY\Cross_maze"):
+def TraceFileSet(
+    idx:np.ndarray, 
+    f:pd.DataFrame, 
+    is_behav: bool = False
+) -> list:
     '''
     Author: YAO Shuyang
-    Date: Jan 26th, 2023
+    Date: Sept 26th, 2023
     Note: To combine trace into a list for the convinence to call.
 
     Input:
-    - file: <class 'pandas.DataFrame'>, the guide file that saves basic information of each session.
+    - f: <class 'pandas.DataFrame'>, the guide f that saves basic information of each session.
     - idx: <class 'numpy.ndarray'>, the indexes (of row) of sessions that you want to choose to combine a list.
-    - Behavior_Paradigm: str, the behavior paradigm of file. Only 'Cross Maze', 'Simple Maze', 'Reverse Maze' are valid value.
+    - is_behav: bool, whether the input is behavioral trace or not.
 
     Output:
     - A list, contains several dicts (trace of each session) and the length of this list is equal to the length of idx.
     '''
-    assert idx is not None and file is not None  #Error! Need an input idx list and a DataFrame!
-    ValueErrorCheck(Behavior_Paradigm, ['CrossMaze', 'SimpleMaze', 'ReverseMaze'])
 
-    if Behavior_Paradigm == 'CrossMaze':
-        KeyWordErrorCheck(file, ['MiceID', 'date', 'session'])
-        trace_set = []
-        print("Read trace file:")
-        for i in tqdm(idx):
-            loc = os.path.join(tp, str(int(file['MiceID'][i])), str(int(file['date'][i])), 'session '+str(int(file['session'][i])), 'trace.pkl')
-            if os.path.exists(loc) == False:
-                print(loc, ' is not exist! Abort function TraceFileSet().')
-                return []
-            else:
-                with open(loc, 'rb') as handle:
-                    trace = pickle.load(handle)
-            trace_set.append(trace)
-        return trace_set
-
-    elif Behavior_Paradigm == 'SimpleMaze':
-        KeyWordErrorCheck(file, ['MiceID', 'date'])
-        trace_set = []
-        print("Read trace file:")
-        for i in tqdm(idx):
-            loc = os.path.join(tp, str(int(file['MiceID'][i])), str(int(file['date'][i])), 'trace.pkl')
-            if os.path.exists(loc) == False:
-                print(loc, ' is not exist! Abort function TraceFileSet().')
-                return []
-            else:
-                with open(loc, 'rb') as handle:
-                    trace = pickle.load(handle)
-            trace_set.append(trace)
-        return trace_set
+    trace_set = []
     
-    elif Behavior_Paradigm == 'ReverseMaze':
-        KeyWordErrorCheck(file, ['MiceID', 'date'])
-        trace_set = []
-        print("Read trace file:")
-        for i in tqdm(idx):
-            loc = os.path.join(tp, str(int(file['MiceID'][i])), str(int(file['date'][i])), 'trace.pkl')
-            if os.path.exists(loc) == False:
-                print(loc, ' is not exist! Abort function TraceFileSet().')
-                return []
-            else:
-                with open(loc, 'rb') as handle:
-                    trace = pickle.load(handle)
+    if is_behav == False:
+        key = 'Trace File'
+    else:
+        key = 'Trace Behav File'
+    
+    for i in tqdm(idx):
+        if os.path.exists(f[key][i]):
+            with open(f[key][i], 'rb') as handle:
+                trace = pickle.load(handle)
             trace_set.append(trace)
-        return trace_set
+        else:
+            trace_set.append(None)
+    
+    return trace_set
 
 # Index matrix is generated for the convience to plot sample cells.
-def Generate_IndexMatrix(file, dateset = ['20220830'], beg_idx = None, end_idx = None):
+def Generate_IndexMatrix(f, dateset = ['20220830'], beg_idx = None, end_idx = None):
     if beg_idx is None or beg_idx < 0:
         beg_idx = 0
-    if end_idx is None or end_idx > len(file):
-        end_idx = len(file)
+    if end_idx is None or end_idx > len(f):
+        end_idx = len(f)
     IndexMatrix = np.zeros((end_idx - beg_idx, len(dateset)), dtype = np.int64)
     for d in range(len(dateset)):
-        IndexMatrix[:,d] = np.array(file[dateset[d]][beg_idx:end_idx], dtype = np.int64)
+        IndexMatrix[:,d] = np.array(f[dateset[d]][beg_idx:end_idx], dtype = np.int64)
     return IndexMatrix
 
-def Read_and_Sort_IndexMap(
-    path:str = None, 
-    occur_num:int = 6, 
-    align_type:str = 'cross_day', 
-    name_label:str = 'SFP2022',
-    order = np.array(['20220820', '20220822', '20220824', '20220826', '20220828', '20220830']) # if align_type == 'cross_day' else np.array(['1','2','3','4'])
-) -> np.ndarray:
-    '''
-    Author: YAO Shuyang
-    Date: Jan 25th, 2023 (Modified)
-    Note: This function is written to
-    1. Read index_map from cellRegistered.mat.
-    2. Sort them with certain order.
-    3. Select cell sequences that satisfy certain requirement. The requirement is the number of cells in the cell sequence. If the number >= occur_numm, it is satisfied.
 
-    Input:
-    - path: str, the directory of cellRegistered.mat file
-    - occur_num: int. The threshold to select cell sequences that satisfy this threshold. The default value for 'cross_day' file is 6 and default value for 'cross_session' is 4.
-    - align_type: str. Determines whether sessions that are aligned are recorded in different days (cross_day) or different sessions in one day (cross_session). Only 'cross_day' and 'cross_session' are valid value.
-    - name_label: str, the cell_reg name label in logFile.txt
 
-    Output:
-    - <class 'numpy.ndarray'>
-    '''
-    ValueErrorCheck(align_type, ['cross_day','cross_session']) # InputContentError! Only 'cross_day' and 'cross_session' are valid value!
-
-    if align_type == 'cross_session' and occur_num == 6:
-        occur_num = 4
-
-    # ReadCellReg
-    index_map = ReadCellReg(loc = path)
-
-    # Index_map does not have the proper length as the input order!
-    assert order.shape[0] <= index_map.shape[0]
-
-    nrow = index_map.shape[0]
-    index_map_reorder = np.zeros((order.shape[0], index_map.shape[1]), dtype = np.int64)
-    # read log.txt file to reorder the index_map, with the order of date or session, according to align_type.
-    dir = os.path.dirname(path)
-    with open(os.path.join(dir, 'logFile.txt'), 'r') as f:
-        lines = f.readlines()[2:2 + nrow]
-
-        if align_type == 'cross_day':
-            for i in range(nrow):
-                idx = lines[i].find(name_label)
-                # Get date, e.g. SFP20200826, the 3rd char object to the 11st char is 20220826.
-                th = np.where(order == lines[i][idx+3:idx+11])[0]
-                if len(th) != 0:
-                    index_map_reorder[th[0], :] = index_map[i, :]
-
-        elif align_type == 'cross_session':
-            for i in range(nrow):
-                idx = lines[i].find(name_label)
-                # Get session, e.g. SFP2020082601, the 12nd char object is the number of session.
-                th = np.where(order == lines[i][idx+12])[0]
-                if len(th) != 0:
-                    index_map_reorder[th[0], :] = index_map[i, :]           
-
-    # Delete those cell number less than occur_num, for example, 'occur_num = 5' means that only those cells that are detected in at least 5 days 
-    # are kept and others are deleted.
-    isfind_map = np.where(index_map_reorder == 0, 0, 1)
-    count_num = np.nansum(isfind_map, axis = 0)
-    kept_idx = np.where(count_num >= occur_num)[0]
-
-    return index_map_reorder[:, kept_idx]       
-    
 # According to figure 4, there's a gap between each block of incorrect path. Now we split old_map incorrect part into several 
 # blocks with NAN gap.
 def IncorrectMap(old_map_all = None, maze_type = 1, is_norm = True, is_sort = True):
@@ -243,7 +154,7 @@ def Add_NAN_Line(ax = None, incorrect_map = None, is_single = False, linewidth =
 # Generate data about some key variables. Generate all data from a behavior paragidm.
 def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function = None, 
                        file_name:str = 'default', behavior_paradigm:str = 'CrossMaze', 
-                       legal_maze_type:list = [0,1,2], f_member: list|None = None, 
+                       legal_maze_type:list = [0,1,2,3], f_member: list|None = None, 
                        file_idx:np.ndarray|list = None, func_kwgs:dict = {}, 
                        is_behav: bool = False):
     '''
@@ -262,10 +173,10 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
     Output:
     - A dict
     '''
-    ValueErrorCheck(behavior_paradigm, ['CrossMaze', 'ReverseMaze', 'DSPMaze', 'SimpleMaze', 'decoding'])
+    ValueErrorCheck(behavior_paradigm, ['CrossMaze', 'ReverseMaze', 'DSPMaze', 'HairpinMaze', 'SimpleMaze', 'decoding'])
 
     # Initiate data dic
-    data = {'MiceID':np.array([]), 'Training Day':np.array([]), 'Maze Type':np.array([]), 'Stage': np.array([])}
+    data = {'MiceID':np.array([], np.int64), 'Training Day':np.array([]), 'Maze Type':np.array([]), 'Stage': np.array([]), 'date': np.array([], dtype=np.int64)}
     
     # Initiate additive member:
     if f_member is not None:
@@ -281,21 +192,23 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
     else:
         follow = False
 
+    if behavior_paradigm in ['CrossMaze', 'DSPMaze', 'ReverseMaze', 'HairpinMaze']:
+        if is_behav:
+            keyw = 'Trace Behav File'
+        else:
+            keyw = 'Trace File'
+    elif behavior_paradigm in ['decoding']:
+        keyw = 'Results File'
+    else:
+        raise ValueError(f'behavior_paradigm should be in ["CrossMaze", "ReverseMaze", "DSPMaze", "HairpinMaze", "decoding"], while {behavior_paradigm} is not supported.')
+        
+
     for i in tqdm(file_idx):
         # delete abnormal sessions.
         if f['include'][i] == 0:
             continue
         
-        try: 
-            KeyWordErrorCheck(f, __file__, keys = ['Trace File', 'Trace Behav File'])
-            if is_behav:
-                p = f['Trace Behav File'][i]
-            else:
-                p = f['Trace File'][i]
-        except:
-            KeyWordErrorCheck(f, __file__, keys = ['Data File'])
-            p = f['Data File'][i]
-
+        p = f[keyw][i]
         if os.path.exists(p):
             with open(p, 'rb') as handle:
                 trace = pickle.load(handle)
@@ -321,10 +234,11 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
 
         # Generating data.
         mazes = 'Maze '+str(trace['maze_type']) if trace['maze_type'] in [1,2] else 'Open Field'
-        data['MiceID'] = np.concatenate([data['MiceID'], np.repeat(str(trace['MiceID']), length)])
+        data['MiceID'] = np.concatenate([data['MiceID'], np.repeat(int(f['MiceID'][i]), length)])
         data['Maze Type'] = np.concatenate([data['Maze Type'], np.repeat(mazes, length)])
         data['Training Day'] = np.concatenate([data['Training Day'], np.repeat(training_day, length)])
         data['Stage'] = np.concatenate([data['Stage'], np.repeat(stage, length)])
+        data['date'] = np.concatenate([data['date'], np.repeat(int(f['date'][i]), length)])
 
         for c in range(len(variable_names)):
             data[variable_names[c]] = np.concatenate([data[variable_names[c]], results[c]])
@@ -333,6 +247,10 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
         if f_member is not None:
             for m in f_member:
                 data[m] = np.concatenate([data[m], np.repeat(f[m][i], length)])
+                
+        del trace
+        gc.collect()
+        
         
     print(np.shape(data['MiceID']))
 
@@ -602,10 +520,123 @@ def ExclusivePeakRate_Interface(trace:dict = {}, spike_threshold:int = 30, varia
 
     return np.concatenate([trace['peak_rate'][mpc_idx], trace['peak_rate'][other_pc_idx]]), np.repeat(['Maintained PC', 'Newly Recuited PC'], [mpc_idx.shape[0], other_pc_idx.shape[0]])
 
-#if __name__ == '__main__':
-    #data = DataFrameEstablish(variable_names = ['peak_rate','mean_rate','cor_mean_rate','inc_mean_rate','cor_peak_rate','inc_peak_rate'], 
-    #                           f = f1, function = FiringRateProcess_Interface)
 
+
+def Read_and_Sort_IndexMap(
+    path:str = None, 
+    occur_num:int = 6, 
+    align_type:str = 'cross_day', 
+    name_label:str = 'SFP2022',
+    order = np.array(['20220820', '20220822', '20220824', '20220826', '20220828', '20220830']) # if align_type == 'cross_day' else np.array(['1','2','3','4'])
+) -> np.ndarray:
+    '''
+    Author: YAO Shuyang
+    Date: Jan 25th, 2023 (Modified)
+    Note: This function is written to
+    1. Read index_map from cellRegistered.mat.
+    2. Sort them with certain order.
+    3. Select cell sequences that satisfy certain requirement. The requirement is the number of cells in the cell sequence. If the number >= occur_numm, it is satisfied.
+
+    Input:
+    - path: str, the directory of cellRegistered.mat f
+    - occur_num: int. The threshold to select cell sequences that satisfy this threshold. The default value for 'cross_day' file is 6 and default value for 'cross_session' is 4.
+    - align_type: str. Determines whether sessions that are aligned are recorded in different days (cross_day) or different sessions in one day (cross_session). Only 'cross_day' and 'cross_session' are valid value.
+    - name_label: str, the cell_reg name label in logFile.txt
+
+    Output:
+    - <class 'numpy.ndarray'>
+    '''
+    ValueErrorCheck(align_type, ['cross_day','cross_session']) # InputContentError! Only 'cross_day' and 'cross_session' are valid value!
+
+    if align_type == 'cross_session' and occur_num == 6:
+        occur_num = 4
+
+    # ReadCellReg
+    index_map = ReadCellReg(loc = path)
+
+    # Index_map does not have the proper length as the input order!
+    assert order.shape[0] <= index_map.shape[0]
+
+    nrow = index_map.shape[0]
+    index_map_reorder = np.zeros((order.shape[0], index_map.shape[1]), dtype = np.int64)
+    # read log.txt file to reorder the index_map, with the order of date or session, according to align_type.
+    dir = os.path.dirname(path)
+    with open(os.path.join(dir, 'logFile.txt'), 'r') as f:
+        lines = f.readlines()[2:2 + nrow]
+
+        if align_type == 'cross_day':
+            for i in range(nrow):
+                idx = lines[i].find(name_label)
+                # Get date, e.g. SFP20200826, the 3rd char object to the 11st char is 20220826.
+                th = np.where(order == lines[i][idx+3:idx+11])[0]
+                if len(th) != 0:
+                    index_map_reorder[th[0], :] = index_map[i, :]
+
+        elif align_type == 'cross_session':
+            for i in range(nrow):
+                idx = lines[i].find(name_label)
+                # Get session, e.g. SFP2020082601, the 12nd char object is the number of session.
+                th = np.where(order == lines[i][idx+12])[0]
+                if len(th) != 0:
+                    index_map_reorder[th[0], :] = index_map[i, :]           
+
+    # Delete those cell number less than occur_num, for example, 'occur_num = 5' means that only those cells that are detected in at least 5 days 
+    # are kept and others are deleted.
+    isfind_map = np.where(index_map_reorder == 0, 0, 1)
+    count_num = np.nansum(isfind_map, axis = 0)
+    kept_idx = np.where(count_num >= occur_num)[0]
+
+    return index_map_reorder[:, kept_idx]       
+
+def GetMultidayIndexmap(
+    mouse: int = None,
+    stage: str = None,
+    session: int = None,
+    i: int = None,
+    occu_num: int = None
+):
+    f = f_CellReg_day
+    if i is None:
+        idx = np.where((f['MiceID'] == mouse)&(f['Stage'] == stage)&(f['session'] == session))[0]
+    
+        if len(idx) == 0:
+            print(f"    Mouse {mouse} does not have {stage} session {session} data.")
+            return np.array([], dtype = np.int64)
+        i = idx[0]
+    
+    if occu_num is None:
+        occu_time = 6
+        
+    with open(os.path.join(CellregDate, f['dates'][i]), 'rb') as handle:
+        order = pickle.load(handle)
+    
+    return Read_and_Sort_IndexMap(path = f['cellreg_folder'][i], occur_num = occu_num, align_type = 'cross_day', name_label = f['label'][i], order=order)
+
+def GetSFPSet(
+    cellreg_path: str,
+    f: pd.DataFrame,
+    file_indices: np.ndarray
+):
+    sfps = []
+    for i in file_indices:
+        path = os.path.dirname(os.path.dirname(cellreg_path))
+        sfp_path = os.path.join(path, f"SFP{int(f['date'][i])}.mat")
+    
+        if os.path.exists(sfp_path):
+            with h5py.File(sfp_path, 'r') as handle:
+                sfp = np.array(handle['SFP'])
+            sfps.append(sfp)
+        else:
+            warnings.warn(f"SFP{int(f['date'][i])}.mat does not exist.")
+            sfps.append(np.array([]))
+        
+    return sfps
+
+def print_estimator(Data, **kwargs):
+    print(f"  Mean: {np.nanmean(Data)}, STD: {np.nanstd(Data)}, Max: {np.nanmax(Data)}, Min: {np.nanmin(Data)}, Median: {np.nanmedian(Data)}", **kwargs)
+
+def cohen_d(x, y):
+    return (np.nanmean(x) - np.nanmean(y))/ np.nanstd(x), (np.nanmean(x) - np.nanmean(y)) / np.nanstd(y)
 
 if __name__ == '__main__':
     print(1)

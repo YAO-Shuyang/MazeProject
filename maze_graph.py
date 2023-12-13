@@ -450,6 +450,13 @@ for k in range(len(correct_path2)):
 Incorrect_SonGraph2 = np.zeros(len(incorrect_path2)*16, dtype = np.int64)
 for k in range(len(incorrect_path2)):
     Incorrect_SonGraph2[16 * k:16*(k+1)] = Father2SonGraph[incorrect_path2[k]]
+    
+correct_path3 = CorrectPath_maze_3
+incorrect_path3 = IncorrectPath_maze_3
+
+Correct_SonGraph3 = np.zeros(len(correct_path3)*16,dtype = np.int64)
+for k in range(len(correct_path3)):
+    Correct_SonGraph3[16 * k:16*(k+1)] = Father2SonGraph[correct_path3[k]]
 
 # 50 x 50
 # Generate method: Generate_OpenField_graph(nx = 50), in Open_field_graphGeneration.ipynb
@@ -523,13 +530,17 @@ correct_paths = {
     2: CorrectPath_maze_2,
     3: CorrectPath_maze_3,
     (1, 48): Correct_SonGraph1,
-    (2, 48): Correct_SonGraph2
+    (2, 48): Correct_SonGraph2,
+    (3, 48): Correct_SonGraph3
 }
 
 incorrect_paths = {
     1: IncorrectPath_maze_1,
     2: IncorrectPath_maze_2,
-    3: IncorrectPath_maze_3
+    3: IncorrectPath_maze_3,
+    (1, 48): Incorrect_SonGraph1,
+    (2, 48): Incorrect_SonGraph2,
+    (3, 48): np.array([])
 }
 
 DPs = {

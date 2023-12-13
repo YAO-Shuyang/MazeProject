@@ -92,7 +92,7 @@ def WallMatrix(maze_type: int):
         if i == 144 and maze_type in [1, 2]:
             vertical_walls[11, 12] = 0
         elif i == 133 and maze_type in [3]:
-            vertical_walls[0, 12] = 0
+            pass
         
         x, y = idx_to_loc(i, nx = nx, ny = nx)
 
@@ -117,7 +117,7 @@ def WallMatrix(maze_type: int):
         
     return vertical_walls, horizont_walls
 
-def DrawMazeProfile(maze_type = 1,axes: Axes = None, color = 'white',linewidth = 1, nx = 48, v = [], h = []):
+def DrawMazeProfile(maze_type = 1,axes: Axes = None, color = 'white',linewidth = 1, nx = 48, v = [], h = [], **kwargs):
     if len(v) == 0:
         v,h = WallMatrix(maze_type = maze_type)
     else:
@@ -127,12 +127,12 @@ def DrawMazeProfile(maze_type = 1,axes: Axes = None, color = 'white',linewidth =
     for i in range(v.shape[0]):
         for j in range(v.shape[1]):
             if v[i,j] == 1:
-                axes.plot([j*l-0.5, j*l-0.5],[i*l-0.5,(i+1)*l-0.5], color = color, linewidth = linewidth)
+                axes.plot([j*l-0.5, j*l-0.5],[i*l-0.5,(i+1)*l-0.5], color = color, linewidth = linewidth, **kwargs)
 
     for j in range(h.shape[0]):
         for i in range(h.shape[1]):
             if h[j,i] == 1:
-                axes.plot([i*l-0.5, (i+1)*l-0.5],[j*l-0.5,j*l-0.5], color = color, linewidth = linewidth)
+                axes.plot([i*l-0.5, (i+1)*l-0.5],[j*l-0.5,j*l-0.5], color = color, linewidth = linewidth, **kwargs)
                 
     axes.axis([-1, nx, -1, nx])
     return axes
@@ -306,24 +306,26 @@ def SmoothMatrix(maze_type: int, sigma: float = 3, _range: int = 7, nx: int = 48
     D = GetDMatrices(maze_type, nx)
     scale = nx/12
     smooth_matrix = np.zeros((nx*nx,nx*nx), dtype = np.float64)
-    
+    for i in range(nx**2):
+        smooth_matrix[i, :] = Gaussian(D[i, :]/scale, sigma = sigma, nx = nx)
+    """
     for curr in range(1,nx*nx+1):
         SurrMap = {}
         SurrMap[0]=[curr]
         Area = [curr]
     
         step = int(_range * 1.5)
-        smooth_matrix[curr-1,curr-1] = Gaussian(0,sigma = sigma, nx = nx)
+        smooth_matrix[curr-1,curr-1] = Gaussian(0, sigma = sigma, nx = nx)
         for k in range(1,step+1):
             SurrMap[k] = np.array([],dtype = np.int32)
             for s in SurrMap[k-1]:
                 for j in range(len(graph[s])):
-                    length = D[curr-1, graph[s][j]-1]/scale#CartesianDistance([curr-1, graph[s][j]-1])
+                    length = D[curr-1, graph[s][j]-1] /scale#CartesianDistance([curr-1, graph[s][j]-1])
                     if graph[s][j] not in Area and length <= _range:
                         Area.append(graph[s][j])
                         SurrMap[k] = np.append(SurrMap[k], graph[s][j])
                         smooth_matrix[curr-1, graph[s][j]-1] = Gaussian(length,sigma = sigma, nx = nx)
-
+    """
     smooth_matrix = sklearn.preprocessing.normalize(smooth_matrix, norm = 'l1')
     return smooth_matrix
     
@@ -405,6 +407,13 @@ def Clear_Axes(axes: Axes = None,close_spines:list = ['top','bottom','left','rig
     -------
     - axes: <class 'matplotlib.axes._subplots.AxesSubplot'>. Return the axes object after clearing.
     '''
+    axes.spines['bottom'].set_linewidth(0.5)
+    axes.spines['left'].set_linewidth(0.5)
+    axes.spines['right'].set_linewidth(0.5)
+    axes.spines['top'].set_linewidth(0.5)
+    
+    axes.tick_params(width=0.5)
+    
     for s in close_spines:
         axes.spines[s].set_visible(False)
     
@@ -421,16 +430,16 @@ def images_to_video(path, length = 1, name = 'Frame'):
     
     print("    Read in PNGs.")
     for k in tqdm(range(1,length+1)):
-        file_name = os.path.join(path,'Frame '+str(k)+'.png')
+        file_name = os.path.join(path, f'{name} '+str(k)+'.png')
         if os.path.exists(file_name) == False:
             print("    "+file_name + " is error!")
         else:
             img = cv2.imread(file_name)
             img_array.append(img)
  
-    size = (1800,1800)
-    fps = 30
-    out = cv2.VideoWriter(os.path.join(path,'Prediction.avi'), cv2.VideoWriter_fourcc('X','V','I','D'), fps, size,True)
+    size = (2400,2400)
+    fps = 22.6
+    out = cv2.VideoWriter(os.path.join(path,'Prediction0.avi'), cv2.VideoWriter_fourcc(*"MJPG"), fps, size,True)
     # ('P', 'I', 'M', 'I'),('I', '4', '2', '0')
     
     print("    Write video prediction.avi")
@@ -556,12 +565,10 @@ def SpikeType(Transients = None, threshold = 3):
 
 def SpikeNodes(Spikes = None, ms_time = None, behav_time = None, behav_nodes = None):
     if behav_nodes.shape[0] != behav_time.shape[0]:
-        print("    ERROR! input behav_nodes and behav_time has different shape! They must be the same")
-        return
+        raise ValueError("    ERROR! input behav_nodes and behav_time has different shape! They must be the same")
     
     if Spikes.shape[1] != ms_time.shape[0]:
-        print("    ERROR! input Spikes and ms_time has different shape! They must be the same")
-        return
+        raise ValueError("    ERROR! input Spikes and ms_time has different shape! They must be the same")
 
     if len(np.where(np.isnan(behav_nodes))[0]) != 0:
         print("    Warning! Input behav_nodes contains NAN value!")
@@ -576,7 +583,7 @@ def SpikeNodes(Spikes = None, ms_time = None, behav_time = None, behav_nodes = N
         else:
             idx_left = np.where(behav_time <= ms_time[i])[0][-1]
             idx_right = np.where(behav_time >= ms_time[i])[0][0]
-            # if the distance to the nearest behav_time stamp is more than 100 ms, we think it will leed to some inaccuracy.
+            # If the temporal distance to the nearest behav_time stamp is more than 100 ms, it would possibly cause some inaccuracy.
             idx = idx_left if ms_time[i] - behav_time[idx_left] <= behav_time[idx_right] - ms_time[i] else idx_right
             if np.abs(ms_time[i] - behav_time[idx]) <= 100:
                 spike_nodes[i] = behav_nodes[idx]
@@ -621,6 +628,17 @@ def GetDMatrices(maze_type:int, nx:int):
         print("nx value error! Report by Decoding ChanceLevel, maze_utils3.")
         assert False
     return D
+
+def RevisedLinearizedPositionScaler(maze_type: int):
+    from mylib.local_path import DMatrixPath
+    if os.path.exists(os.path.join(DMatrixPath, f'maze{int(maze_type)}_rev.pkl')):
+        with open(os.path.join(DMatrixPath, f'maze{int(maze_type)}_rev.pkl'), 'rb') as handle:
+            D = pickle.load(handle)
+            
+        return D
+    else:
+        raise ValueError(f'{os.path.join(DMatrixPath, f"maze{int(maze_type)}_rev.pkl")} is not exist!')
+        
 
 def DecodingChanceLevel(maze_type:int = 1, nx:int = 48, shuffle_frames:int = 40000, occu_time:np.ndarray = None, Ms:np.ndarray = np.zeros((2304,2304))):
     ValueErrorCheck(nx, [12,24,48])
@@ -1144,29 +1162,6 @@ def plot_trajactory(x, y, maze_type = 1, is_DrawMazeProfile = False, is_ExistAxe
         plt.savefig(os.path.join(save_loc,file_name+'.svg'), dpi = 600)
         plt.close()
 
-# In some cases, if main field center of two cells are close to each other in a certain environment which we tentatively term it as A, they their main field center in 
-# another environment may be close to each other as well. To test whether the phenomenone truely happen when we switch the environment from open field to maze 1 and 
-# from maze 1 to maze 2, function InterFieldCenterDistance() are inplemented.
-def InterFieldCenterDistance(center_list1:np.ndarray, center_list2:np.ndarray, maze_list = np.array([0,1,2], dtype = np.int64)):
-    if len(center_list1) < 2 or len(center_list2) < 2:
-        print("Warning! Only 2 environment are identified.")
-    
-    if len(center_list1) != len(center_list2) or center_list1.shape[0] != maze_list.shape[0]:
-        print("LengthError! Two center lists must have the same length, but the inputted two are not satisfied with the requirement.")
-        return None
-
-    # Distance list in each environment (maze_list)
-    IFCD = np.zeros(center_list1.shape[0])
-
-    # Calculate center distance.
-    for i in range(center_list1.shape[0]):
-        if maze_list[i] != 0:
-            IFCD[i] = Cartesian_distance(curr = center_list1[i], surr = center_list2[i], nx = 12)#FastDistance(start = center_list1[i], goal = center_list2[i], maze_type = maze_list[i], nx = 12)
-        else:
-            IFCD[i] = Cartesian_distance(curr = center_list1[i], surr = center_list2[i], nx = 12)
-    
-    return IFCD
-
 # Return Field Number Vector of A Session
 def field_number_session(trace:dict, is_placecell = True, spike_thre: int = 10):
     '''
@@ -1185,17 +1180,21 @@ def field_number_session(trace:dict, is_placecell = True, spike_thre: int = 10):
         idx = np.where(trace['is_placecell'] == 1)[0]
     else:
         idx = np.arange(trace['is_placecell'].shape[0])
-
-    spike_num = np.nansum(trace['Spikes'], axis = 1)
-    cell_idx = np.where(spike_num >= spike_thre)[0]
-    idx = np.intersect1d(cell_idx, idx)
     
     field_number = np.zeros(len(idx), dtype = np.float64)
+    
+    if trace['maze_type'] in [0, 3]:
+        silent = cp.deepcopy(trace['SilentNeuron'])
+        place_field_all = cp.deepcopy(trace['place_field_all'])
+    else:
+        silent = trace['LA']['SilentNeuron']
+        place_field_all = trace['LA']['place_field_all']
+        
     for i in range(idx.shape[0]):
-        if idx[i] in trace['SilentNeuron']:
+        if idx[i] in silent:
             field_number[i] = np.nan
         else:
-            field_number[i] = len(trace['place_field_all'][idx[i]].keys())
+            field_number[i] = len(place_field_all[idx[i]].keys())
     
     return field_number
 
@@ -1363,6 +1362,60 @@ def EqualPoissonFit(x, y, l0:float = 5):
     para = leastsq(EqualPoissonResiduals, x0 = l0, args = (x, y))
     return para[0][0]
 
+def Exponential(x: np.ndarray, a, b) -> np.ndarray:
+    return a * np.exp(b * x)
+
+def ExponentialResiduals(params, x, y):
+    a, b = params
+    return y - Exponential(x, a, b)
+
+def ExponentialFit(x, y, a0: float=1, b0: float=1):
+    para, _ = leastsq(ExponentialResiduals, [a0, b0], args = (x, y))
+    return para[0], para[1]
+
+def Normal(x: np.ndarray, miu: float, sigma: float) -> np.ndarray:
+    return 1 / (np.sqrt(2*np.pi) * sigma) * np.exp(-(x-miu)**2/(2*sigma**2))
+
+def NormalResiduals(params, x, y):
+    miu, sigma = params
+    return y - Normal(x, miu, sigma)
+
+def NormalFit(x, y, miu0: float=6, sigma0: float=2):
+    para, _ = leastsq(NormalResiduals, [miu0, sigma0], args = (x, y))
+    return para[0], para[1]
+
+from scipy.stats import nbinom, weibull_min
+def NegativeBinomial(x: np.ndarray, r: float, p: float) -> np.ndarray:
+    return nbinom.pmf(x, r, p)
+
+def NegativeBinomialResiduals(params, x, y):
+    r, p = params
+    return y - NegativeBinomial(x, r, p)
+
+def NegativeBinomialFit(x, y, r0: float=0.5, p0: float=0.2):
+    para, _ = leastsq(NegativeBinomialResiduals, [r0, p0], args = (x, y))
+    return para[0], para[1]
+
+def Weibull(x: np.ndarray, shape: float, loc: float, scale: float):
+    return weibull_min.cdf(x, shape, loc=loc, scale=scale)
+
+def WeibullResiduals(params, x, y):
+    shape, loc, scale = params
+    return y - Weibull(x, shape, loc, scale)
+
+def WeibullFit(x, y, shape0: float=1, loc: float=10.3, scale0: float=0.73):
+    para, _ = leastsq(WeibullResiduals, [shape0, loc, scale0], args = (x, y))
+    return para[0], para[1], para[2]
+
+from scipy.optimize import curve_fit
+def Sigmoid(x, a, b):
+    return 1 / (1 + np.exp(-a * (x - b)))
+
+def SigmoidFit(x, y):
+    para, covariance = curve_fit(Sigmoid, x, y, p0 = [1, np.median(x)])
+    return para[0], para[1]
+
+
 def sort_dlc_file(dir_name: str):
     """
     Sort dlc files with recording order before concatenating.
@@ -1468,7 +1521,7 @@ def DLC_Concatenate(directory: str, find_chars: str = '.csv', body_part: list = 
     directory: str, required
         The directory that saves all of the files that needed to be concatenate. An order is needed.
     """
-
+    log = []
     try:
         bp = ['bodypart1', 'bodypart2', 'bodypart3', 'bodypart4']
 
@@ -1487,6 +1540,7 @@ def DLC_Concatenate(directory: str, find_chars: str = '.csv', body_part: list = 
                     if '.csv' in file:
                         if_no_file = False
                         f = pd.read_csv(os.path.join(directory, file), **kwargs)
+                        log.append(file)
                         for b in bp:
                             coord = np.zeros((len(f), 2), dtype=np.float64)
                             coord[:,0] = f[b, 'x']
@@ -1512,6 +1566,7 @@ def DLC_Concatenate(directory: str, find_chars: str = '.csv', body_part: list = 
                     if '.csv' in file:
                         if_no_file = False
                         f = pd.read_csv(os.path.join(directory, file), **kwargs)
+                        log.append(file)
                         for b in bp:
                             coord = np.zeros((len(f), 2), dtype=np.float64)
                             coord[:,0] = f[b, 'x']
@@ -1526,6 +1581,9 @@ def DLC_Concatenate(directory: str, find_chars: str = '.csv', body_part: list = 
     if if_no_file == False:
         with open(os.path.join(directory, 'dlc_coord.pkl'), 'wb') as f:
             pickle.dump(Data, f)
+            
+        with open(os.path.join(directory, 'dlc_log.txt'), 'w') as f:
+            f.write('\n'.join(log))
     else:
         warnings.warn(f"There's no DLC processed csv files in directory '{directory}'")
 
@@ -1604,10 +1662,39 @@ def uniform_smooth_speed(speed: np.ndarray, window: int = 30) -> np.ndarray:
 
 
 
-
-if __name__ == '__main__':
-    loc = r"E:\CC\MAZE_2\2022_08_30\11095\15_19_57\My_WebCam\dlc_process_file"
+def field_reallocate(centers_pool: np.ndarray, field: dict, maze_type: int):
+    CP = correct_paths[(int(maze_type), 48)]
+    G = maze_graphs[(int(maze_type), 48)]
     
-    print(os.listdir(loc))
-    print("---------------------------------------------")
-    print(sort_dlc_file(loc))
+    field_area = cp.deepcopy(CP)
+    centers = cp.deepcopy(centers_pool)
+    shuffle_field = {}
+    for i, k in enumerate(field.keys()):
+        while 1:
+            CENTER = np.random.choice(centers, size = 1)[0]
+            if CENTER in field_area:
+                break
+            
+        LENGTH = len(field[k])
+        
+        Area = [CENTER]
+        step = 0
+        StepExpand = {0: [CENTER]}
+        while len(Area) < LENGTH:
+            StepExpand[step+1] = []
+            for c in StepExpand[step]:
+                surr = G[c]
+                for j in surr:
+                    if j in field_area and j not in Area:
+                        StepExpand[step+1].append(j)
+                        Area.append(j)
+        
+            # Generate field successfully! 
+            if len(StepExpand[step+1]) == 0:
+                break
+            step += 1
+    
+        shuffle_field[CENTER] = np.array(Area, dtype=np.int64)
+        
+        field_area = np.intersect1d(field_area, shuffle_field[CENTER])
+    return shuffle_field

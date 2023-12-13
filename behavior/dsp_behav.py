@@ -107,7 +107,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
     else:
         warnings.warn(f"Didn't find {lap_info_path}")
         return
-
+    
     behav_position_original = dlc_position_generation(dlc, **dlc_args)
     frames_num_tracker[0] = behav_position_original.shape[0]
 
@@ -222,29 +222,27 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
 
 
     # For maze 1, maze 2 and hairpin maze sessions, a cross-wall correction should be performed. --------------------------------------------
-    if maze_type in [1,2,3]:
+    if maze_type in [1, 2]:
         # Correct trajectory cross-wall events
         trace = Circulate_Checking(trace, circulate_time = 5)
             
-        # Check the effect of cross-wall correction
-        plot_trajactory_comparison(processed_pos_new, trace['correct_pos'], is_position_transform = True, 
-                                   save_loc = p_behav, file_name = 'CrossWall-Correction_Trajactory', maze_type = maze_type)
-        print('    Figure 7 has done.')
-        
-        # Transform nodes to x,y location to check the efficiency of correction
-        plot_trajactory_comparison(behav_nodes, trace['correct_nodes'], is_node = True, maze_type = maze_type,
-                                       save_loc = p_behav, file_name = 'CrossWall-Correction_Nodes')
-        print("    Figure 8 has done.")
-        frames_num_tracker[4] = trace['correct_nodes'].shape[0]
-        
     # For open field, nothing need to do. ------------------------------------------------------------------------------------
-    elif maze_type == 0:
-
+    else:
         trace['correct_pos'] = cp.deepcopy(trace['processed_pos_new'])
         trace['correct_nodes'] = cp.deepcopy(trace['behav_nodes'])
         trace['correct_time'] = cp.deepcopy(trace['behav_time'])
         frames_num_tracker[3] = trace['correct_nodes'].shape[0]
-
+        
+    # Check the effect of cross-wall correction
+    plot_trajactory_comparison(processed_pos_new, trace['correct_pos'], is_position_transform = True, 
+                                   save_loc = p_behav, file_name = 'CrossWall-Correction_Trajactory', maze_type = maze_type)
+    print('    Figure 7 has done.')
+        
+    # Transform nodes to x,y location to check the efficiency of correction
+    plot_trajactory_comparison(behav_nodes, trace['correct_nodes'], is_node = True, maze_type = maze_type,
+                                       save_loc = p_behav, file_name = 'CrossWall-Correction_Nodes')
+    print("    Figure 8 has done.")
+    frames_num_tracker[4] = trace['correct_nodes'].shape[0]
     # =======================================================================================================================
     # calculating ratemap ----------------------------------------------------------------------------------------------------
     pos, correct_time, behav_nodes = Delete_NAN(trace['correct_pos'], trace['correct_time'], trace['correct_nodes'])

@@ -145,7 +145,6 @@ class MultiDayPopulationVectorCorrelation:
             plt.close()
             
         print("  Figure is saved.")
-        
     
     def visualize_pvc_heatmap(
         self,

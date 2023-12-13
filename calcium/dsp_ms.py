@@ -431,7 +431,7 @@ def PartialPeakCurve(trace: dict, **kwargs) -> dict:
         areas = DSP_incorrect_graph1
 
     grid_spec = [len(paths[k]) for k in paths.keys()]
-    fig, axes = plt.subplots(ncols=5, nrows=1, figsize=(4*5, 6), gridspec_kw={'width_ratios':grid_spec})
+    
     n_neuron = trace['n_neuron']
 
     maze_type = trace['maze_type']
@@ -445,20 +445,25 @@ def PartialPeakCurve(trace: dict, **kwargs) -> dict:
 
     x_ticks = np.array([len(paths[0]) - len(paths[i]) for i in range(4)] + [len(paths[0])-1], dtype=np.int64)
     x_labels = ['start', 'node 1', 'node 2', 'node 3', 'end']
-        
-    for i in range(5):
-        axes[i].set_yticks([0, n_neuron-1],lables=[1, n_neuron])
-        contents = trace['node '+str(i)]['old_map_smooth'][pc_idx, :]
-        contents = contents[:, paths[i]-1]
-        title = "start from node "+str(i) if i not in [0, 4] else "start from the entry"
-        axes[i] = PeakCurveAxes(axes[i], contents, title=title, is_sortx=False,
-                                maze_type=maze_type, y_order=y_order, **kwargs)
-        axes[i].set_xticks(x_ticks[i::]-x_ticks[i], labels=x_labels[i::]) if i < 4 else axes[i].set_xticks(x_ticks, labels=x_labels)
-        axes[i].set_xlim([-0.5, len(paths[i])-0.5])
     
-    plt.savefig(os.path.join(save_loc, 'Partial Peak Curve.png'), dpi=600)
-    plt.savefig(os.path.join(save_loc, 'Partial Peak Curve.svg'), dpi=600)
-    plt.close()
+    try:
+        fig, axes = plt.subplots(ncols=5, nrows=1, figsize=(4*5, 6), gridspec_kw={'width_ratios':grid_spec})    
+        for i in range(5):
+            ax = axes[i]
+            ax.set_yticks([0, n_neuron-1], lables=[1, n_neuron])
+            contents = trace['node '+str(i)]['old_map_smooth'][pc_idx, :]
+            contents = contents[:, paths[i]-1]
+            title = "start from node "+str(i) if i not in [0, 4] else "start from the entry"
+            ax = PeakCurveAxes(ax, contents, title=title, is_sortx=False,
+                                maze_type=maze_type, y_order=y_order, **kwargs)
+            ax.set_xticks(x_ticks[i::]-x_ticks[i], labels=x_labels[i::]) if i < 4 else ax.set_xticks(x_ticks, labels=x_labels)
+            ax.set_xlim([-0.5, len(paths[i])-0.5])
+    
+        plt.savefig(os.path.join(save_loc, 'Partial Peak Curve.png'), dpi=600)
+        plt.savefig(os.path.join(save_loc, 'Partial Peak Curve.svg'), dpi=600)
+        plt.close()
+    except:
+        pass
 
     corr_matrix = np.zeros((n_neuron, 6), np.float64)
     for i in tqdm(range(n_neuron)):
@@ -615,7 +620,7 @@ def OldMap(trace: dict, is_draw: bool = True) -> dict:
     for n in tqdm(old_nodes):
         mask3[n-1] = 0
     occu_time_old = occu_time_transform(occu_time = occu_time, nx = 12)
-    Ms = SmoothMatrix(maze_type = maze_type, nx = 12, _range = 1, sigma = 2)
+    Ms = SmoothMatrix(maze_type = maze_type, nx = 12, _range = 1, sigma = 1)
     old_map_all, old_map_clear, old_map_smooth, old_map_nanPos = calc_ratemap(Spikes = Spikes, spike_nodes = old_nodes, _nbins = 12*12, 
         occu_time = occu_time_old, Ms = Ms, is_silent = trace['node 3']['SilentNeuron'])
 
@@ -931,6 +936,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     ms_speed_behav = cp.deepcopy(ms_speed[idx])
     dt = np.append(np.ediff1d(ms_time_behav), 33)
     dt[np.where(dt >= 100)[0]] = 100
+    spike_num_mon2 = np.nansum(Spikes, axis = 1)
     
     # Filter the speed
     print(f"     - Filter spikes with speed {v_thre} cm/s.")
@@ -944,18 +950,18 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     spike_nodes = spike_nodes[spf_idx]
     ms_speed_behav = ms_speed_behav[spf_idx]
     dt = dt[spf_idx]
-    spike_num_mon2 = np.nansum(Spikes, axis = 1)
+    spike_num_mon3 = np.nansum(Spikes, axis = 1)
 
     # Delete InterLap Spikes
     n_neuron = Spikes.shape[0]
-    Ms = SmoothMatrix(maze_type = trace['maze_type'], sigma = 2, _range = 7, nx = 48)
+    Ms = SmoothMatrix(maze_type = trace['maze_type'], sigma = 1, _range = 7, nx = 48)
     print("      - Calculate and shuffle sub-ratemap")
-    spike_num_mon3 = np.zeros(n_neuron, dtype=np.int64)
+    spike_num_mon4 = np.zeros(n_neuron, dtype=np.int64)
     for n in unique_type:
         print(f"        Node {n} -----------------------------------------------------------")
         lap_idx = np.where(lap_type == n)[0]
         idx = split_calcium_data(lap_idx=lap_idx, trace=trace, ms_time=ms_time_behav)
-        spike_num_mon3 += np.nansum(Spikes[:, idx], axis = 1)
+        spike_num_mon4 += np.nansum(Spikes[:, idx], axis = 1)
 
         trace['node '+str(n)] = calc_rate_map_properties(
             trace['maze_type'],
@@ -969,7 +975,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
             kwargs = {'file_name': 'Place cell shuffle [trans]'}
         )
 
-    plot_spike_monitor(spike_num_mon1, spike_num_mon2, spike_num_mon3, save_loc = os.path.join(trace['p'], 'behav'))
+    plot_spike_monitor(spike_num_mon1, spike_num_mon2, spike_num_mon3, spike_num_mon4, save_loc = os.path.join(trace['p'], 'behav'))
 
     print("    C. Calculating firing rate for each neuron and identified their place fields (those areas which firing rate >= 50% peak rate)")
     # Set occu_time <= 50ms spatial bins as nan to avoid too big firing rate
