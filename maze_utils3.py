@@ -1362,15 +1362,37 @@ def EqualPoissonFit(x, y, l0:float = 5):
     para = leastsq(EqualPoissonResiduals, x0 = l0, args = (x, y))
     return para[0][0]
 
-def Exponential(x: np.ndarray, a, b) -> np.ndarray:
-    return a * np.exp(b * x)
+def Exponential(x: np.ndarray, a, b, c) -> np.ndarray:
+    return a + (c-a) * np.exp(-x/b)
 
 def ExponentialResiduals(params, x, y):
-    a, b = params
-    return y - Exponential(x, a, b)
+    a, b, c = params
+    return y - Exponential(x, a, b, c)
 
-def ExponentialFit(x, y, a0: float=1, b0: float=1):
-    para, _ = leastsq(ExponentialResiduals, [a0, b0], args = (x, y))
+def ExponentialFit(x, y, a0: float=1, b0: float=1, c0: float=1):
+    para, _ = leastsq(ExponentialResiduals, [a0, b0, c0], args = (x, y))
+    return para[0], para[1], para[2]
+
+def Exponential2Zero(x: np.ndarray, a, b) -> np.ndarray:
+    return a * np.exp(-x/b)
+
+def ExponentialResiduals2Zero(params, x, y):
+    a, b = params
+    return y - Exponential2Zero(x, a, b)
+
+def ExponentialFit2Zero(x, y, a0: float=1, b0: float=1):
+    para, _ = leastsq(ExponentialResiduals2Zero, [a0, b0], args = (x, y))
+    return para[0], para[1]
+
+def ExponentialFromOne(x: np.ndarray, a, b) -> np.ndarray:
+    return a + (1-a) * np.exp(-x/b)
+
+def ExponentialResidualsFromOne(params, x, y):
+    a, b = params
+    return y - ExponentialFromOne(x, a, b)
+
+def ExponentialFitFromOne(x, y, a0: float=1, b0: float=1):
+    para, _ = leastsq(ExponentialResidualsFromOne, [a0, b0], args = (x, y))
     return para[0], para[1]
 
 def Normal(x: np.ndarray, miu: float, sigma: float) -> np.ndarray:

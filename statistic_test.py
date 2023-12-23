@@ -173,7 +173,7 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
     Output:
     - A dict
     '''
-    ValueErrorCheck(behavior_paradigm, ['CrossMaze', 'ReverseMaze', 'DSPMaze', 'HairpinMaze', 'SimpleMaze', 'decoding'])
+    ValueErrorCheck(behavior_paradigm, ['CrossMaze', 'ReverseMaze', 'DSPMaze', 'HairpinMaze', 'SimpleMaze', 'decoding', 'CellReg CrossMaze'])
 
     # Initiate data dic
     data = {'MiceID':np.array([], np.int64), 'Training Day':np.array([]), 'Maze Type':np.array([]), 'Stage': np.array([]), 'date': np.array([], dtype=np.int64)}
@@ -192,7 +192,7 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
     else:
         follow = False
 
-    if behavior_paradigm in ['CrossMaze', 'DSPMaze', 'ReverseMaze', 'HairpinMaze']:
+    if behavior_paradigm in ['CrossMaze', 'DSPMaze', 'ReverseMaze', 'HairpinMaze', 'CellReg CrossMaze']:
         if is_behav:
             keyw = 'Trace Behav File'
         else:
@@ -200,7 +200,7 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
     elif behavior_paradigm in ['decoding']:
         keyw = 'Results File'
     else:
-        raise ValueError(f'behavior_paradigm should be in ["CrossMaze", "ReverseMaze", "DSPMaze", "HairpinMaze", "decoding"], while {behavior_paradigm} is not supported.')
+        raise ValueError(f'behavior_paradigm should be in ["CrossMaze", "ReverseMaze", "DSPMaze", "HairpinMaze", "decoding", "CellReg CrossMaze"], while {behavior_paradigm} is not supported.')
         
 
     for i in tqdm(file_idx):
@@ -219,7 +219,7 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
         # if maze_type is not we want, continue
         if trace['maze_type'] not in legal_maze_type and follow:
             continue
-
+        
         # Running funcitons to get variables we want to analysis.
         results = function(trace, variable_names = variable_names, **func_kwgs)
         # length of each variables in dictionary 'data' must be the same with others.

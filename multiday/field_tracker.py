@@ -237,19 +237,21 @@ def field_register(trace: dict):
     return trace
 
 
-def conditional_prob(trace: dict):
+def conditional_prob(trace: dict = None, field_reg: np.ndarray = None, thre: int = 5):
     """
     if trace['Stage'] in ['Stage 1', 'Stage 1+2'] or trace['maze_type'] == 2:
         field_reg = cp.deepcopy(trace['field_reg'])[2:, :]
     else:
     """
-    field_reg = cp.deepcopy(trace['field_reg'])
+    if field_reg is None:
+        field_reg = cp.deepcopy(trace['field_reg'])
 
-    prob = np.zeros((field_reg.shape[0], 2), dtype=np.int64)
-    recover_prob = np.zeros(field_reg.shape[0], dtype=np.int64)
-    disapear_num = 0
-    retain_duration = np.zeros(field_reg.shape[0], dtype=np.int64)
-    no_detect_duration = np.zeros((field_reg.shape[0], 2), dtype=np.int64)
+    duration = np.arange(field_reg.shape[0])  # Retained duration, silent duration, not detected duration
+    on_next_prob = np.zeros((field_reg.shape[0], 4), dtype=np.int64) # State ON with duration t -> State ON/OFF/NOT DETECTED on the next sessions
+    off_next_prob = np.zeros(field_reg.shape[0], dtype=np.int64) # State OFF on Session t -> State ON DETECTED on Session t+1
+    nod_next_prob = np.zeros((field_reg.shape[0], 2), dtype=np.int64) # State NOT DETECTED on Session t -> State ON DETECTED on Session t+1
+    silent_num = 0
+    no_detect_num = 0
     
     for j in tqdm(range(field_reg.shape[1])):
         count_one, count_nil = 0, 0 # turn on and turn off
@@ -258,67 +260,96 @@ def conditional_prob(trace: dict):
         for i in range(field_reg.shape[0]):
             if np.isnan(field_reg[i, j]):
                 if count_one >= 1:
-                    retain_duration[count_one-1] += 1
+                    on_next_prob[count_one, 2] += 1
                     count_nod += 1
-                elif count_one == 0 and count_nod > 1:
+                    no_detect_num += 1
+                elif count_one == 0 and count_nil == 0 and count_nod >= 1:
                     count_nod += 1
-                    
+                elif count_nil >= 1:
+                    no_detect_num += 1
+                
                 count_one = 0
                 count_nil = 0
                 is_disappear = False
             elif field_reg[i, j] == 1:
-                if count_nod > 1:
-                    
+                if count_nod >= 1:
+                    nod_next_prob[count_nod, 1] += 1
+                    count_nod = 0
                 if count_one >= 1:
-                    prob[count_one, 1] += 1
+                    on_next_prob[count_one, 1] += 1
                 elif count_one == 0:
                     if count_nil >= 1 and is_disappear:
-                        recover_prob[count_nil-1] += 1
+                        off_next_prob[count_nil] += 1
                         count_nil = 0
                 
                 is_disappear = True
                 count_one += 1
             elif field_reg[i, j] == 0:
+                if count_nod >= 1:
+                    nod_next_prob[count_nod, 0] += 1
+                    count_nod = 0
                 if count_nil == 0:
                     if count_one >= 1:
-                        prob[count_one, 0] += 1
+                        on_next_prob[count_one, 0] += 1
                         count_one = 0
-                        disapear_num += 1
-                    
+                        silent_num += 1
+
                 count_nil += 1
             else:
                 raise ValueError(f"field reg contains invalid value {field_reg[i, j]} at row {i} column {j}. ")
-            
+
         if count_one >= 1:
-            retain_duration[count_one-1] += 1
+            on_next_prob[count_one-1, 3] += 1
+        
+    retained_prob = on_next_prob[:, 1] / np.sum(on_next_prob[:, :2], axis=1)
+    nodetect_prob = on_next_prob[:, 2] / (np.sum(on_next_prob[:, :3], axis=1) + np.concatenate([[0], on_next_prob[:-1, 3]]))
+    print(on_next_prob)
+    recover_prob = off_next_prob / silent_num
+    redetect_prob = nod_next_prob[:, 1] / (nod_next_prob[:, 0] + nod_next_prob[:, 1])
+    redetect_frac = np.sum(nod_next_prob, axis=1) / no_detect_num
     
-    print(np.sum(prob, axis=1))
-    idx = np.where(prob[:, 1] < 4)[0]
-    res = prob[:, 1] / np.sum(prob, axis = 1)
-    res[idx] = np.nan
-    return res, recover_prob / disapear_num, retain_duration
+    retained_prob[np.where(on_next_prob[:, 1] <= thre)[0]] = np.nan
+    nodetect_prob[np.where(on_next_prob[:, 2] <= thre)[0]] = np.nan
+    recover_prob[np.where(off_next_prob <= thre)[0]] = np.nan
+    redetect_prob[np.where(nod_next_prob[:, 1] <= thre)[0]] = np.nan
+    print(retained_prob)
+    print(nodetect_prob, end='\n\n')
+    return duration, retained_prob, nodetect_prob, recover_prob, redetect_prob, redetect_frac
 
 
 def field_overlapping(trace):
     field_reg = trace['field_reg']
     
     maps = np.where(np.isnan(field_reg), 0, 1)
-    idx = np.where(np.sum(maps, axis=0) == field_reg.shape[0])[0]
-    field_reg = field_reg[:, idx]
     
     overlapping = np.ones((field_reg.shape[0], field_reg.shape[0]), np.float64)
     for i in range(field_reg.shape[0]-1):
         for j in range(i+1, field_reg.shape[0]):
             
-            idx = np.where((np.isnan(field_reg[i, :]) == False) & (np.isnan(field_reg[j, :]) == False))[0]
-            if len(idx) == 0:
+            idx = np.where(np.sum(maps[i:j+1], axis=0) == j-i+1)[0]
+            sub_reg = field_reg[:, idx]
+            if len(np.where(sub_reg[i, :] == 1)[0]) < 10:
                 overlapping[i, j] = np.nan
                 overlapping[j, i] = np.nan
                 continue
-
-            overlapping[i, j] = len(np.where((field_reg[i, idx] == 1) & (field_reg[j, idx] == 1))[0]) / len(np.where(field_reg[i, idx] == 1)[0])
+            
+            overlapping[i, j] = len(np.where((sub_reg[i, :] == 1) & (sub_reg[j, :] == 1))[0]) / len(np.where(sub_reg[i, :] == 1)[0])
             overlapping[j, i] = overlapping[i, j]
-    return overlapping
+    
+    start_session = np.zeros_like(overlapping)
+    for i in range(overlapping.shape[0]):
+        start_session[i, :] = i+1
+    
+    intervals = np.zeros_like(overlapping)
+    for i in range(overlapping.shape[0]):
+        for j in range(overlapping.shape[0]):
+            intervals[i, j] = j-i
+        
+    return overlapping[np.where(np.triu(overlapping, k=1) != 0)], start_session[np.where(np.triu(start_session, k=1) != 0)], intervals[np.where(np.triu(intervals, k=1) != 0)]
+    
+
+
+
 
 if __name__ == '__main__':
     
@@ -326,7 +357,7 @@ if __name__ == '__main__':
     with open(r"E:\Data\Cross_maze\10227\Super Long-term Maze 1\trace_mdays.pkl", 'rb') as handle:
         trace = pickle.load(handle)    
     
-    field_overlapping(trace)
+    print(field_overlapping(trace))
     """
     x = np.arange(0, 26)
     y = np.zeros((26, 2))

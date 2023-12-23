@@ -458,12 +458,13 @@ if __name__ == "__main__":
     idx = np.where((f_CellReg_day['maze_type'] != 0))[0]
     #run_all_mice_multiday(i=12, overlap_thre=0.7)
 
-    for i in range(len(f_CellReg_day)):
+    for i in range(37, len(f_CellReg_day)):
         if f_CellReg_day['include'][i] == 0 or f_CellReg_day['maze_type'][i] == 0:
             continue
-        """
+    
         print(i)
         run_all_mice_multiday(i, f_CellReg_day, overlap_thre=0.6)
+        
         """
         with open(f_CellReg_day['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
@@ -472,6 +473,7 @@ if __name__ == "__main__":
         
         with open(f_CellReg_day['Trace File'][i], 'wb') as handle:
             pickle.dump(trace, handle)
+        """
     """
     """
         
