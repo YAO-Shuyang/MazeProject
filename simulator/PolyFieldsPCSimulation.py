@@ -1,4 +1,4 @@
-from maze_utils3 import clear_NAN, SmoothMatrix
+from mylib.maze_utils3 import clear_NAN, SmoothMatrix
 import numpy as np
 import pickle
 import tqdm

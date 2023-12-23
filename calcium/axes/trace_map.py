@@ -3,14 +3,13 @@ from matplotlib.axes import Axes
 import numpy as np
 from mylib.maze_utils3 import DrawMazeProfile, Clear_Axes
 
-def insert_temporary_nan(trajectory: np.ndarray, behav_time: np.ndarray, thre: float = 400):
-    dt = np.ediff1d(behav_time)
+def insert_temporary_nan(trajectory: np.ndarray, behav_time: np.ndarray, thre: float = 20):
     dx = np.ediff1d(trajectory[:, 0])
     dy = np.ediff1d(trajectory[:, 1])
     dl = np.sqrt(dx**2 + dy**2)
+    idx = np.where(dl > thre)[0]
     behav_time = behav_time.astype(np.float64)
-
-    idx = np.where(dt > thre)[0]
+    
     return np.insert(trajectory, idx+1, [np.nan, np.nan], axis=0), np.insert(behav_time, idx+1, np.nan)
 
 
@@ -23,6 +22,7 @@ def TraceMapAxes(
     maze_type: int = 0,
     is_plot_maze_walls: bool = True,
     title: str="",
+    title_color: str='k',
     is_inverty: bool=False,
     maze_kwargs: dict = {'linewidth':1, 'color': 'black'},
     traj_kwargs: dict = {},
@@ -94,6 +94,6 @@ def TraceMapAxes(
     if is_inverty:
         ax.invert_yaxis()
 
-    ax.set_title(title)
+    ax.set_title(title, color=title_color)
 
     return ax, a, b

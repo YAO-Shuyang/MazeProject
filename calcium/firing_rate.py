@@ -1,5 +1,7 @@
 
 from mylib.preprocessing_ms import place_field, shuffle_test, Generate_SilentNeuron, calc_ratemap
+from mylib.preprocessing_ms import half_half_correlation, odd_even_correlation, CrossLapsCorrelation
+from mylib.preprocessing_ms import OldMapSplit, field_specific_correlation, count_field_number, field_register
 import scipy.stats
 import numpy as np
 import pickle
@@ -14,6 +16,7 @@ def calc_rate_map_properties(
     dt: np.ndarray,
     Ms: np.ndarray,
     save_loc: str,
+    behavior_paradigm: str,
     kwargs: dict = {}
 ):
     n_neuron = Spikes.shape[0]
@@ -49,13 +52,15 @@ def calc_rate_map_properties(
 
     # Shuffle test
     trace_ms = shuffle_test(trace_ms, Ms, **kwargs)
-
+    #plot_field_arange(trace, save_loc=os.path.join(trace['p'], 'PeakCurve'))
+    
     # Generate place field
     trace_ms['place_field_all'] = place_field(
         trace=trace_ms,
         thre_type=2,
         parameter=0.2,
     )
-
-    #plot_field_arange(trace, save_loc=os.path.join(trace['p'], 'PeakCurve'))
+    
+    trace_ms = count_field_number(trace_ms)
+    trace_ms = field_register(trace_ms)
     return trace_ms

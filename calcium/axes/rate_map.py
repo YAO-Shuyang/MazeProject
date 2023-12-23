@@ -8,6 +8,7 @@ def RateMapAxes(
     content: np.ndarray,
     maze_type: int,
     title: str="",
+    title_color: str = 'black',
     is_plot_maze_walls: bool = True,
     is_inverty: bool=False,
     is_colorbar: bool=True,
@@ -45,7 +46,7 @@ def RateMapAxes(
 
     Returns
     -------
-    Axes
+    Axes, im, cbar
         The modified axes.
     """
     assert content.shape[0] == nx**2
@@ -53,7 +54,7 @@ def RateMapAxes(
     ax = Clear_Axes(ax)
 
     ax.set_aspect("equal")
-    ax.set_title(title)
+    ax.set_title(title, color = title_color)
     
     if is_inverty:
         ax.invert_yaxis()

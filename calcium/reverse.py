@@ -844,6 +844,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     ms_speed_behav = cp.deepcopy(ms_speed[idx])
     dt = np.append(np.ediff1d(ms_time_behav), 33)
     dt[np.where(dt >= 100)[0]] = 100
+    spike_num_mon2 = np.nansum(Spikes, axis = 1)
     
     # Filter the speed (spf: speed filter)
     print(f"      - Filter spikes with speed {v_thre} cm/s.")
@@ -857,7 +858,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     spike_nodes = spike_nodes[spf_idx]
     ms_speed_behav = ms_speed_behav[spf_idx]
     dt = dt[spf_idx]
-    spike_num_mon2 = np.nansum(Spikes, axis = 1)
+    spike_num_mon3 = np.nansum(Spikes, axis = 1)
     
     # Delete InterLap Spikes
     print("      - Delete the inter-lap spikes.")
@@ -869,7 +870,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     )
     assert frame_labels.shape[0] == spike_nodes.shape[0]
 
-    Ms = SmoothMatrix(maze_type = trace['maze_type'], sigma = 2, _range = 7, nx = 48)
+    Ms = SmoothMatrix(maze_type = trace['maze_type'], sigma = 1, _range = 7, nx = 48)
 
     # cis direction
     idx = np.where(frame_labels == 1)[0]
@@ -882,7 +883,8 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
         dt[idx],
         Ms,
         trace['p'],
-        kwargs = {'file_name': 'Place cell shuffle [cis]'}
+        kwargs = {'file_name': 'Place cell shuffle [cis]'},
+        behavior_paradigm='ReverseMaze'
     )
     
     # trans direction
@@ -896,7 +898,8 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
         dt[idx],
         Ms,
         trace['p'],
-        kwargs = {'file_name': 'Place cell shuffle [trans]'}
+        kwargs = {'file_name': 'Place cell shuffle [trans]'},
+        behavior_paradigm='ReverseMaze'
     )
 
     # Together the two dimension
@@ -912,11 +915,12 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
         dt,
         Ms,
         trace['p'],
-        kwargs = {'file_name': 'Place cell shuffle [total]'}
+        kwargs = {'file_name': 'Place cell shuffle [total]'},
+        behavior_paradigm='ReverseMaze'
     )
-    spike_num_mon3 = np.nansum(Spikes, axis = 1)
+    spike_num_mon4 = np.nansum(Spikes, axis = 1)
     
-    plot_spike_monitor(spike_num_mon1, spike_num_mon2, spike_num_mon3, save_loc = os.path.join(trace['p'], 'behav'))
+    plot_spike_monitor(spike_num_mon1, spike_num_mon2, spike_num_mon3, spike_num_mon4, save_loc = os.path.join(trace['p'], 'behav'))
 
     print("    C. Calculating firing rate for each neuron and identified their place fields (those areas which firing rate >= 50% peak rate)")
     # Set occu_time <= 50ms spatial bins as nan to avoid too big firing rate
@@ -931,10 +935,10 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     
     print("    Plotting:")
     print("      1. Ratemap")
-    RateMap(trace)
+    #RateMap(trace)
 
     print("      2. Tracemap")
-    TraceMap(trace)
+    #TraceMap(trace)
   
     print("      3. Quarter_map")
     #trace = QuarterMap(trace, isDraw = False)

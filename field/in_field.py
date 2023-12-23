@@ -12,6 +12,8 @@ from scipy.stats import ttest_1samp
 
 LOWER_BOUND = 5
 UPPER_BOUND = 95
+CORRECT_PASS = True
+FAIL_TO_PASS = False
 
 from numba import jit
 import time
@@ -29,7 +31,7 @@ def _twopiece_fit(init_breakpoints, x, y):
     return total_losses
 
 @jit(nopython=True)
-def _parallel_shuffle(
+def parallel_shuffle(
     trial_num, 
     total_events_num, 
     frames_set, 
@@ -37,8 +39,8 @@ def _parallel_shuffle(
     durations: np.ndarray,
     shuffle_times: int=5000,
 ):
-    dt = np.ediff1d(cal_events_time)
-    init_break_points = cal_events_time[0:-1] + dt
+    dt = np.ediff1d(np.unique(cal_events_time))
+    init_break_points = np.unique(cal_events_time)[0:-1] + dt
     const1, const2, bps = np.zeros(shuffle_times, np.float64), np.zeros(shuffle_times, np.float64), np.zeros(shuffle_times, np.float64)
     
     for i in range(shuffle_times):
@@ -55,13 +57,7 @@ def _parallel_shuffle(
         total_losses = _twopiece_fit(init_break_points, cal_events_time, rand_events_rate)
         
         total_losses[np.where(np.isnan(total_losses))[0]] = 100000
-        """
-        low = total_losses[0]
-        idx=0
-        for j, loss in enumerate(total_losses):
-            if loss < low:
-                idx=j
-        """       
+   
         idx =  np.argmin(total_losses)
         if np.min(total_losses) == 100000:
             bps[i] = -1000
@@ -71,28 +67,107 @@ def _parallel_shuffle(
         const2[i] = np.nanmean(rand_events_rate[np.where(cal_events_time>bps[i])[0]])
 
     return const1, const2, bps
+
+@jit(nopython=True)
+def _set_range_jit(maze_type: int, father_field: np.ndarray, CP: np.ndarray) -> tuple[float, float]:
+    """
+    set_range: set the range of the field on the correct track.
+
+    Parameters
+    ----------
+    maze_type : int
+        Maze type
+    father_field : np.ndarray
+        The bins in the field.
+
+    Returns
+    -------
+    tuple[float, float]
+        The range of the field on the correct track, (min, max).
+        Return (np.nan, np.nan) if all of the bins in the field are 
+        situated at incorrect track.
+    """
+    
+    field_range = np.zeros(len(father_field), dtype=np.float64)
+
+    IS_INCORRECT_TRACK_FIELDS = True
+
+    for i, n in enumerate(father_field):
+        if n not in CP:
+            field_range[i] = np.nan
+        else:
+            IS_INCORRECT_TRACK_FIELDS = False
+            field_range[i] = np.where(CP == n)[0][0]
+    
+    if IS_INCORRECT_TRACK_FIELDS:
+        return (np.nan, np.nan)
+    else:
+        return (np.nanmin(field_range), np.nanmax(field_range))    
+
+@jit(nopython=True)
+def temporal_analysis(
+    ms_time_original: np.ndarray,
+    deconv_signal: np.ndarray,
+    in_field_nodes: np.ndarray,
+    in_field_time: np.ndarray,
+    interval_indices: np.ndarray,
+    father_field: np.ndarray,
+    maze_type: int,
+    CP: np.ndarray,
+    signal_folder: np.ndarray = np.linspace(1, 3, 11),
+    t_thre: float = 500.,
+    t_unit: float = 1000.,
+) -> np.ndarray:
             
-def _star(p:str):
-    '''
-    Note: notations of significance according to the input p value.
+    field_range = _set_range_jit(maze_type=maze_type, father_field=father_field, CP=CP)
+    
+    if np.isnan(field_range[0]) or np.isnan(field_range[1]):
+        return
+    
+    signal_std = np.nanstd(deconv_signal)
+    thre_num = signal_folder.shape[0]
+    err_events = np.zeros((interval_indices.shape[0]-1, 5), np.float64)
+    cal_events_rate = np.zeros((interval_indices.shape[0]-1, thre_num), dtype=np.float64)
+    cal_events_time = np.zeros((interval_indices.shape[0]-1, thre_num), dtype=np.float64)
+    cal_events_num = np.zeros((interval_indices.shape[0]-1, thre_num), dtype=np.float64)
+    cal_frames_num = np.zeros(interval_indices.shape[0]-1, dtype=np.int64)
+    durations = np.zeros(interval_indices.shape[0]-1, dtype=np.float64)
+    
+    for i in range(interval_indices.shape[0]-1):
+        
+        beg, end = interval_indices[i], interval_indices[i+1]
+        beg_node, end_node = in_field_nodes[beg], in_field_nodes[end-1]
+        ms_indices = np.where((ms_time_original >= in_field_time[beg])&(ms_time_original <= in_field_time[end-1]))[0]
+        SUITABLE_FRAME_NUM = len(ms_indices) > 1
+        if beg_node == CP[int(field_range[0])] and end_node == CP[int(field_range[1])] and SUITABLE_FRAME_NUM:
 
-    # Input:
-    - p:str, the p value.
-
-    # Output:
-    - str, the notation.
-    '''
-    if p > 0.05:
-        return 'ns'
-    elif p <= 0.05 and p > 0.01:
-        return '*'
-    elif p <= 0.01 and p > 0.001:
-        return '**'
-    elif p <= 0.001 and p > 0.0001:
-        return '***'
-    elif p <= 0.0001:
-        return '****'
-
+            cal_frames_num[i] = len(ms_indices)
+            durations[i] = (ms_indices[-1]-ms_indices[0])/1000*t_unit + 0.05*t_unit
+            for j in range(thre_num):
+                cal_events_num[i, j] = len(np.where(deconv_signal[ms_indices] >= signal_folder[j]*np.nanstd(deconv_signal))[0])
+                cal_events_time[i, j] = (in_field_time[beg] + in_field_time[end-1])/2
+                cal_events_rate[i, j] = cal_events_num[i, j] / durations[i] * 1000
+        else:
+            err_events[i, 0] = 1
+            err_events[i, 1] = field_range[0]
+            err_events[i, 2] = field_range[1]
+            err_events[i, 3] = in_field_time[beg]/1000
+            err_events[i, 4] = in_field_time[end-1]/1000
+            continue
+    
+    err_indices = np.where(err_events[:, 0] == 1)[0]
+    cal_events_indices = np.where(err_events[:, 0] == 0)[0]
+    return (
+        cal_events_num[cal_events_indices, :],
+        cal_events_time[cal_events_indices, :],
+        cal_events_rate[cal_events_indices, :],
+        durations[cal_events_indices],
+        cal_frames_num[cal_events_indices],
+        err_events[err_indices, :],
+        field_range
+    )
+        
+    
 def set_range(maze_type: int, field: list | np.ndarray) -> tuple[float, float]:
     """
     set_range: set the range of the field on the correct track.
@@ -128,7 +203,31 @@ def set_range(maze_type: int, field: list | np.ndarray) -> tuple[float, float]:
     if IS_INCORRECT_TRACK_FIELDS:
         return (np.nan, np.nan)
     else:
-        return (np.nanmin(field_range), np.nanmax(field_range))
+        return (np.nanmin(field_range), np.nanmax(field_range))    
+    
+            
+def _star(p:str):
+    '''
+    Note: notations of significance according to the input p value.
+
+    # Input:
+    - p:str, the p value.
+
+    # Output:
+    - str, the notation.
+    '''
+    if p > 0.05:
+        return 'ns'
+    elif p <= 0.05 and p > 0.01:
+        return '*'
+    elif p <= 0.01 and p > 0.001:
+        return '**'
+    elif p <= 0.001 and p > 0.0001:
+        return '***'
+    elif p <= 0.0001:
+        return '****'
+
+
 
 class InFieldRateChangeModel:
     def __init__(self) -> None:
@@ -169,46 +268,44 @@ class InFieldRateChangeModel:
         
         return deconv_signal_behav
 
-    def in_field_trajectory(
-        self, 
-        behav_nodes: np.ndarray,
-        behav_time: np.ndarray,
-        behav_pos: np.ndarray,
-        field: list | np.ndarray, 
-        t_thre: float = 500
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        assert len(field) != 0
-
-        idx = np.sort(np.concatenate([np.where(behav_nodes == i)[0] for i in field])) if len(field) > 1 else np.where(behav_nodes == field[0])[0]
-
-        in_field_time = behav_time[idx].astype(np.float64)
-        in_field_nodes = behav_nodes[idx].astype(np.float64)
-        in_field_pos = behav_pos[idx, :]
-
-        dt = np.ediff1d(in_field_time)
-        break_idx = np.where(dt >= t_thre)[0]  # If The time gap is greater than a time threshold, insert a nan value as a gap.
-        in_field_time = np.insert(in_field_time, break_idx+1, np.nan)
-        in_field_nodes = np.insert(in_field_nodes, break_idx+1, np.nan)
-        in_field_pos = np.insert(in_field_pos, break_idx+1, [np.nan, np.nan], axis = 0)
-
-        return in_field_time, in_field_nodes, in_field_pos
-
     def temporal_analysis(self,
-        trace: dict,
-        n: int,
         field: np.ndarray | list,
+        maze_type: int,
+        ms_time_original: np.ndarray,
+        deconv_signal: np.ndarray,
         t_thre: float = 500,
         t_unit: float = 1000, # ms
         signal_folder: np.ndarray = np.linspace(1, 3, 11),
         behav_time: np.ndarray = None,
         behav_nodes: np.ndarray = None,
-        behav_pos: np.ndarray = None
     ) -> tuple[np.ndarray, np.ndarray, list]:
-        if behav_time is None or behav_nodes is None or behav_pos is None:
-            behav_time = cp.deepcopy(trace['correct_time'])
-            behav_pos = cp.deepcopy(trace['correct_pos'])
-            behav_nodes = spike_nodes_transform(cp.deepcopy(trace['correct_nodes']), nx=12)
 
+        # Within field trajectory and corresponding frames.
+        if len(field) == 1:
+            in_field_indices = np.where(behav_nodes == field[0])[0]
+        else:
+            in_field_indices = np.sort(np.concatenate([np.where(behav_nodes == k)[0] for k in field]))
+
+        in_field_time = behav_time[in_field_indices]
+        in_field_nodes = behav_nodes[in_field_indices]
+
+        dt = np.ediff1d(in_field_time)
+        interval_indices = np.concatenate([[0], np.where(dt >= t_thre)[0]+1, [in_field_time.shape[0]]])
+      
+        cal_events_num, cal_events_time, cal_events_rate, durations, cal_frames_num, err_events, field_range = temporal_analysis(
+            ms_time_original=cp.deepcopy(ms_time_original),
+            deconv_signal=cp.deepcopy(deconv_signal),
+            in_field_time=in_field_time,
+            in_field_nodes=in_field_nodes,
+            interval_indices=interval_indices,
+            father_field=np.array(field, np.int64),
+            CP=cp.deepcopy(correct_paths[int(maze_type)]),
+            signal_folder=signal_folder,
+            t_thre=t_thre,
+            t_unit=t_unit,
+            maze_type=maze_type
+        )
+        """
         maze_type = trace['maze_type']
         ms_time_behav = cp.deepcopy(trace['ms_time_behav'])
         deconv_signal = cp.deepcopy(trace['DeconvSignal'][n, :])
@@ -274,7 +371,8 @@ class InFieldRateChangeModel:
                 continue
                      
             include_indices.append(i)
-
+ 
+        
         cal_events_rate = np.zeros((len(include_indices), len(signal_folder)), dtype=np.float64)
         cal_events_time = np.zeros((len(include_indices), len(signal_folder)), dtype=np.float64)
         cal_events_num = np.zeros((len(include_indices), len(signal_folder)), dtype=np.float64)
@@ -292,10 +390,10 @@ class InFieldRateChangeModel:
                 cal_events_num[i, j] = len(np.where(deconv_signal_behav[cal_events_indices]>=thre*self.signal_std)[0])
                 cal_events_time[i, j] = (in_field_time[end] + in_field_time[beg])/2
                 cal_events_rate[i, j] = cal_events_num[i, j] / durations[i] * 1000
-
+        """ 
         cal_events_rate = cal_events_rate / np.nanmax(cal_events_rate, axis=0)
         cal_events_rate[np.where(np.isnan(cal_events_rate))[0]] = 0
-        
+
         self.field_range = field_range
         self.durations = durations
 
@@ -377,7 +475,6 @@ class InFieldRateChangeModel:
         k_default=0.0005
     ) -> None:
         if self.cal_events_rate is None or self.cal_events_time is None:
-            return
             raise ValueError("Model should undergo temporal_analysis first!")
         self.shuffle_times = shuffle_times
         trial_num, thre_num = self.cal_events_num.shape[0], self.cal_events_num.shape[1]
@@ -385,7 +482,7 @@ class InFieldRateChangeModel:
         rand_L, rand_k, rand_x0, rand_b = np.zeros(shuffle_times), np.zeros(shuffle_times), np.zeros(shuffle_times), np.zeros(shuffle_times)
         
         total_events_num = int(self.total_events_num[-1])
-        const1, const2, rand_x0 = _parallel_shuffle(
+        const1, const2, rand_x0 = parallel_shuffle(
             trial_num=trial_num,
             total_events_num=total_events_num,
             frames_set=frames_set,
@@ -416,6 +513,7 @@ class InFieldRateChangeModel:
 
         self._classify()
         self._report = f"The field is {self._ctype} with significance {_star(self.pvalue)} (pvalue {self.pvalue})"
+        print(self._report)
 
 
     @property
@@ -450,7 +548,6 @@ class InFieldRateChangeModel:
                 return trial_num-i
         
         return 0
-            
 
     def get_info(self):
         return {
@@ -544,15 +641,6 @@ class InFieldRateChangeModel:
         model.temporal_analysis(trace=trace, n=n, field=field, t_thre=t_thre,t_unit=t_unit)
         return model
 
-    @staticmethod
-    def get_in_field_trajectory(
-        trace: dict, 
-        field: list | np.ndarray, 
-        t_thre: float = 500
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        model = InFieldRateChangeModel()
-        model.in_field_trajectory(trace=trace, field=field, t_thre=t_thre)
-        return model
 
     @staticmethod
     def analyze_field(
@@ -569,33 +657,28 @@ class InFieldRateChangeModel:
         behav_time: np.ndarray | None = None,
         behav_nodes: np.ndarray | None = None,
         behav_pos: np.ndarray | None = None
-    ):
+    ):  
+        #t1 = time.time()
         model = InFieldRateChangeModel()
-        model.temporal_analysis(trace=trace, n=n, field=field, t_thre=t_thre,t_unit=t_unit, signal_folder=signal_folder, behav_nodes=behav_nodes, behav_time=behav_time, behav_pos=behav_pos)
+        # = time.time()
+        #print("Initialization time cost", t2-t1)
+        model.temporal_analysis(
+            field=field, 
+            maze_type=cp.deepcopy(trace['maze_type']),
+            t_thre=t_thre,
+            t_unit=t_unit, 
+            ms_time_original=cp.deepcopy(trace['ms_time']),
+            deconv_signal=cp.deepcopy(trace['DeconvSignal'][n, :]),
+            signal_folder=signal_folder, 
+            behav_nodes=cp.deepcopy(behav_nodes), 
+            behav_time=cp.deepcopy(behav_time)
+        )
+        #t3 = time.time()
+        #print("temporal analysis time cost", t3-t2)
         model.fit(num_pieces_range=num_pieces_range, lam=lam, k_default=k_default)
+        #t4 = time.time()
+        #print("fit time cost:", t4-t3)
         model.shuffle_test(shuffle_times=shuffle_times, num_pieces_range=num_pieces_range, lam=lam, k_default=k_default)
+        #t5 = time.time()
+        #print("shuffle time cost:", t5-t4, end='\n\n')
         return model
-
-if __name__ == '__main__':
-    import pickle
-    import os
-    from mylib import InstantRateCurveAxes, LapwiseCalciumTraceAxes
-    from mylib.calcium.smooth.gaussian import gaussian_smooth_matrix1d
-
-    with open(r"E:\Data\Cross_maze\11095\20220828\session 2\trace.pkl", 'rb') as handle:
-        trace = pickle.load(handle)
-    
-    #[138, 126, 127, 115], [92, 80, 81]
-
-    model = InFieldRateChangeModel.analyze_field(trace, 23-1, [10, 11, 12, 24, 23, 22, 34, 33, 32])
-    cal_events_rate, cal_events_time, err_events = model.cal_events_rate.flatten(), model.cal_events_time.flatten(), model.err_events
-    #M = gaussian_smooth_matrix1d(temporal_stamp.shape[0], dis_stamp=temporal_stamp/1000, window = 6, folder=0.1)
-
-    cal_indices = model.in_field_indices
-    plt.figure(figsize=(3, 8))
-    LapwiseCalciumTraceAxes(
-        ax=plt.axes(),
-        cal_trace=model.deconv_signal[model.in_field_indices],
-        cal_time=trace['ms_time_behav'][model.in_field_indices]
-    )
-    plt.show()

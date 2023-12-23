@@ -6,11 +6,13 @@ from mylib.dp_analysis import field_arange, plot_field_arange, BehaviorEventsAna
 from mylib.dp_analysis import plot_1day_line, plot_field_arange_all, FieldDisImage, ImageBase
 from mylib.diff_start_point import DSPMazeLapSplit
 from mylib.calcium.field_criteria import place_field
+from mylib.field.in_field import set_range
 from mylib import LocTimeCurveAxes
 
 from mylib.behavior.behavevents import BehavEvents
 from mylib.divide_laps.lap_split import LapSplit
 
+from numba import jit
 #  -------------------------------------------------------- Calsium ----------------------------------------------------------------------------
 # In some cases (for example, mice 10019, date 4_20, neuron 23), there're some 'silent neurons' which has indistinct 
 # firing activity and as a result, the size of spike_ind is 0 and could not be able to used for further shuffling. 
@@ -31,7 +33,12 @@ def Generate_SilentNeuron(Spikes, threshold = 30):
 # spatial information (all neurons)
 # Shuffle ISI: DOI: 10.1523/JNEUROSCI.19-21-09497.1999
 
-def calc_SI(spikes: np.ndarray, rate_map: np.ndarray, t_total: float, t_nodes_frac: np.ndarray) -> np.ndarray:
+def calc_SI(
+    spikes: np.ndarray, 
+    rate_map: np.ndarray, 
+    t_total: float, 
+    t_nodes_frac: np.ndarray
+) -> np.ndarray:
     mean_rate = np.nansum(spikes, axis = 1) / t_total # mean firing rate
     logArg = (rate_map.T / mean_rate).T;
     logArg[np.where(logArg == 0)] = 1; # keep argument in log non-zero
@@ -41,10 +48,6 @@ def calc_SI(spikes: np.ndarray, rate_map: np.ndarray, t_total: float, t_nodes_fr
     return(SI)
 
 def calc_ratemap(Spikes = None, spike_nodes = None, _nbins = 48*48, occu_time = None, Ms = None, is_silent = None):
-    if is_silent is None:
-        print("    ERROR! no silent cell information.")
-        return 
-    
     Spikes = Spikes
     occu_time = occu_time
     spike_count = np.zeros((Spikes.shape[0], _nbins), dtype = np.float64)
@@ -53,7 +56,8 @@ def calc_ratemap(Spikes = None, spike_nodes = None, _nbins = 48*48, occu_time = 
         spike_count[:,i] = np.nansum(Spikes[:,idx], axis = 1)
 
     rate_map_all = spike_count/(occu_time/1000+ 1E-9)
-    rate_map_all[is_silent,:] = np.nan
+    if is_silent is not None:
+        rate_map_all[is_silent,:] = np.nan
     clear_map_all, nanPos = clear_NAN(rate_map_all)
     smooth_map_all = np.dot(clear_map_all, Ms.T)
     return rate_map_all, clear_map_all, smooth_map_all, nanPos
@@ -80,11 +84,11 @@ def shuffle_test_isi(SI, spikes, spike_nodes, occu_time, shuffle_n = 1000, Ms = 
     for i in range(shuffle_n):
         spikes_rand[i, shuffle_spike_ind[i]] = 1
     
-    _, _, smooth_map_rand, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms, 
+    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms, 
                                                                                     is_silent = silent_cell)
     SI_rand = calc_SI(spikes = spikes_rand, rate_map = smooth_map_rand, t_total = t_total, t_nodes_frac=t_nodes_frac)
     is_placecell = SI > np.percentile(SI_rand, percent)
-    return is_placecell 
+    return is_placecell
 
 def shuffle_test_shift(SI, spikes, spike_nodes, occu_time, shuffle_n = 1000, Ms = None, silent_cell = None, percent = 95):
     # spikes: numpy.ndarray, shape:(T,), T is the number of frames. The spikes of 1 neuron during recording.
@@ -99,7 +103,7 @@ def shuffle_test_shift(SI, spikes, spike_nodes, occu_time, shuffle_n = 1000, Ms 
     for i in range(shuffle_n):
         spikes_rand[i,:] = np.roll(spikes, shift = shuffle_shift[i])
 
-    _, _, smooth_map_rand, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms, 
+    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms, 
                                                                                     is_silent = silent_cell)
     SI_rand = calc_SI(spikes = spikes_rand, rate_map = smooth_map_rand, t_total = t_total, t_nodes_frac=t_nodes_frac)
     is_placecell = SI > np.percentile(SI_rand, percent)
@@ -118,7 +122,7 @@ def shuffle_test_all(SI, spikes, spike_nodes, occu_time, shuffle_n = 1000, Ms = 
         np.random.shuffle(spikes_temp)
         spikes_rand[i, :] = cp.deepcopy(spikes_temp)
         
-    _, _, smooth_map_rand, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms, 
+    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms, 
                                                                                     is_silent = silent_cell)
     SI_rand = calc_SI(spikes = spikes_rand, rate_map = smooth_map_rand, t_total = t_total, t_nodes_frac=t_nodes_frac)
     is_placecell = SI > np.percentile(SI_rand, percent)
@@ -131,7 +135,7 @@ def shuffle_test(trace, Ms = None, shuffle_n = 1000, percent = 95, save_loc: str
     is_placecell_shift = np.zeros(n_neuron, dtype = np.int64)
     is_placecell_all = np.zeros(n_neuron, dtype = np.int64)
 
-    SI_all = calc_SI(trace['Spikes'], rate_map = trace['smooth_map_all'], t_total = trace['t_total'], t_nodes_frac = trace['t_nodes_frac'])
+    SI_all = calc_SI(trace['Spikes'], rate_map = trace['rate_map_all'], t_total = trace['t_total'], t_nodes_frac = trace['t_nodes_frac'])
 
     for i in tqdm(range(n_neuron)):
         if i in trace['SilentNeuron']:
@@ -286,7 +290,7 @@ def OldMap(trace, isDraw = True):
     return trace
 
 def DrawRateMap(trace, ax = None):
-    n_neuron = len(trace['rate_map_all'])
+    n_neuron = len(trace['smooth_map_all'])
     smooth_map_all = trace['smooth_map_all']
     loc = trace['loc']
     
@@ -294,18 +298,19 @@ def DrawRateMap(trace, ax = None):
         # rate map     
         im = ax.imshow(np.reshape(smooth_map_all[k],[48,48]), cmap = 'jet')
         cbar = plt.colorbar(im, ax = ax)
-        cbar.set_ticks(ColorBarsTicks(peak_rate=np.nanmax(smooth_map_all[k]), is_auto=True, tick_number=4))
+        cbar.set_ticks([0, np.max(smooth_map_all[k, :])])
         cbar.set_label('Firing Rate / Hz')
         # maze profile
         color = 'red' if trace['is_placecell'][k] == 1 else 'black'
         ax.set_title(f"Mice {trace['MiceID']}, Cell {k+1}, SI = {round(trace['SI_all'][k],3)}",
                      color = color, fontsize = 12)
+        ax.axis([-0.7, 47.7, 47.7, -0.7])
         plt.savefig(os.path.join(loc,str(k+1)+'.svg'),dpi = 600)
         plt.savefig(os.path.join(loc,str(k+1)+'.png'),dpi = 600)
         cbar.remove()
         im.remove()
 
-def RateMap(trace):
+def RateMap(trace: dict) -> dict:
     maze_type = trace['maze_type']
 
     fig = plt.figure(figsize = (4,3))
@@ -320,6 +325,44 @@ def RateMap(trace):
     mkdir(loc)
     DrawRateMap(trace, ax = ax)
     plt.close()
+    return trace
+
+def RateMapIncludeIP(trace: dict) -> dict:
+    if 'LA' not in trace.key():
+        return trace
+        
+    maze_type = trace['maze_type']
+
+    fig = plt.figure(figsize = (4,3))
+    ax = Clear_Axes(plt.axes())
+
+    DrawMazeProfile(maze_type = maze_type, axes = ax, nx = 48)
+    
+    p = trace['p']
+    loc = os.path.join(p,'RateMapIncludeIP')
+
+    trace['loc'] = loc
+    mkdir(loc)
+    
+    n_neuron = len(trace['LA']['smooth_map_all'])
+    smooth_map_all = trace['LA']['smooth_map_all']
+    loc = trace['loc']
+    
+    for k in tqdm(range(n_neuron)):
+        # rate map     
+        im = ax.imshow(np.reshape(smooth_map_all[k], [48,48]), cmap = 'jet')
+        cbar = plt.colorbar(im, ax = ax)
+        cbar.set_ticks([0, np.max(smooth_map_all[k, :])])
+        cbar.set_label('Firing Rate / Hz')
+        # maze profile
+        color = 'red' if trace['LA']['is_placecell'][k] == 1 else 'black'
+        ax.set_title(f"Mice {trace['MiceID']}, Cell {k+1}, SI = {round(trace['LA']['SI_all'][k],3)}",
+                     color = color, fontsize = 12)
+        ax.axis([-0.7, 47.7, 47.7, -0.7])
+        plt.savefig(os.path.join(loc,str(k+1)+'.svg'),dpi = 600)
+        plt.savefig(os.path.join(loc,str(k+1)+'.png'),dpi = 600)
+        cbar.remove()
+        im.remove()
 
 # Quarter Map
 def DrawQuarterMap(trace, ax = None):
@@ -432,13 +475,14 @@ def DrawTraceMap(trace, ax: Axes):
         ax.set_title("Mice "+str(trace['MiceID'])+" , Cell "+str(k+1), 
                      color = color, 
                      fontsize = 16)
+        ax.axis([-0.7, 47.7, 47.7, -0.7])
         plt.savefig(os.path.join(loc,str(k+1)+'.svg'),dpi = 600)
         plt.savefig(os.path.join(loc,str(k+1)+'.png'),dpi = 600)
         
         for s in b:
             s.remove()
 
-def TraceMap(trace):
+def TraceMap(trace: dict) -> dict:
     p = trace['p']
     maze_type = trace['maze_type']
     loc = os.path.join(p,'TraceMap')
@@ -447,13 +491,60 @@ def TraceMap(trace):
 
     fig = plt.figure(figsize = (4,4))
     ax = Clear_Axes(plt.axes())
-    ax.invert_yaxis()
 
     DrawTraceMap(trace, ax = ax)
     #ax.yaxis_inverted()
     plt.close()
     return trace
 
+
+def TraceMapIncludeIP(trace: dict) -> dict:
+    p = trace['p']
+    maze_type = trace['maze_type']
+    loc = os.path.join(p,'TraceMapIncludeIP')
+    mkdir(loc)
+    trace['loc'] = loc
+
+    fig = plt.figure(figsize = (4,4))
+    ax = Clear_Axes(plt.axes())
+
+    n_neuron = trace['n_neuron']
+    maze_type = trace['maze_type']
+    processed_pos, behav_time = Add_NAN(trace['correct_pos'], trace['correct_time'], maze_type = maze_type)
+    processed_pos = position_transform(processed_pos = processed_pos, nx = 48, maxWidth = 960)
+    ms_time_behav = trace['LA']['ms_time_behav']
+    Spikes = trace['LA']['Spikes']
+    
+    ax.plot(processed_pos[:,0], processed_pos[:,1], color = 'gray', linewidth=0.8)
+    ax.invert_yaxis()
+    DrawMazeProfile(maze_type = maze_type, axes = ax, color = 'brown', nx = 48, linewidth = 2)
+    
+    for k in tqdm(range(n_neuron)):
+        # spike location
+        spike_indices = np.where(Spikes[k,:] == 1)[0]
+        time_indices = np.array([get_recent_behavior_time(behav_time, ms_time_behav[j]) for j in spike_indices], np.int64)
+        a = []   
+            
+        b = ax.plot(
+            processed_pos[time_indices, 0], 
+            processed_pos[time_indices, 1], 
+            'o', 
+            label='events',
+            color='black', 
+            markersize=3, 
+            markeredgewidth=0
+        )
+            
+        color = 'red' if trace['LA']['is_placecell'][k] == 1 else 'black'
+        ax.set_title("Mice "+str(trace['MiceID'])+" , Cell "+str(k+1), 
+                     color = color, 
+                     fontsize = 12)
+        ax.axis([-0.7, 47.7, 47.7, -0.7])
+        plt.savefig(os.path.join(loc,str(k+1)+'.svg'),dpi = 600)
+        plt.savefig(os.path.join(loc,str(k+1)+'.png'),dpi = 600)
+        
+        for s in b:
+            s.remove()
 
 # population vector correlation
 def PVCorrelationMap(trace):
@@ -629,125 +720,36 @@ def LocTimeCurve(trace):
     mkdir(save_loc)
     
     CP = correct_paths[trace['maze_type']]
+    
+    t_max = int(np.nanmax(ms_time)/1000)
 
     for i in tqdm(range(trace['n_neuron'])):
         color = 'red' if trace['is_placecell'][i] == 1 else 'black'
-        ax, a1, b1 = LocTimeCurveAxes(
+        ax, _, _ = LocTimeCurveAxes(
             ax, 
             behav_time=ms_time,
             spikes=trace['Spikes'][i], 
-            spike_time=trace['ms_time_behav'], 
+            spike_time=ms_time, 
             maze_type=trace['maze_type'],
             given_x=linearized_x,
             title='Cell '+str(i+1),
             title_color=color,
         )
         ax.set_xlim([0, len(CP)+1])
-
+        ax.set_ylim([0, t_max])
+        
+        colors = sns.color_palette("Spectral", len(trace['place_field_all'][i].keys()))
+        for j, k in enumerate(trace['place_field_all'][i].keys()):
+            lef, rig = set_range(trace['maze_type'], spike_nodes_transform(trace['place_field_all'][i][k], 12))
+            lef += 0.5
+            rig += 1.5
+            ax.fill_betweenx(y=[0, t_max], x1=lef, x2 = rig, alpha=0.3, edgecolor=None, linewidth=0, color = colors[j])
+            
         plt.savefig(join(save_loc, str(i+1)+'.png'), dpi = 600)
         plt.savefig(join(save_loc, str(i+1)+'.svg'), dpi = 600)
-        a = a1 + b1
-        for j in a:
-            j.remove()
+        ax.clear()
             
     return trace
-
-"""
-def LocTimeCurve(trace, curve_type = 'Deconv', threshold = 3, isDraw = True):
-    # curve_type: str, determines the resource of spikes
-    # threshold: float, std * threshold to determine the spikes.
-    
-    ms_time = cp.deepcopy(trace['ms_time_behav'])
-    ms_time_original = cp.deepcopy(trace['ms_time'])
-    # y axis value of trajactories (time: ms)
-    behav_time = cp.deepcopy(trace['correct_time'])
-    correct_nodes = cp.deepcopy(trace['correct_nodes'])
-    old_nodes_behav = spike_nodes_transform(spike_nodes = correct_nodes, nx = 12)
-
-    # reorder old_nodes with the order of correct path and incorrect path
-    if trace['maze_type'] == 0:
-        return
-
-    length = len(correct_paths[trace['maze_type']])
-    order = xorders[trace['maze_type']]
-
-    reorder = np.zeros_like(order)
-    for i in range(reorder.shape[0]):
-        reorder[i] = np.where(order == i+1)[0] + 1
-    # reorder old_nodes
-    old_nodes_order = reorder[old_nodes_behav-1]
-
-    if curve_type == 'Deconv':
-        transient = 'DeconvSignal'
-    elif curve_type == 'Raw':
-        transient == 'RawTraces'
-    else:
-        print("    ValueError! Only 'Deconv' and 'Raw' are valid value for curve_type! Report by LocTimeCurve()")
-        return
-    
-    # Generate Spikes and delete spikes
-    Spikes = SpikeType(Transients = trace[transient], threshold = threshold) # Calculating spikes in different ways
-    idx = np.zeros(ms_time.shape[0], dtype = np.int64)
-    for i in range(ms_time.shape[0]):
-        idx[i] = np.where(ms_time_original == ms_time[i])[0][0]
-    Spikes = Spikes[:,idx]
-
-    # x axis value of trajactories (location: spatial bins)
-    rand_nodes = np.random.rand(old_nodes_behav.shape[0]) - 0.5 + old_nodes_order
-    
-    # find a spike time stamp:
-    spike_time = np.zeros_like(ms_time)
-    spike_location = np.zeros_like(ms_time)
-    for i in range(spike_time.shape[0]):
-        # project ms_time onto behav_time
-        idx_left = np.where(behav_time <= ms_time[i])[0][-1]
-        idx_right = np.where(behav_time >= ms_time[i])[0][0]
-        idx = idx_left if ms_time[i] - behav_time[idx_left] <= behav_time[idx_right] - ms_time[i] else idx_right
-        # x axis value of spikes (location: bin)
-        spike_location[i] = rand_nodes[idx]  
-        # y axis value of spikes (time: ms)
-        spike_time[i] = behav_time[idx]  
-    
-    if isDraw == True:
-        trace['loc'] = os.path.join(trace['p'],'LocTimeCurve',curve_type+'_'+str(threshold))
-        mkdir(trace['loc'])
-        DrawLocTimeCurve(behav_time = behav_time, rand_nodes = rand_nodes, spike_time = spike_time, spike_location = spike_location, 
-                        Spikes = Spikes, length = length, trace = trace, curve_type = curve_type, threshold = threshold)
-
-
-def DrawLocTimeCurve(behav_time = None, rand_nodes = None, spike_time = None, spike_location = None, Spikes =None, 
-                     length = None, trace = None, curve_type = 'Raw', threshold = 3):
-    # Plotting gray trajactory shadow
-    fig = plt.figure(figsize = (3,4))
-    ax = Clear_Axes(plt.axes(), close_spines = ['top','right'], ifxticks=True, ifyticks=True)
-    ax.plot(rand_nodes,behav_time/1000,'.', color = 'gray', markersize = 1)
-    ax.axis([0,145,0,np.nanmax(behav_time/1000)+10])
-    ax.set_xticks(np.linspace(0,144,9))
-    ax.set_xlabel('Maze ID (Linearized)')
-    ax.set_ylabel('Time / s')
-    ax.axvline(length+0.5,color = 'orange')
-    
-    for n in tqdm(range(trace['n_neuron'])):
-        # Generate Spikes x,y location
-        idx = np.where(Spikes[n,:] == 1)[0]
-        x = spike_location[idx]
-        y = spike_time[idx] / 1000
-
-        # plotting Spikes
-        if 'is_placecell' not in trace.keys():
-            color = 'black'
-        else:
-            color = 'red' if trace['is_placecell'][n] == 1 else 'black'
-        a = ax.plot(x,y,'|',color = 'red', markersize = 3, markeredgewidth = 0.3)
-        ax.set_title(curve_type+', threshold = '+str(threshold)+'\nCell '+str(n+1), color = color)
-        plt.savefig(os.path.join(trace['loc'],'Cell '+str(n+1)+'.svg'),dpi = 600)
-        plt.savefig(os.path.join(trace['loc'],'Cell '+str(n+1)+'.png'),dpi = 600)
-        for j in a:
-            j.remove()
-
-    plt.clf()
-    plt.close()
-"""
 
 #======================================================================== Lap Analysis ================================================================================
 # Cross Lap Correlation for cross maze paradigm
@@ -766,7 +768,7 @@ def CrossLapsCorrelation(trace, behavior_paradigm = 'CrossMaze'):
     ms_idx_lap = []
     nanPos_all = []
     occu_time_all = np.zeros((laps, 2304), dtype = np.float64)
-    Ms = SmoothMatrix(maze_type = trace['maze_type'], sigma = 2, _range = 7, nx = 48)
+    Ms = SmoothMatrix(maze_type = trace['maze_type'], sigma = 1, _range = 7, nx = 48)
 
     # Generate lap's rate map
     print("    Generate laps' rate map...")
@@ -862,37 +864,37 @@ def SimplePeakCurve(trace, is_ExistAxes = False, is_GetAxes = False, file_name =
     plt.close()
 
 
-def plot_spike_monitor(a, b, c, save_loc: str or None):
-    assert a.shape[0] == b.shape[0] and b.shape[0] == c.shape[0]
+def plot_spike_monitor(a, b, c, d, save_loc: str or None):
+    assert a.shape[0] == b.shape[0] and b.shape[0] == c.shape[0] and c.shape[0] == d.shape[0]
     n = a.shape[0]
     mkdir(save_loc)
     
-    Data = {'class': np.concatenate([np.repeat('raw', n), np.repeat('speed filted', n), np.repeat('delete interval', n)]),
-            'x2': np.concatenate([np.repeat(1, n), np.repeat(2, n), np.repeat(3, n)]),
-            'x': np.concatenate([np.repeat(1, n)+np.random.rand(n)*0.8-0.4, np.repeat(2, n)+np.random.rand(n)*0.8-0.4, np.repeat(3, n)+np.random.rand(n)*0.8-0.4]),
-            'number of spikes/cell': np.concatenate([a, b, c])}
+    Data = {'class': np.concatenate([np.repeat('raw', n), np.repeat('NAN filter', n), np.repeat('speed filtered', n), np.repeat('delete interval', n)]),
+            'x2': np.concatenate([np.repeat(1, n), np.repeat(2, n), np.repeat(3, n), np.repeat(4, n)]),
+            'x': np.concatenate([np.repeat(1, n)+np.random.rand(n)*0.8-0.4, np.repeat(2, n)+np.random.rand(n)*0.8-0.4, np.repeat(3, n)+np.random.rand(n)*0.8-0.4, np.repeat(4, n)+np.random.rand(n)*0.8-0.4]),
+            'number of spikes/cell': np.concatenate([a, b, c, d])}
     fig = plt.figure(figsize = (4, 3))
     ax = Clear_Axes(plt.axes(), close_spines=['top', 'right'], ifxticks=True, ifyticks=True)
     sns.lineplot(x = 'x2', y = 'number of spikes/cell', data = Data, ax = ax)
     sns.scatterplot(x = 'x', y = 'number of spikes/cell', data = Data, hue = 'class', ax = ax, legend=False)
-    plt.xticks([1,2,3], ['raw', 'speed\nfilted', 'delete\ninterval'])
+    plt.xticks([1,2,3, 4], ['raw', 'NAN\nfiltered', 'speed\nfiltered', 'delete\ninterval'])
     ax.set_xlabel("")
     plt.savefig(os.path.join(save_loc, 'spikes_monitor_num.png'), dpi = 600)
     plt.savefig(os.path.join(save_loc, 'spikes_monitor_num.svg'), dpi = 600)
     plt.close()
 
-    Data = {'class': np.concatenate([np.repeat('raw', n), np.repeat('speed filted', n), np.repeat('delete interval', n)]),
-            'x2': np.concatenate([np.repeat(1, n), np.repeat(2, n), np.repeat(3, n)]),
-            'x': np.concatenate([np.repeat(1, n)+np.random.rand(n)*0.8-0.4, np.repeat(2, n)+np.random.rand(n)*0.8-0.4, np.repeat(3, n)+np.random.rand(n)*0.8-0.4]),
-            'spikes remain rate / %': np.concatenate([a/a*100, b/a*100, c/a*100])}
+    Data = {'class': np.concatenate([np.repeat('raw', n), np.repeat('speed filtered', n), np.repeat('speed filted', n), np.repeat('delete interval', n)]),
+            'x2': np.concatenate([np.repeat(1, n), np.repeat(2, n), np.repeat(3, n), np.repeat(4, n)]),
+            'x': np.concatenate([np.repeat(1, n)+np.random.rand(n)*0.8-0.4, np.repeat(2, n)+np.random.rand(n)*0.8-0.4, np.repeat(3, n)+np.random.rand(n)*0.8-0.4, np.repeat(4, n)+np.random.rand(n)*0.8-0.4]),
+            'spikes remain rate / %': np.concatenate([a/a*100, b/a*100, c/a*100, d/a*100])}
     fig = plt.figure(figsize = (4, 3))
     ax = Clear_Axes(plt.axes(), close_spines=['top', 'right'], ifxticks=True, ifyticks=True)
     sns.lineplot(x = 'x2', y = 'spikes remain rate / %', data = Data, ax = ax)
     sns.scatterplot(x = 'x', y = 'spikes remain rate / %', data = Data, hue = 'class', ax = ax, legend=False)
-    plt.xticks([1,2,3], ['raw', 'speed\nfilted', 'delete\ninterval'])
+    plt.xticks([1,2,3, 4], ['raw', 'NAN\nfiltered', 'speed\nfiltered', 'delete\ninterval'])
     ax.set_yticks(np.linspace(0,100,6))
     ax.set_xlabel("")
-    ax.axis([0, 4, 0, 100])
+    ax.axis([0, 5, 0, 100])
     plt.savefig(os.path.join(save_loc, 'spikes_monitor_rate.png'), dpi = 600)
     plt.savefig(os.path.join(save_loc, 'spikes_monitor_rate.svg'), dpi = 600)
     plt.close()
@@ -963,7 +965,8 @@ def odd_even_correlation(trace):
     ms_idx = trace['ms_idx_lap']
     if laps == 1:
         return trace
-
+    beg, end = LapSplit(trace, trace['paradigm'])
+    
     occu_time_all = cp.deepcopy(trace['occu_time_split'])
     Spikes = cp.deepcopy(trace['Spikes'])
     spike_nodes = cp.deepcopy(trace['spike_nodes'])
@@ -999,35 +1002,123 @@ def odd_even_correlation(trace):
                 't_total_odd': t_total_odd, 't_total_evn': t_total_evn, 't_nodes_frac_odd': t_nodes_frac_odd, 't_nodes_frac_evn':t_nodes_frac_evn, 'SI_odd': SI_odd,
                 'SI_evn': SI_evn, 'odd_even_corr': odd_even_corr}
     trace.update(appendix)
+    
+    if 'LA' in trace.keys():
+        Spikes = cp.deepcopy(trace['LA']['Spikes'])
+        spike_nodes = cp.deepcopy(trace['LA']['spike_nodes'])
+        spike_time = cp.deepcopy(trace['LA']['ms_time_behav'])
+        dt = np.ediff1d(trace['LA']['ms_time_behav'])
+        dt = np.append(dt, np.median(dt))
+        dt[dt>100] = 100
+    else:
+        return trace
+
+    _nbins = 2304
+    _coords_range = [0, _nbins +0.0001]
+    
+    odd_indices = np.concatenate([np.where((spike_time >= beg[i]) & (spike_time <= end[i]))[0] for i in odd_idx])
+    evn_indices = np.concatenate([np.where((spike_time >= beg[i]) & (spike_time <= end[i]))[0] for i in evn_idx])
+    
+    occu_time_odd, _, _ = scipy.stats.binned_statistic(
+        spike_nodes[odd_indices],
+        dt[odd_indices],
+        bins=_nbins,
+        statistic="sum",
+        range=_coords_range)
+    
+    occu_time_evn, _, _ = scipy.stats.binned_statistic(
+        spike_nodes[evn_indices],
+        dt[evn_indices],
+        bins=_nbins,
+        statistic="sum",
+        range=_coords_range
+    )
+
+    rate_map_odd, clear_map_odd, smooth_map_odd, nanPos_odd = calc_ratemap(
+        Spikes = Spikes[:, odd_indices], 
+        is_silent = trace['SilentNeuron'],
+        spike_nodes = spike_nodes[odd_indices], 
+        occu_time = occu_time_odd, 
+        Ms = trace['Ms']
+    )
+    
+    rate_map_evn, clear_map_evn, smooth_map_evn, nanPos_evn = calc_ratemap(
+        Spikes = Spikes[:, evn_indices],
+        is_silent = trace['SilentNeuron'],
+        spike_nodes = spike_nodes[evn_indices],
+        occu_time = occu_time_evn,
+        Ms = trace['Ms']
+    )
+    
+    fir_evn_corr = np.zeros(Spikes.shape[0], dtype=np.float64)
+    for i in range(Spikes.shape[0]):
+        fir_evn_corr[i], _ = scipy.stats.pearsonr(smooth_map_odd[i, :], smooth_map_evn[i, :])
+
+    t_total_odd = np.nansum(occu_time_odd) / 1000
+    t_total_evn = np.nansum(occu_time_evn) / 1000
+    t_nodes_frac_odd = occu_time_odd / 1000 / (t_total_odd + 1E-6)
+    t_nodes_frac_evn = occu_time_evn / 1000 / (t_total_evn + 1E-6)
+    SI_odd = calc_SI(Spikes[:, odd_indices], rate_map=smooth_map_odd, t_total=t_total_odd, t_nodes_frac=t_nodes_frac_odd)
+    SI_evn = calc_SI(Spikes[:, evn_indices], rate_map=smooth_map_evn, t_total=t_total_evn, t_nodes_frac=t_nodes_frac_evn)
+
+    appendix = {'rate_map_odd':rate_map_odd, 'clear_map_odd':clear_map_odd, 'smooth_map_odd':smooth_map_odd, 'nanPos_odd':nanPos_odd, 'occu_time_odd':occu_time_odd,
+                'rate_map_evn':rate_map_evn, 'clear_map_evn':clear_map_evn, 'smooth_map_evn':smooth_map_evn, 'nanPos_evn':nanPos_evn, 'occu_time_evn':occu_time_evn,
+                't_total_odd': t_total_odd, 't_total_evn': t_total_evn, 't_nodes_frac_odd': t_nodes_frac_odd, 't_nodes_frac_evn':t_nodes_frac_evn, 'SI_odd': SI_odd,
+                'SI_evn': SI_evn, 'fir_evn_corr': fir_evn_corr}
+    trace['LA'].update(appendix)
+
     return trace
 
 def half_half_correlation(trace):
-    laps = trace['laps']
-
-    if laps == 1:
-        return trace 
+    beg, end = LapSplit(trace, trace['paradigm'])
     
-    mid = int((laps+1)/2) if laps % 2 == 1 else int(laps/2)
-    ms_idx = trace['ms_idx_lap']
-
-    occu_time_all = cp.deepcopy(trace['occu_time_split'])
+    mid = int(beg.shape[0]/2)
+    t1, t2 = trace['correct_time'][beg[0]], trace['correct_time'][end[mid-1]]
+    t3, t4 = trace['correct_time'][beg[mid]], trace['correct_time'][end[-1]]
+    
     Spikes = cp.deepcopy(trace['Spikes'])
     spike_nodes = cp.deepcopy(trace['spike_nodes'])
-    fir_idx = np.arange(0, mid)
-    sec_idx = np.arange(mid, laps)
-    occu_time_fir = np.nansum(occu_time_all[fir_idx,:], axis = 0)
-    occu_time_sec = np.nansum(occu_time_all[sec_idx,:], axis = 0)
+    spike_time = cp.deepcopy(trace['ms_time_behav'])
+    dt = np.ediff1d(trace['ms_time_behav'])
+    dt = np.append(dt, np.median(dt))
+    dt[dt>100] = 100
+    
+    _nbins = 2304
+    _coords_range = [0, _nbins +0.0001]
 
-    Spikes_fir = np.concatenate([Spikes[:,ms_idx[k]] for k in fir_idx], axis = 1)
-    Spikes_sec = np.concatenate([Spikes[:,ms_idx[k]] for k in sec_idx], axis = 1)
+    occu_time_fir, _, _ = scipy.stats.binned_statistic(
+        spike_nodes[np.where((spike_time >= t1) & (spike_time <= t2))[0]],
+        dt[np.where((spike_time >= t1) & (spike_time <= t2))[0]],
+        bins=_nbins,
+        statistic="sum",
+        range=_coords_range)
+    
+    occu_time_sec, _, _ = scipy.stats.binned_statistic(
+        spike_nodes[np.where((spike_time >= t3) & (spike_time <= t4))[0]],
+        dt[np.where((spike_time >= t3) & (spike_time <= t4))[0]],
+        bins=_nbins,
+        statistic="sum",
+        range=_coords_range
+    )
 
-    spike_nodes_fir = np.concatenate([spike_nodes[ms_idx[k]] for k in fir_idx])
-    spike_nodes_sec = np.concatenate([spike_nodes[ms_idx[k]] for k in sec_idx])
+    Ms = SmoothMatrix(maze_type = trace['maze_type'], sigma = 1, _range = 7, nx = 48)
 
-    rate_map_fir, clear_map_fir, smooth_map_fir, nanPos_fir = calc_ratemap(Spikes = Spikes_fir, spike_nodes = spike_nodes_fir, occu_time = occu_time_fir, 
-                                                                           Ms = trace['Ms'], is_silent = trace['SilentNeuron'])
-    rate_map_sec, clear_map_sec, smooth_map_sec, nanPos_sec = calc_ratemap(Spikes = Spikes_sec, spike_nodes = spike_nodes_sec, occu_time = occu_time_sec, 
-                                                                           Ms = trace['Ms'], is_silent = trace['SilentNeuron'])
+    rate_map_fir, clear_map_fir, smooth_map_fir, nanPos_fir = calc_ratemap(
+        Spikes = Spikes[:, np.where((spike_time >= t1) & (spike_time <= t2))[0]], 
+        is_silent = trace['SilentNeuron'],
+        spike_nodes = spike_nodes[np.where((spike_time >= t1) & (spike_time <= t2))[0]], 
+        occu_time = occu_time_fir, 
+        Ms = Ms
+    )
+    
+    rate_map_sec, clear_map_sec, smooth_map_sec, nanPos_sec = calc_ratemap(
+        Spikes = Spikes[:, np.where((spike_time >= t3) & (spike_time <= t4))[0]],
+        is_silent = trace['SilentNeuron'],
+        spike_nodes = spike_nodes[np.where((spike_time >= t3) & (spike_time <= t4))[0]],
+        occu_time = occu_time_sec,
+        Ms = Ms
+    )
+    
     fir_sec_corr = np.zeros(Spikes.shape[0], dtype=np.float64)
     for i in range(Spikes.shape[0]):
         fir_sec_corr[i], _ = scipy.stats.pearsonr(smooth_map_fir[i, :], smooth_map_sec[i, :])
@@ -1036,14 +1127,73 @@ def half_half_correlation(trace):
     t_total_sec = np.nansum(occu_time_sec) / 1000
     t_nodes_frac_fir = occu_time_fir / 1000 / (t_total_fir + 1E-6)
     t_nodes_frac_sec = occu_time_sec / 1000 / (t_total_sec + 1E-6)
-    SI_fir = calc_SI(Spikes_fir, rate_map=smooth_map_fir, t_total=t_total_fir, t_nodes_frac=t_nodes_frac_fir)
-    SI_sec = calc_SI(Spikes_sec, rate_map=smooth_map_sec, t_total=t_total_sec, t_nodes_frac=t_nodes_frac_sec)
+    SI_fir = calc_SI(Spikes[:, np.where((spike_time >= t1) & (spike_time <= t2))[0]], rate_map=smooth_map_fir, t_total=t_total_fir, t_nodes_frac=t_nodes_frac_fir)
+    SI_sec = calc_SI(Spikes[:, np.where((spike_time >= t3) & (spike_time <= t4))[0]], rate_map=smooth_map_sec, t_total=t_total_sec, t_nodes_frac=t_nodes_frac_sec)
 
     appendix = {'rate_map_fir':rate_map_fir, 'clear_map_fir':clear_map_fir, 'smooth_map_fir':smooth_map_fir, 'nanPos_fir':nanPos_fir, 'occu_time_fir':occu_time_fir,
                 'rate_map_sec':rate_map_sec, 'clear_map_sec':clear_map_sec, 'smooth_map_sec':smooth_map_sec, 'nanPos_sec':nanPos_sec, 'occu_time_sec':occu_time_sec,
                 't_total_fir': t_total_fir, 't_total_sec': t_total_sec, 't_nodes_frac_fir': t_nodes_frac_fir, 't_nodes_frac_sec':t_nodes_frac_sec, 'SI_fir': SI_fir,
                 'SI_sec': SI_sec, 'fir_sec_corr': fir_sec_corr}
     trace.update(appendix)
+
+    if 'LA' in trace.keys():
+        Spikes = cp.deepcopy(trace['LA']['Spikes'])
+        spike_nodes = cp.deepcopy(trace['LA']['spike_nodes'])
+        spike_time = cp.deepcopy(trace['LA']['ms_time_behav'])
+        dt = np.ediff1d(trace['LA']['ms_time_behav'])
+        dt = np.append(dt, np.median(dt))
+        dt[dt>100] = 100
+    else:
+        return trace
+    
+    occu_time_fir, _, _ = scipy.stats.binned_statistic(
+        spike_nodes[np.where((spike_time >= t1) & (spike_time <= t2))[0]],
+        dt[np.where((spike_time >= t1) & (spike_time <= t2))[0]],
+        bins=_nbins,
+        statistic="sum",
+        range=_coords_range)
+    
+    occu_time_sec, _, _ = scipy.stats.binned_statistic(
+        spike_nodes[np.where((spike_time >= t3) & (spike_time <= t4))[0]],
+        dt[np.where((spike_time >= t3) & (spike_time <= t4))[0]],
+        bins=_nbins,
+        statistic="sum",
+        range=_coords_range
+    )
+
+    rate_map_fir, clear_map_fir, smooth_map_fir, nanPos_fir = calc_ratemap(
+        Spikes = Spikes[:, np.where((spike_time >= t1) & (spike_time <= t2))[0]], 
+        is_silent = trace['SilentNeuron'],
+        spike_nodes = spike_nodes[np.where((spike_time >= t1) & (spike_time <= t2))[0]], 
+        occu_time = occu_time_fir, 
+        Ms = Ms
+    )
+    
+    rate_map_sec, clear_map_sec, smooth_map_sec, nanPos_sec = calc_ratemap(
+        Spikes = Spikes[:, np.where((spike_time >= t3) & (spike_time <= t4))[0]],
+        is_silent = trace['SilentNeuron'],
+        spike_nodes = spike_nodes[np.where((spike_time >= t3) & (spike_time <= t4))[0]],
+        occu_time = occu_time_sec,
+        Ms = Ms
+    )
+    
+    fir_sec_corr = np.zeros(Spikes.shape[0], dtype=np.float64)
+    for i in range(Spikes.shape[0]):
+        fir_sec_corr[i], _ = scipy.stats.pearsonr(smooth_map_fir[i, :], smooth_map_sec[i, :])
+
+    t_total_fir = np.nansum(occu_time_fir) / 1000
+    t_total_sec = np.nansum(occu_time_sec) / 1000
+    t_nodes_frac_fir = occu_time_fir / 1000 / (t_total_fir + 1E-6)
+    t_nodes_frac_sec = occu_time_sec / 1000 / (t_total_sec + 1E-6)
+    SI_fir = calc_SI(Spikes[:, np.where((spike_time >= t1) & (spike_time <= t2))[0]], rate_map=smooth_map_fir, t_total=t_total_fir, t_nodes_frac=t_nodes_frac_fir)
+    SI_sec = calc_SI(Spikes[:, np.where((spike_time >= t3) & (spike_time <= t4))[0]], rate_map=smooth_map_sec, t_total=t_total_sec, t_nodes_frac=t_nodes_frac_sec)
+
+    appendix = {'rate_map_fir':rate_map_fir, 'clear_map_fir':clear_map_fir, 'smooth_map_fir':smooth_map_fir, 'nanPos_fir':nanPos_fir, 'occu_time_fir':occu_time_fir,
+                'rate_map_sec':rate_map_sec, 'clear_map_sec':clear_map_sec, 'smooth_map_sec':smooth_map_sec, 'nanPos_sec':nanPos_sec, 'occu_time_sec':occu_time_sec,
+                't_total_fir': t_total_fir, 't_total_sec': t_total_sec, 't_nodes_frac_fir': t_nodes_frac_fir, 't_nodes_frac_sec':t_nodes_frac_sec, 'SI_fir': SI_fir,
+                'SI_sec': SI_sec, 'fir_sec_corr': fir_sec_corr}
+    trace['LA'].update(appendix)
+    
     return trace
 
 def calc_ms_speed(behav_speed: np.ndarray, behav_time: np.ndarray, 
@@ -1378,6 +1528,59 @@ def ComplexFieldAnalyzer(trace: dict, is_draw: bool = True, shuffle_times = 5000
 
     return trace
 
+def add_perfect_lap(trace: dict) -> dict:
+    if trace['maze_type'] == 0:
+        return trace
+    
+    beg, end = LapSplit(trace, trace['paradigm'])
+    behav_nodes = spike_nodes_transform(trace['correct_nodes'], nx=12)
+    D = GetDMatrices(trace['maze_type'], 12)
+    CP = cp.deepcopy(correct_paths[trace['maze_type']])
+    
+    is_perfect = np.ones(beg.shape[0], np.int64)
+    
+    for i in range(beg.shape[0]):
+        for j in range(beg[i]+1, end[i]):
+            if behav_nodes[j] not in CP:
+                is_perfect[i] = 0
+                break
+            
+            if int(D[behav_nodes[j]-1, 0]*100) < int(D[behav_nodes[j-1]-1, 0]*100):
+                is_perfect[i] = 0
+                break
+    
+    trace['is_perfect'] = is_perfect
+    return trace
+
+def count_field_number(trace: dict) -> dict:
+    if 'place_field_all' not in trace.keys():
+        raise ValueError("No 'place_field_all' in trace.")
+    
+    field_number = np.zeros(trace['Spikes'].shape[0], np.float64)
+    for i in tqdm(range(trace['Spikes'].shape[0])):
+        if trace['is_placecell'][i] == 0:
+            field_number[i] = np.nan
+        else:
+            num = len(trace['place_field_all'][i].keys())
+            field_number[i] = num
+    
+    print("        Field Number Has Been Counted.")
+    trace['place_field_num'] = field_number
+    return trace
+
+def field_register(trace: dict) -> dict:
+    is_pc = cp.deepcopy(trace['is_placecell'])
+    
+    # Initial maps
+    field_reg = []
+    for i in range(is_pc.shape[0]):
+        if is_pc[i] == 1:
+            for j, k in enumerate(trace['place_field_all'][i].keys()):
+                field_reg.append([i, j, k, len(trace['place_field_all'][i][k])])
+    
+    trace['field_reg'] = np.array(field_reg, np.int64)
+    return trace
+
 # ------------------------------------------------------------------------ 主程序 -------------------------------------------------------------------------------------
 def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', v_thre: float = 2.5, **speed_sm_args):
     if behavior_paradigm not in ['CrossMaze','ReverseMaze', 'DSPMaze', 'PinMaze', 'SimpleMaze']:
@@ -1396,6 +1599,7 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', v_thr
 
     coverage = coverage_curve(trace['processed_pos_new'], maze_type=trace['maze_type'], save_loc=os.path.join(p, 'behav'))
     trace['coverage'] = coverage
+    trace = add_perfect_lap(trace)
 
     # Read File
     print("    A. Read ms.mat File")
@@ -1503,7 +1707,7 @@ def run_all_mice(p = None, folder = None, behavior_paradigm = 'CrossMaze', v_thr
     trace['place_field_all'] = place_field(
         trace=trace,
         thre_type=2,
-        parameter=0.2,
+        parameter=0.4,
     )
 
     # Shuffle test
@@ -1581,9 +1785,3 @@ if __name__ == '__main__':
 
     with open(r"E:\Data\Cross_maze\10209\20230728\session 2\trace.pkl", 'rb') as handle:
         trace = pickle.load(handle)
-    
-    trace['p'] = r"E:\Data\Cross_maze\10209\20230728\session 2"
-    trace = ComplexFieldAnalyzer(trace=trace, shuffle_times=10000)
-    
-    with open(r"E:\Data\Cross_maze\10209\20230728\session 2\trace.pkl", 'wb') as fs:
-        pickle.dump(trace, fs)
