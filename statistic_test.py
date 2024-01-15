@@ -446,81 +446,6 @@ def get_placecell_pair(i: int, f: pd.DataFrame, env1: str = 'op', env2: str = 'm
     index_map_pcpair = index_map_pair[:, idx]
     return index_map_pcpair[np.array([j, k]), :]
 
-def ExclusivePeakRate_Interface(trace:dict = {}, spike_threshold:int = 30, variable_names:str = None, f_CellReg:pd.DataFrame = None, f_trace:pd.DataFrame = f1):
-    '''
-    Parameters
-    ----------
-    trace: dict
-        The trace file that saves elements.
-    spike_threshold: int, default value is 30
-        If total number of spikes of a cell is less than the threshold, this cell is not included in statistic.
-    variable_names: str
-        The variable's name.
-    f_CellReg: pd.DataFrame
-
-    Note
-    ----
-    To return peak rate exclude maintained place cells.
-
-    Author
-    ------
-    YAO Shuyang
-    
-    Date
-    ----
-    Jan 30th, 2023
-    '''
-    trace = FiringRateProcess(trace, map_type = 'old', spike_threshold = spike_threshold)
-    KeyWordErrorCheck(trace, __file__, ['is_placecell', 'peak_rate','MiceID','date'])
-    VariablesInputErrorCheck(variable_names, ['Peak Rate', 'Cell Type'])
-    
-    MiceSet = {'11095':11095, '11092':11092}
-    DateSet = {'20220808':20220808, '20220809':20220809, '20220810':20220810, '20220811':20220811, '20220812':20220812, '20220813':20220813, '20220815':20220815, 
-               '20220817':20220817, '20220820':20220820, '20220822':20220822, '20220824':20220824, '20220826':20220826, '20220828':20220828, '20220830':20220830}
-
-    if trace['MiceID'] not in MiceSet.keys() or trace['date'] not in DateSet.keys() or (trace['maze_type'] == 1 and DateSet[trace['date']] < 20220813):
-        return np.array([]), np.array([])
-
-    if trace['maze_type'] == 0:
-        return trace['peak_rate'][np.where(trace['is_placecell'] == 1)[0]], np.repeat("Original PC", trace['peak_rate'][np.where(trace['is_placecell'] == 1)[0]].shape[0])
-    
-    try:
-        i = np.where((f_CellReg['MiceID'] == MiceSet[trace['MiceID']])&(f_CellReg['date'] == DateSet[trace['date']]))[0][0]
-        print(f_CellReg['Cell Reg Path'][i])
-    except:
-        print(i)
-
-    # Get Index MAP
-    if os.path.exists(f_CellReg['Cell Reg Path'][i]):
-        index_map = Read_and_Sort_IndexMap(path = f_CellReg['Cell Reg Path'][i], occur_num = 2, align_type = 'cross_session')
-    else:
-        print(f_CellReg['Cell Reg Path'][i], 'is not exist!')
-        return np.array([]), np.array([])
-    
-    # Select Cell Pairs that Both exist in index_map in map1 and map2
-    is_cell_detected = np.where(index_map == 0, 0, 1)
-    cellpair = np.where(np.nansum(is_cell_detected[[0,trace['maze_type']],:], axis = 0) == 2)[0]
-    index_map = index_map[:, cellpair]
-    index_map = index_map.astype(np.int64)
-
-    idx = np.where((f_trace['MiceID'] == f_CellReg['MiceID'][i])&(f_trace['date'] == f_CellReg['date'][i]))[0]
-    trace_set = TraceFileSet(idx = idx, file = f_trace, Behavior_Paradigm = 'Cross Maze')
-    m = trace['maze_type'] # map
-
-    # non-place cell index
-    spikes_num = np.nansum(trace['Spikes'], axis = 1)
-    pc_idx = np.where((spikes_num >= spike_threshold)&(trace['is_placecell'] == 1))[0]
-
-    mpc_idx_idx = np.where((trace_set[0]['is_placecell'][index_map[0, :]-1] == 1)&(trace_set[m]['is_placecell'][index_map[m, :]-1] == 1))[0]
-    mpc_idx = index_map[m, mpc_idx_idx]-1
-
-    # Get the intersection:
-    mpc_idx = np.intersect1d(pc_idx, mpc_idx)
-    other_pc_idx = np.setdiff1d(pc_idx, mpc_idx)
-
-    return np.concatenate([trace['peak_rate'][mpc_idx], trace['peak_rate'][other_pc_idx]]), np.repeat(['Maintained PC', 'Newly Recuited PC'], [mpc_idx.shape[0], other_pc_idx.shape[0]])
-
-
 
 def Read_and_Sort_IndexMap(
     path:str = None, 
@@ -639,4 +564,7 @@ def cohen_d(x, y):
     return (np.nanmean(x) - np.nanmean(y))/ np.nanstd(x), (np.nanmean(x) - np.nanmean(y)) / np.nanstd(y)
 
 if __name__ == '__main__':
-    print(1)
+    idx = np.where((f_CellReg_day['MiceID'] == 10227)&(f_CellReg_day['Stage'] == 'Stage 1+2'))[0][0]
+    
+    stat_dir = f_CellReg_day['stat_folder'][idx]
+    print(ReadSTAT(stat_dir, open_type='scipy'))

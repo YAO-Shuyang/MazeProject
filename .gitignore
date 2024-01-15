@@ -12,10 +12,12 @@ dismat/
 decoder/Decoding*
 *test.py
 
+cellreg/
 build/
 develop-eggs/
 dist/
 downloads/
+obsolete/
 eggs/
 .eggs/
 lib/
