@@ -33,3 +33,4 @@ f_CellReg_reverse = pd.read_excel(r"E:\Data\cellregs.xlsx", sheet_name='reverse'
 
 f_decode = pd.read_excel(r"E:\Data\Simulation_pc\cross_maze_decode.xlsx", sheet_name='Lap-wise')
 f_decode_shuffle = pd.read_excel(r"E:\Data\Simulation_pc\cross_maze_decode.xlsx", sheet_name='Shuffle')
+

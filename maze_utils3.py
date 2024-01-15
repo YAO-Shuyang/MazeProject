@@ -905,18 +905,63 @@ def DrawPeakCurveSplit(rate_map, length, title = '', loc = ''):
     plt.show()
 
 # Read Cell Reg
-def ReadCellReg(loc, open_type = 'h5py'):
+def ReadCellReg(loc, open_type = 'h5py') -> np.ndarray:
+    """ReadCellReg: Read the MATLAB file saved by CellReg method
+
+    Parameters
+    ----------
+    loc : str
+        The directory of the MATLAB file
+    open_type : str, optional
+        The method to open the MATLAB file, depending on the file signature
+        Generally, 'h5py' and 'scipy' are used, by default 'h5py'
+        'h5py' is needed when using v7.3 signature to save the file
+        'scipy' is needed when 'h5py' does not work, relating to old-version MATLAB file.
+
+    Returns
+    -------
+    index_map, numpy.ndarray with 2 dimensions (n_sessions, n_neurons)
+        The index_map of neuron IDs.
+    """
     if open_type == 'h5py':
         with h5py.File(loc, 'r') as f:
             cell_registered_struct = f['cell_registered_struct']
             index_map = np.array(cell_registered_struct['cell_to_index_map'])
-        return index_map
+        return index_map.astype(np.int64)
 
     elif open_type == 'scipy':
         f = scipy.io.loadmat(loc)
         cell_registered_struct = f['cell_registered_struct']
         index_map = np.array(cell_registered_struct['cell_to_index_map'])
-        return index_map
+        return index_map.astype(np.int64)
+    
+def ReadSTAT(loc, open_type = 'h5py'):
+    """ReadSTAT: Read the MATLAB file saved by STAT method
+
+    Parameters
+    ----------
+    loc : str
+        The directory of the MATLAB file
+    open_type : str, optional
+        The method to open the MATLAB file, depending on the file signature
+        Generally, 'h5py' and 'scipy' are used, by default 'h5py'
+        'h5py' is needed when using v7.3 signature to save the file
+        'scipy' is needed when 'h5py' does not work, relating to old-version MATLAB file.
+
+    Returns
+    -------
+    index_map, numpy.ndarray with 2 dimensions (n_sessions, n_neurons)
+        The index_map of neuron IDs.
+    """
+    if open_type == 'h5py':
+        with h5py.File(loc, 'r') as f:
+            index_map = np.array(f['neuron_chain_new']).T
+        return index_map.astype(np.int64)
+
+    elif open_type == 'scipy':
+        f = scipy.io.loadmat(loc)
+        index_map = index_map = np.array(f['neuron_chain_new']).T
+        return index_map.astype(np.int64)
 
 # Count cell reg number.
 def CountCellReg(cellReg = None):
