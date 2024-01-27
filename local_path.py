@@ -30,6 +30,7 @@ f4_behav = pd.read_excel(os.path.join(HP_path,'Hairpin_maze_paradigm.xlsx'), she
 f_CellReg_env = pd.read_excel(r"E:\Data\cellregs.xlsx", sheet_name='env')
 f_CellReg_day = pd.read_excel(r"E:\Data\cellregs.xlsx", sheet_name='day')
 f_CellReg_reverse = pd.read_excel(r"E:\Data\cellregs.xlsx", sheet_name='reverse')
+f_CellReg_day_hairpin = pd.read_excel(r"E:\Data\cellregs.xlsx", sheet_name='day_hairpin')
 
 f_decode = pd.read_excel(r"E:\Data\Simulation_pc\cross_maze_decode.xlsx", sheet_name='Lap-wise')
 f_decode_shuffle = pd.read_excel(r"E:\Data\Simulation_pc\cross_maze_decode.xlsx", sheet_name='Shuffle')

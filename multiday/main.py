@@ -248,26 +248,44 @@ def field_tracker(trace: dict, overlap_thre: float = 0.6):
 def run_all_mice_multiday(
     i: int,
     f: pd.DataFrame = f_CellReg_day,
-    overlap_thre: float = 0.75
+    overlap_thre: float = 0.75,
+    index_map: np.ndarray | None = None,
+    cellreg_dir: str | None = None,
+    mouse: int | None = None,
+    stage: str | None = None,
+    session: int | None = None,
+    maze_type: int | None = None,
+    behavior_paradigm: str | None = None
 ):
-    if f['maze_type'][i] == 0:
-        return f
+
     
-    line = i
-    cellreg_dir = f['cellreg_folder'][i]
-    mouse = int(f['MiceID'][i])
-    stage = f['Stage'][i]
-    session = int(f['session'][i])
-    maze_type = int(f['maze_type'][i])
-    behavior_paradigm = f['paradigm'][i]
+    if index_map is None:
+        if f['maze_type'][i] == 0:
+            return f
+        line = i
+        cellreg_dir = f['cellreg_folder'][i]
+        mouse = int(f['MiceID'][i])
+        stage = f['Stage'][i]
+        session = int(f['session'][i])
+        maze_type = int(f['maze_type'][i])
+        behavior_paradigm = f['paradigm'][i]
     
-    index_map = GetMultidayIndexmap(
-        mouse,
-        stage=stage,
-        session=session,
-        i = i,
-        occu_num=2
-    )
+        index_map = GetMultidayIndexmap(
+            mouse,
+            stage=stage,
+            session=session,
+            i = i,
+            occu_num=2
+        )
+    else:
+        assert mouse is not None
+        assert stage is not None
+        assert session is not None
+        assert maze_type is not None
+        assert behavior_paradigm is not None
+        assert cellreg_dir is not None
+        
+        
     # Initial basic elements
     n_neurons = index_map.shape[1]
     n_sessions = index_map.shape[0]    
@@ -457,7 +475,42 @@ def run_all_mice_multiday(
 if __name__ == "__main__":
     idx = np.where((f_CellReg_day['maze_type'] != 0))[0]
     #run_all_mice_multiday(i=12, overlap_thre=0.7)
+    """
+    f = pd.read_excel(r"E:\Data\maze_learning\PlotFigures\STAT_CellReg\caiman10227.xlsx", sheet_name='cellreg-14')
+    index_map = np.zeros((26, len(f)))
+    dates = [ 20230806, 20230808, 20230810, 20230812, 
+              20230814, 20230816, 20230818, 20230820, 
+              20230822, 20230824, 20230827, 20230829,
+              20230901,
+              20230906, 20230908, 20230910, 20230912, 
+              20230914, 20230916, 20230918, 20230920, 
+              20230922, 20230924, 20230926, 20230928, 
+              20230930]
+    for i, day in enumerate(dates):
+        index_map[i, :] = f[day][:]
+    
+    index_map[np.isnan(index_map)] = 0
+    """
+    with open(r"E:\Data\maze_learning\PlotFigures\STAT_CellReg\index_map_10227Maze1.pkl", 'rb') as handle:
+        index_map = pickle.load(handle)
+        
+    mat = np.where(index_map>0, 1, 0)
+    num = np.sum(mat, axis = 0)
+    index_map = index_map[:, np.where(num >= 2)[0]]
+        
+    run_all_mice_multiday(
+        i=0,
+        index_map=index_map,
+        overlap_thre=0.6,
+        cellreg_dir=r"E:\Data\maze_learning\PlotFigures\STAT_CellReg\10227\a.xlsx",
+        mouse=10227,
+        stage='Stage 1+2',
+        session=2,
+        maze_type=1,
+        behavior_paradigm="CrossMaze"
+    )
 
+"""
     for i in range(37, len(f_CellReg_day)):
         if f_CellReg_day['include'][i] == 0 or f_CellReg_day['maze_type'][i] == 0:
             continue
@@ -465,7 +518,7 @@ if __name__ == "__main__":
         print(i)
         run_all_mice_multiday(i, f_CellReg_day, overlap_thre=0.6)
         
-        """
+
         with open(f_CellReg_day['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
             
@@ -473,7 +526,7 @@ if __name__ == "__main__":
         
         with open(f_CellReg_day['Trace File'][i], 'wb') as handle:
             pickle.dump(trace, handle)
-        """
-    """
-    """
+
+    
+"""
         

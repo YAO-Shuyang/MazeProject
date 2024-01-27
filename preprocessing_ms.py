@@ -1576,9 +1576,12 @@ def field_register(trace: dict) -> dict:
     for i in range(is_pc.shape[0]):
         if is_pc[i] == 1:
             for j, k in enumerate(trace['place_field_all'][i].keys()):
-                field_reg.append([i, j, k, len(trace['place_field_all'][i][k])])
+                fcs = trace['FSCList'][i][k] if 'FSCList' in trace.keys() else np.nan
+                oec = trace['OECList'][i][k] if 'OECList' in trace.keys() else np.nan
+                rate = trace['smooth_map_all'][i][k-1] if 'smooth_map_all' in trace.keys() else np.nan
+                field_reg.append([i, j, k, len(trace['place_field_all'][i][k]), rate, fcs, oec])
     
-    trace['field_reg'] = np.array(field_reg, np.int64)
+    trace['field_reg'] = np.array(field_reg, np.float64)
     return trace
 
 # ------------------------------------------------------------------------ 主程序 -------------------------------------------------------------------------------------

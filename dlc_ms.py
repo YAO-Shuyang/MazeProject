@@ -12,9 +12,10 @@ import gc
 from mylib.preprocessing_ms import plot_split_trajectory, Generate_SilentNeuron, calc_ratemap, place_field, Delete_InterLapSpike
 from mylib.preprocessing_ms import shuffle_test, RateMap, QuarterMap, OldMap, SimplePeakCurve, TraceMap, LocTimeCurve, PVCorrelationMap
 from mylib.preprocessing_ms import CrossLapsCorrelation, OldMapSplit, FiringRateProcess, calc_ms_speed, plot_spike_monitor
-from mylib.preprocessing_ms import half_half_correlation, odd_even_correlation, coverage_curve, CombineMap, plot_field_arange
+from mylib.preprocessing_ms import half_half_correlation, odd_even_correlation, coverage_curve, CombineMap, plot_field_arange, field_register
 from mylib.preprocessing_ms import calc_speed, uniform_smooth_speed, field_specific_correlation, Clear_Axes, DrawMazeProfile, add_perfect_lap
 from mylib.preprocessing_ms import get_spike_frame_label, ComplexFieldAnalyzer, RateMapIncludeIP, TraceMapIncludeIP, count_field_number
+from mylib.field.within_field import within_field_half_half_correlation, within_field_odd_even_correlation
 from mylib.maze_utils3 import SpikeType, SpikeNodes, SmoothMatrix, mkdir
 from mylib.calcium.firing_rate import calc_rate_map_properties
 import matplotlib.pyplot as plt
@@ -242,8 +243,21 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     
     print("      G. In Field Correlation")
     trace = field_specific_correlation(trace)
-
     
+    trace['FSCList'] = within_field_half_half_correlation(
+        trace['smooth_map_fir'],
+        trace['smooth_map_sec'],
+        trace['place_field_all']
+    )
+    
+    trace['OECList'] = within_field_odd_even_correlation(
+        trace['smooth_map_odd'],
+        trace['smooth_map_evn'],
+        trace['place_field_all']
+    )
+    
+    trace = field_register(trace)
+
     trace['processing_time'] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
     path = os.path.join(trace['p'],"trace.pkl")
     print("    ",path)

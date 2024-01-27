@@ -4,6 +4,9 @@ from scipy.stats import poisson, norm, nbinom, kstest, ks_2samp, anderson, ander
 from scipy.stats import linregress, pearsonr, chisquare, ttest_1samp, ttest_ind
 from scipy.stats import ttest_rel, levene
 
+poisson.cdf()
+norm.cdf()
+nbinom.cdf()
 # Fig 0028 Field Distribution Statistic Test Against Poisson Distribution
 def FieldDistributionStatistics_HairpinInterface(
     trace: dict,
