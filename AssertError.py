@@ -15,7 +15,8 @@ def VariablesInputErrorCheck(input_variable:list = [], check_variable:list = [])
         return True
     else:
         print("VariablesInputError! You need to check the input variable_name! or it'll return a ERROR!")
-        print("The correct form is:",check_variable)
+        print("The correct form is:", check_variable)
+        print(f"instead of         ", input_variable)
         assert False
 
 # Report location of error.
@@ -30,5 +31,6 @@ def ValueErrorCheck(input_variable, check_variable: list = []):
     if input_variable in check_variable:
         return True
     else:
-        print("ValueError! the input variable is not valid! Only the following values are valid:\n",check_variable)
+        print(f"ValueError! the input variable is not valid! Only the {check_variable} are valid, instead of:")
+        print(input_variable)
         assert False

@@ -6,6 +6,7 @@ from scipy.stats import linregress, pearsonr, chisquare, ttest_1samp, ttest_ind
 from scipy.stats import ttest_rel, levene, spearmanr
 from mylib.stats.kstest import poisson_kstest, normal_kstest, nbinom_kstest
 from mylib.behavior.correct_rate import lapwise_behavioral_score
+from mylib.stats.indeptest import indept_field_properties, indept_field_properties_mutual_info
 
 # Fig0007 Cell Number
 def CellNumber_Interface(trace: dict, spike_threshold = 30, variable_names = None, is_placecell = False):
@@ -444,25 +445,14 @@ def FieldCentersToStart_Interface(trace = {}, spike_threshold = 30, variable_nam
 
 
 # Fig0030 Decoding Error Figure
-def NeuralDecodingResults_Interface(trace: dict, spike_threshold = 10, variable_names = None, is_placecell = False, maze_type: int = None):
-    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Error', 'Is Perfect'])
+def NeuralDecodingResults_Interface(trace: dict, spike_threshold = 10, variable_names = None, is_placecell = False):
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Error'])
     
     pred, test = trace['y_pred'].astype(np.int64), trace['y_test'].astype(np.int64)
+    maze_type = trace['maze_type']
     D48 = GetDMatrices(maze_type=maze_type, nx=48)
-    if maze_type == 0:
-        return D48[(pred-1, test-1)], np.repeat(-1, pred.shape[0])
     
-    D = GetDMatrices(maze_type=maze_type, nx=12)
-    CP = correct_paths[int(maze_type)]
-    traj = spike_nodes_transform(test, 12)
-    
-    is_perfect = 1
-    for i in range(traj.shape[0]-1):
-        if D[traj[i+1]-1, 0] < D[traj[i]-1, 0] or traj[i] not in CP:
-            is_perfect = 0
-            break
-    
-    return D48[(pred-1, test-1)], np.repeat(is_perfect, pred.shape[0])
+    return [np.median(D48[(pred-1, test-1)])]
 
 
 # Fig0033 Peak Velocity
@@ -1524,6 +1514,74 @@ def IndeptTestForPositionAndRate_Interface(
     
     return np.array([statistics]), np.array([pvalue]), np.array([r]), np.array([pearsonp]), np.array([s]), np.array([spearmanp])
 
+# Fig0408 Statistic independence test for sibling fields' property.
+def FieldPropertyIndependence_Chi2_MI_DoubleCheck_Interface(
+    trace: dict,
+    variable_names: list or None = None,
+    spike_threshold: int or float = 10,
+):
+    VariablesInputErrorCheck(input_variable=variable_names, 
+                             check_variable=['Chi2 Statistic', 'Mutual Information', 'Field Pair Type', 'Variable', 'Pair Num'])
+    stab_sib, stab_non = [], []
+    size_sib, size_non = [], []
+    rate_sib, rate_non = [], []
+    
+    field_reg = trace['field_reg']
+    for i in range(field_reg.shape[0]):
+        for j in range(field_reg.shape[0]):
+            if i == j:
+                continue
+            
+            if field_reg[i, 0] == field_reg[j, 0]:
+                stab_sib.append([field_reg[i, 5], field_reg[j, 5]])
+                size_sib.append([field_reg[i, 3], field_reg[j, 3]])
+                rate_sib.append([field_reg[i, 4], field_reg[j, 4]])
+            else:
+                stab_non.append([field_reg[i, 5], field_reg[j, 5]])
+                size_non.append([field_reg[i, 3], field_reg[j, 3]])
+                rate_non.append([field_reg[i, 4], field_reg[j, 4]])
+                
+    stab_sib = np.array(stab_sib, np.float64)
+    stab_non = np.array(stab_non, np.float64)[np.random.randint(0, len(stab_non), len(stab_sib)), :]
+    size_sib = np.array(size_sib, np.int64)
+    size_non = np.array(size_non, np.int64)[np.random.randint(0, len(size_non), len(size_sib)), :]
+    rate_sib = np.array(rate_sib, np.float64)
+    rate_non = np.array(rate_non, np.float64)[np.random.randint(0, len(rate_non), len(rate_sib)), :]
+    
+    stat_stab_sib, stat_stab_non, len_stab_sib, len_stab_non = indept_field_properties(
+        real_distribution=field_reg[:, 5],
+        X_pairs=stab_sib,
+        Y_pairs=stab_non,
+        n_bin=40
+    )
+    mi_stab_sib, mi_stab_non, _, _ = indept_field_properties_mutual_info(stab_sib, stab_non)
+    
+    stat_size_sib, stat_size_non, len_size_sib, len_size_non = indept_field_properties(
+        real_distribution=field_reg[:, 3],
+        X_pairs=size_sib,
+        Y_pairs=size_non,
+        n_bin=40
+    )
+    mi_size_sib, mi_size_non, _, _ = indept_field_properties_mutual_info(size_sib, size_non)
+    
+    stat_rate_sib, stat_rate_non, len_rate_sib, len_rate_non = indept_field_properties(
+        real_distribution=field_reg[:, 4],
+        X_pairs=rate_sib,
+        Y_pairs=rate_non,
+        n_bin=40
+    )
+    mi_rate_sib, mi_rate_non, _, _ = indept_field_properties_mutual_info(rate_sib, rate_non)
+    
+    print("  Stabilty: ", stat_stab_sib, stat_stab_non, "   MI: ", mi_stab_sib, mi_stab_non)
+    print("  Size: ", stat_size_sib, stat_size_non, "   MI: ", mi_size_sib, mi_size_non)
+    print("  Rate: ", stat_rate_sib, stat_rate_non, "   MI: ", mi_rate_sib, mi_rate_non)
+    
+    
+    return ([stat_stab_sib, stat_stab_non, stat_size_sib, stat_size_non, stat_rate_sib, stat_rate_non],
+            [mi_stab_sib, mi_stab_non, mi_size_sib, mi_size_non, mi_rate_sib, mi_rate_non],
+            ['Sibling', 'Non-sibling', 'Sibling', 'Non-sibling', 'Sibling', 'Non-sibling'],
+            ['Stability', 'Stability', 'Size', 'Size', 'Rate', 'Rate'],
+            [len_stab_sib, len_stab_non, len_size_sib, len_size_non, len_rate_sib, len_rate_non])
 
 # Fig0064
 def PlaceFieldNum_Reverse_Interface(
@@ -1534,6 +1592,21 @@ def PlaceFieldNum_Reverse_Interface(
     VariablesInputErrorCheck(input_variable=variable_names,
                              check_variable=['Field Number', 'Direction'])
     return [np.nanmean(trace['cis']['place_field_num']), np.nanmean(trace['trs']['place_field_num'])], ['Cis', 'Trs']
+
+def LapwiseDistance_Reverse_Interface(
+    trace: dict,
+    variable_names: list or None = None,
+    spike_threshold: int or float = 10,
+):
+    VariablesInputErrorCheck(input_variable=variable_names,
+                             check_variable=['Lap-wise Distance', 'LapID'])
+    beg, end = LapSplit(trace, trace['paradigm'])
+    dist = np.zeros(beg.shape[0], np.float64)
+    for i in range(beg.shape[0]):
+        x, y = trace['correct_pos'][beg[i]:end[i]+1, 0], trace['correct_pos'][beg[i]:end[i]+1, 1]
+        dx, dy = np.ediff1d(x), np.ediff1d(y)
+        dist[i] = np.nansum(np.sqrt(dx**2, dy**2))
+    return dist, np.arange(1, beg.shape[0]+1)
 
 def PlaceFieldOverlapProportion_Interface(
     trace: dict,

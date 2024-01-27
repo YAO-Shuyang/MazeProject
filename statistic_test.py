@@ -217,8 +217,12 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
             continue
 
         # if maze_type is not we want, continue
-        if trace['maze_type'] not in legal_maze_type and follow:
-            continue
+        
+        if 'maze_type' in trace.keys():
+            if trace['maze_type'] not in legal_maze_type and follow:
+                continue
+        else:
+            trace['maze_type'] = int(f['maze_type'][i])
         
         # Running funcitons to get variables we want to analysis.
         results = function(trace, variable_names = variable_names, **func_kwgs)
@@ -233,7 +237,10 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
         stage = str(f['Stage'][i])
 
         # Generating data.
-        mazes = 'Maze '+str(trace['maze_type']) if trace['maze_type'] in [1,2] else 'Open Field'
+        if behavior_paradigm in ['HairpinMaze']:
+            mazes = 'HairpinMaze'
+        else:
+            mazes = 'Maze '+str(trace['maze_type']) if trace['maze_type'] in [1,2] else 'Open Field'
         data['MiceID'] = np.concatenate([data['MiceID'], np.repeat(int(f['MiceID'][i]), length)])
         data['Maze Type'] = np.concatenate([data['Maze Type'], np.repeat(mazes, length)])
         data['Training Day'] = np.concatenate([data['Training Day'], np.repeat(training_day, length)])

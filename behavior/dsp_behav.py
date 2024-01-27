@@ -135,7 +135,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
     
     # 2. Data cleaning by deleting several frames near the start point and the end point.
     print("    Data cleaning...")
-
+    print("Width:", np.nanmax(behav_positions[:,0])-np.nanmin(behav_positions[:,0]), "Height:", np.nanmax(behav_positions[:,1])-np.nanmin(behav_positions[:,1]))
     # data cleaning 1:
     behav_positions, behav_time = clean_data(behav_positions, behav_time, maze_type = maze_type, delete_start=0, delete_end=0, save_loc=p_behav)
     # Add NAN value at the cross lap gap to plot the trajactory.

@@ -310,8 +310,8 @@ class MultiDayLayout:
              
         for i in cell_pairs:
             cell_indices = index_map[:, i]
-            print("    Cell Indices: ", cell_indices)
-            print(f"{i}/{len(cell_pairs)}, cell num = {cell_indices.shape[0]}")
+            print("Cell Indices: ", cell_indices)
+            print(f"   {i}/{len(cell_pairs)}, cell num = {np.count_nonzero(cell_indices)}")
             core2 = MultiDayCore.concat_core(f, file_indices, cell_indices, core=core, interv_time=interv_time)
             Visualizer = MultiDayLayout(f, file_indices, cell_indices, core=core2, **layout_kw)   
             Visualizer.visualize(
@@ -323,7 +323,6 @@ class MultiDayLayout:
                 is_show=is_show, 
                 **kwargs
             )
-        del Visualizer
         
 class MultiDayLayout2:
     def __init__(
