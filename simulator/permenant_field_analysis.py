@@ -219,7 +219,7 @@ if __name__ == '__main__':
     import os
     from mylib.local_path import figdata
     from mylib.statistic_test import *
-    from mylib.multiday.field_tracker import conditional_prob
+    from field.field_tracker import conditional_prob
     
     loc = os.path.join(figdata, "PermenantFieldAnalysis")
     if os.path.exists(loc)==False:

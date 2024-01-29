@@ -5,7 +5,7 @@ import copy as cp
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-from mylib.multiday.field_tracker import conditional_prob
+from field.field_tracker import conditional_prob
 from mylib.maze_utils3 import Sigmoid, SigmoidFit, Exponential, ExponentialFit
 
 class FieldImputation(object):
