@@ -7,7 +7,7 @@ import pickle
 import gc
 
 from mylib.maze_utils3 import mkdir, DrawMazeProfile, spike_nodes_transform, Clear_Axes, correct_paths, maze_graphs
-from mylib.multiday.field_tracker import field_register
+from field.field_tracker import field_register
 from mylib.statistic_test import GetMultidayIndexmap
 from mylib.divide_laps.lap_split import LapSplit
 from mylib.multiday.core import MultiDayCore
