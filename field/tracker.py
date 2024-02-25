@@ -1,8 +1,8 @@
 import numpy as np
 import warnings
 import pandas as pd
-from mylib.local_path import f1, f_CellReg_day
-from mylib.statistic_test import GetMultidayIndexmap
+from mylib.local_path import f1, f_CellReg_day, f3, f4
+from mylib.statistic_test import GetMultidayIndexmap, ReadCellReg
 from mylib.multiday.core import MultiDayCore
 from mylib.local_path import f1, f_CellReg_day
 from tqdm import tqdm
@@ -113,18 +113,18 @@ class Field(object):
         # Criterion 1: Have 60% or more overlapping with the most recently detected fields
         return self._is_overlap(self._area[active_idx[-1]], area)
         
+        """
         # Criterion 2: It should have overlap with 50% or more the remaining detected fields.
         prev_overlap = 1
         for i in range(len(active_idx)):
             if np.intersect1d(self._area[active_idx[i]], area).shape[0] > 0:
                 prev_overlap += 1
-        return True
         
-        if prev_overlap/active_idx.shape[0] < 0.1:
+        if prev_overlap/active_idx.shape[0] < 0.2:
             return False
         else:  
             return True
-        
+        """
     def register(self, is_detected):
         if self.curr_session != self._total_session-1:
             warnings.warn(
@@ -350,6 +350,16 @@ def main(
         assert maze_type is not None
         assert behavior_paradigm is not None
         assert cellreg_dir is not None
+        direction = None if behavior_paradigm == 'CrossMaze' else 'cis'
+        
+    if behavior_paradigm == 'CrossMaze':
+        fdata = f1
+    elif behavior_paradigm == 'ReverseMaze':
+        fdata = f3
+    elif behavior_paradigm == 'HairpinMaze':
+        fdata = f4
+    else:
+        raise ValueError(f"Paradigm {behavior_paradigm} is not supported.")
         
         
     # Initial basic elements
@@ -358,18 +368,23 @@ def main(
 
     # Get information from daily trace.pkl
     core = MultiDayCore(
-        keys = ['is_placecell', 'place_field_all_multiday']
+        keys = ['is_placecell', 'place_field_all_multiday'],
+        paradigm=behavior_paradigm,
+        direction=direction
     )
-    file_indices = np.where((f1['MiceID'] == mouse) & (f1['Stage'] == stage) & (f1['session'] == session))[0]
+    file_indices = np.where((fdata['MiceID'] == mouse) & (fdata['Stage'] == stage) & (fdata['session'] == session))[0]
     
     if mouse in [11095, 11092]:
         file_indices = file_indices[3:]
     
     if stage == 'Stage 1+2':
-        file_indices = np.where((f1['MiceID'] == mouse) & (f1['session'] == session) & ((f1['Stage'] == 'Stage 1') | (f1['Stage'] == 'Stage 2')))[0]
+        file_indices = np.where((fdata['MiceID'] == mouse) & (fdata['session'] == session) & ((fdata['Stage'] == 'Stage 1') | (fdata['Stage'] == 'Stage 2')))[0]
+        
+    if stage == 'Stage 1' and mouse in [10212] and session == 2:
+        file_indices = np.where((fdata['MiceID'] == mouse) & (fdata['session'] == session) & (fdata['Stage'] == 'Stage 1') & (fdata['date'] != 20230506))[0]
         
     print(file_indices, mouse, stage, session)
-    res = core.get_trace_set(f=f1, file_indices=file_indices, keys=['is_placecell', 'place_field_all_multiday'])
+    res = core.get_trace_set(f=fdata, file_indices=file_indices, keys=['is_placecell', 'place_field_all_multiday'])
     
     is_placecell = np.full((n_sessions, n_neurons), np.nan)
     place_field_all = [[] for _ in range(n_neurons)]
@@ -393,39 +408,97 @@ def main(
               "n_neurons": n_neurons, "n_sessions": n_sessions, "maze_type": maze_type,
              "index_map": index_map.astype(np.int64)}
 
-    with open(os.path.join(os.path.dirname(os.path.dirname(cellreg_dir)), "trace_mdays_conc.pkl"), 'wb') as handle:
-        print(type(trace['is_placecell']), os.path.join(os.path.dirname(os.path.dirname(cellreg_dir)), "trace_mdays_conc.pkl"))
+    with open(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc.pkl"), 'wb') as handle:
+        print(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc.pkl"))
         pickle.dump(trace, handle)
         
     del res
-    del trace
     gc.collect()
-            
-if __name__ == "__main__":  
-    """
-        
-
-    """
-    with open(r"E:\Data\maze_learning\PlotFigures\STAT_CellReg\10224\neuromatch_res.pkl", 'rb') as handle:
-        index_map = pickle.load(handle)
     
-    index_map[np.where((index_map < 0)|np.isnan(index_map))] = 0
-    mat = np.where(index_map>0, 1, 0)
-    num = np.sum(mat, axis = 0)
-    index_map = index_map[:, np.where(num >= 2)[0]]  
-    print(index_map.shape)
-    main(
-        i=0,
+    if behavior_paradigm == 'CrossMaze':
+        del trace
+        return
+    else:
+        DATA = {"MiceID": mouse, "Stage": stage, "session": session, "maze_type": maze_type, "paradigm": behavior_paradigm,
+                "cis":{"is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info},
+                "n_neurons": n_neurons, "n_sessions": n_sessions, "maze_type": maze_type,
+                "index_map": index_map.astype(np.int64)}
+    
+    n_neurons = index_map.shape[1]
+    n_sessions = index_map.shape[0]    
+
+    # Get information from daily trace.pkl
+    core = MultiDayCore(
+        keys = ['is_placecell', 'place_field_all_multiday'],
+        paradigm=behavior_paradigm,
+        direction='trs'
+    )
+        
+    res = core.get_trace_set(f=fdata, file_indices=file_indices, keys=['is_placecell', 'place_field_all_multiday'])
+    
+    is_placecell = np.full((n_sessions, n_neurons), np.nan)
+    place_field_all = [[] for _ in range(n_neurons)]
+    for j in range(n_neurons):
+        for i in range(n_sessions):
+            if index_map[i, j] > 0:
+                is_placecell[i, j] = res['is_placecell'][i][int(index_map[i, j])-1]
+                place_field_all[j].append(res['place_field_all_multiday'][i][int(index_map[i, j])-1])
+            else:
+                place_field_all[j].append(None)
+    print("Field Register...")            
+    field_reg, field_info = Tracker.field_register(
         index_map=index_map,
-        overlap_thre=0.6,
-        cellreg_dir=r"E:\Data\maze_learning\PlotFigures\STAT_CellReg\10224\b\a.xlsx",
-        mouse=10224,
-        stage='Stage 1+2',
-        session=2,
-        maze_type=1,
-        behavior_paradigm="CrossMaze"
+        place_field_all=place_field_all,
+        is_placecell=is_placecell,
+        overlap_thre=overlap_thre
     )
     
+    DATA['trs'] = {"is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info}
+    with open(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc.pkl"), 'wb') as handle:
+        print(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc.pkl"))
+        pickle.dump(DATA, handle)
+
+
+if __name__ == "__main__":  
+    from mylib.local_path import f_CellReg_modi as f
+    
+    for i in range(len(f)):
+        
+        if f['paradigm'][i] == 'CrossMaze':
+            if f['maze_type'][i] == 0:
+                index_map = GetMultidayIndexmap(
+                    mouse=f['MiceID'][i],
+                    stage=f['Stage'][i],
+                    session=f['session'][i],
+                    occu_num=2
+                )
+            else:
+                with open(f['cellreg_folder'][i], 'rb') as handle:
+                    index_map = pickle.load(handle)
+        else:
+            index_map = ReadCellReg(f['cellreg_folder'][i])
+            
+    # with open(r"E:\Data\maze_learning\PlotFigures\STAT_CellReg\10224\neuromatch_res.pkl", 'rb') as handle:
+    #     index_map = pickle.load(handle)
+    
+        index_map[np.where((index_map < 0)|np.isnan(index_map))] = 0
+        mat = np.where(index_map>0, 1, 0)
+        num = np.sum(mat, axis = 0)
+        index_map = index_map[:, np.where(num >= 2)[0]]  
+        print(index_map.shape)
+        main(
+            i=i,
+            f=f,
+            index_map=index_map,
+            overlap_thre=0.6,
+            cellreg_dir=f['cellreg_folder'][i],
+            mouse=f['MiceID'][i],
+            stage=f['Stage'][i],
+            session=f['session'][i],
+            maze_type=f['maze_type'][i],
+            behavior_paradigm=f['paradigm'][i]
+        )
+    """
     with open(r"E:\Data\maze_learning\PlotFigures\STAT_CellReg\trace_mdays_conc.pkl", 'rb') as handle:
         trace = pickle.load(handle)
         
@@ -435,3 +508,4 @@ if __name__ == "__main__":
         is_placecell=trace['is_placecell']
     )
     print(field_reg[:, :4])
+    """

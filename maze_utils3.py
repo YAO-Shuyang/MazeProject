@@ -1765,3 +1765,8 @@ def field_reallocate(centers_pool: np.ndarray, field: dict, maze_type: int):
         
         field_area = np.intersect1d(field_area, shuffle_field[CENTER])
     return shuffle_field
+
+
+def init_connected_matrix(maze_type: int, nx: int = 12):
+    pass    
+    
