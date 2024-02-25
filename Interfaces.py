@@ -64,6 +64,21 @@ def FiringRateProcess_Interface(trace = {}, spike_threshold = 10, variable_names
     
     return peak_rate, mean_rate, is_placecell
 
+# Fig0015/14
+# FiringRateProcess's interface for data analysis. Fig0015.
+def FieldPeakRateStatistic_Interface(trace = {}, spike_threshold = 10, variable_names = None, is_placecell = True):
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['peak_rate'])
+    KeyWordErrorCheck(trace, __file__, ['is_placecell', 'Spikes'])
+    
+    #trace = FiringRateProcess(trace, map_type = 'smooth', spike_threshold = spike_threshold)
+    peak_rate = []
+    for i in range(trace['n_neuron']):
+        if trace['is_placecell'][i] == 1:
+            for k in trace['place_field_all'][i].keys():
+                peak_rate.append(trace['smooth_map_all'][i, k-1])
+    
+    return np.array(peak_rate, np.float64)
+
 # Fig0016&17
 # Generate spatial information map Fig0016
 def SpatialInformation_Interface(trace = {}, spike_threshold = 10, variable_names = None, is_placecell = True):
@@ -456,8 +471,8 @@ def NeuralDecodingResults_Interface(trace: dict, spike_threshold = 10, variable_
 
 
 # Fig0033 Peak Velocity
-def PeakVelocity_Interface(trace: dict, spike_threshold: int or float = 10, 
-                           variable_names: list or None = None, 
+def PeakVelocity_Interface(trace: dict, spike_threshold: int | float = 10, 
+                           variable_names: list | None = None, 
                            is_placecell: bool = False):
     KeyWordErrorCheck(trace, __file__, ['behav_nodes', 'behav_speed', 'n_neuron', 'old_map_clear'])
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Cell', 'velocity'])
@@ -481,8 +496,8 @@ def PeakVelocity_Interface(trace: dict, spike_threshold: int or float = 10,
     return np.array(cell_id, dtype=np.int64), np.array(velocity, dtype=np.float64)
 
 
-def Coverage_Interface(trace: dict, spike_threshold: int or float = 10, 
-                           variable_names: list or None = None, 
+def Coverage_Interface(trace: dict, spike_threshold: int | float = 10, 
+                           variable_names: list | None = None, 
                            is_placecell: bool = False):   
     KeyWordErrorCheck(trace, __file__, ['processed_pos_new'])
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Coverage', 'Bin Number'])
@@ -499,8 +514,8 @@ def Coverage_Interface(trace: dict, spike_threshold: int or float = 10,
 
 
 
-def Speed_Interface(trace: dict, spike_threshold: int or float = 10, 
-                           variable_names: list or None = None, 
+def Speed_Interface(trace: dict, spike_threshold: int | float = 10, 
+                           variable_names: list | None = None, 
                            is_placecell: bool = False):
     if 'correct_speed' not in trace.keys():
         correct_speed = calc_speed(behav_positions = trace['correct_pos']/10, behav_time = trace['correct_time'])
@@ -524,8 +539,8 @@ def Speed_Interface(trace: dict, spike_threshold: int or float = 10,
         
     return mean_speed, np.arange(1, CP.shape[0]+1)
 
-def InterSessionCorrelation_Interface(trace: dict, spike_threshold: int or float = 10, 
-                           variable_names: list or None = None, 
+def InterSessionCorrelation_Interface(trace: dict, spike_threshold: int | float = 10, 
+                           variable_names: list | None = None, 
                            is_placecell: bool = False):
     if 'laps' not in trace.keys():
         trace = CrossLapsCorrelation(trace, behavior_paradigm = trace['paradigm'])
@@ -544,8 +559,8 @@ def InterSessionCorrelation_Interface(trace: dict, spike_threshold: int or float
 
 from scipy.stats import poisson, norm
 # Fig0039
-def KSTestPoisson_Interface(trace: dict, spike_threshold: int or float = 10, 
-                           variable_names: list or None = None, cell_num_bound: int = 50,
+def KSTestPoisson_Interface(trace: dict, spike_threshold: int | float = 10, 
+                           variable_names: list | None = None, cell_num_bound: int = 50,
                            is_placecell: bool = True):
     
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Statistic', 'PValue'])   
@@ -560,8 +575,8 @@ def KSTestPoisson_Interface(trace: dict, spike_threshold: int or float = 10,
     return [sta], [p]
 
 #Fig0039-2
-def KSTestNormal_Interface(trace: dict, spike_threshold: int or float = 10, 
-                           variable_names: list or None = None, cell_num_bound: int = 50,
+def KSTestNormal_Interface(trace: dict, spike_threshold: int | float = 10, 
+                           variable_names: list | None = None, cell_num_bound: int = 50,
                            is_placecell: bool = True):
     
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Statistic', 'PValue'])   
@@ -577,8 +592,8 @@ def KSTestNormal_Interface(trace: dict, spike_threshold: int or float = 10,
     return [sta], [p]
 
 # Fig0040
-def FieldNumber_InSessionStability_Interface(trace: dict, spike_threshold: int or float = 10, 
-                                             variable_names: list or None = None, 
+def FieldNumber_InSessionStability_Interface(trace: dict, spike_threshold: int | float = 10, 
+                                             variable_names: list | None = None, 
                                              is_placecell: bool = True):
     if 'laps' not in trace.keys():
         trace = CrossLapsCorrelation(trace, behavior_paradigm = trace['paradigm'])
@@ -598,8 +613,8 @@ def FieldNumber_InSessionStability_Interface(trace: dict, spike_threshold: int o
 
 
 # Fig0041
-def InFieldCorrelation_Interface(trace: dict, spike_threshold: int or float = 10, 
-                                             variable_names: list or None = None, 
+def InFieldCorrelation_Interface(trace: dict, spike_threshold: int | float = 10, 
+                                             variable_names: list | None = None, 
                                              is_placecell: bool = True):
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Center ID', 'Field Size', 'Center Rate', 
                                                                                 'In-field OEC', 'In-field FSC', 'Path Type'])
@@ -635,8 +650,8 @@ def InFieldCorrelation_Interface(trace: dict, spike_threshold: int or float = 10
             np.array(path, dtype = np.int64))
 
 # Fig0044
-def PVCorrelations_Interface(trace: dict, spike_threshold: int or float = 10, 
-                                             variable_names: list or None = None, 
+def PVCorrelations_Interface(trace: dict, spike_threshold: int | float = 10, 
+                                             variable_names: list | None = None, 
                                              is_placecell: bool = True):
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Std OEC', 'Mean OEC', 'CP Std OEC', 'CP Mean OEC', 'IP Std OEC', 'IP Mean OEC',
                                                                                 'Std FSC', 'Mean FSC', 'CP Std FSC', 'CP Mean FSC', 'IP Std FSC', 'IP Mean FSC'])
@@ -705,8 +720,8 @@ from mylib.calcium.field_criteria import GetPlaceField
 #Fig0048 Place Field Criteria
 def PlaceFieldNumberWithCriteria_Interface(
     trace: dict, 
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None, 
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None, 
     is_placecell: bool = True
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Field Number', 'criteria', 'x'])
@@ -743,8 +758,8 @@ def PlaceFieldNumberWithCriteria_Interface(
 # Fig0048-2 First-second half stability
 def PlaceFieldFSCStabilityWithCriteria_Interface(
     trace: dict, 
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None, 
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None, 
     is_placecell: bool = True
 ):
 
@@ -817,8 +832,8 @@ def PlaceFieldFSCStabilityWithCriteria_Interface(
 #Fig 0050 Lapwise travel distance
 def LapwiseTravelDistance_Interface(
     trace: dict, 
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None, 
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None, 
     is_placecell: bool = True,
     field_num_bound: int = 10
 ):
@@ -847,8 +862,8 @@ def LapwiseTravelDistance_Interface(
 #Fig0051
 def AverageVelocity_Interface(
     trace: dict, 
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None, 
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None, 
     is_placecell: bool = True,
     field_num_bound: int = 10
 ):
@@ -885,8 +900,8 @@ def AverageVelocity_Interface(
 
 def FirstExposure_Interface(
     trace: dict, 
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None, 
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None, 
     is_placecell: bool = True
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Average Velocity', 'Time'])
@@ -922,8 +937,8 @@ def FirstExposure_Interface(
 # Fig 0053
 def LapNum_Interface(
     trace: dict, 
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None, 
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None, 
     is_placecell: bool = True
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Lap Num'])
@@ -937,8 +952,8 @@ def LapNum_Interface(
 # Fig 0055
 def LapwiseAverageVelocity_Interface(
     trace: dict, 
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None, 
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None, 
     is_placecell: bool = True
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Lap-wise Average Velocity', 'Lap ID'])
@@ -963,8 +978,8 @@ def LapwiseAverageVelocity_Interface(
 # Fig0057 Mean Rate on Diff Path
 def MeanRateDiffPath_Interface(
     trace: dict, 
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None, 
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None, 
     is_placecell: bool = True
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Mean Rate', 'Path Type'])
@@ -1002,8 +1017,8 @@ def MeanRateDiffPath_Interface(
 # Fig0058 Occupation Time on Correct&Incorrect Track
 def OccupationTimeDiffPath_Interface(
     trace: dict, 
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None, 
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None, 
     is_placecell: bool = True
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Occupation Time Percentage', 'Ratio', 'Bin-wise Mean Time', 'Bin-wise Ratio', 'Path Type'])
@@ -1030,8 +1045,8 @@ def OccupationTimeDiffPath_Interface(
 # Fig0059 - Naive - PVC Half-Half Correlation
 def Naive_PVCHalfHalfCorrelation_Interface(
     trace: dict,
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None, 
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None, 
     is_placecell: bool = False
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['PVC Half-Half Correlation', 'Bin'])
@@ -1054,8 +1069,8 @@ def Naive_PVCHalfHalfCorrelation_Interface(
 from mylib.field.within_field import within_field_half_half_correlation, within_field_odd_even_correlation
 def WithinFieldBasicInfo_Interface(
     trace: dict, 
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None, 
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None, 
     is_placecell: bool = True
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['FSC Stability', 'OEC Stability', 'Field Size', 'Field Length', 'Peak Rate', 'Position'])
@@ -1100,8 +1115,8 @@ def WithinFieldBasicInfo_Interface(
 
 #Fig 04+ Place Cells' Fields Independent Test
 def WithinCellFieldStatistics_Interface(trace: dict, 
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None, 
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None, 
     is_placecell: bool = True,
     field_num_bound: int = 10
 ):
@@ -1199,8 +1214,8 @@ def WithinCellFieldStatistics_Interface(trace: dict,
 # Fig0060
 def PerfectLapIdentify_Interface(
     trace,
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Lap ID', 'Perfect Lap', 'Distance', 'Navigation Time', 'Average Velocity'])
     
@@ -1239,8 +1254,8 @@ def PerfectLapIdentify_Interface(
 
 def PerfectLapPercentage_Interface(
     trace,
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Perfect Lap Percentage'])
     
@@ -1270,8 +1285,8 @@ def PerfectLapPercentage_Interface(
 
 def PlaceCellPercentage_ReverseInterface(
     trace,
-    spike_threshold: int or float = 10,
-    variable_names: list or None = None
+    spike_threshold: int | float = 10,
+    variable_names: list | None = None
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Percentage', 'Direction', 'Cell Number', 'Place Cell Number'])
     return (np.array([np.mean(trace['cis']['is_placecell']), np.mean(trace['trs']['is_placecell'])], np.float64), 
@@ -1284,8 +1299,8 @@ def PlaceCellPercentage_ReverseInterface(
 #Fig0402 Linearized Position
 def ErrorTimesAndFieldFraction_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Error Num', 'Pass Number', 'Error Rate', 'Decision Point'])
     if trace['maze_type'] == 0:
@@ -1297,8 +1312,8 @@ def ErrorTimesAndFieldFraction_Interface(
 # Fig0402 Linearized Position (Over-representation and occupation time)
 def OccupationTimeAndFieldFraction_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Occupation Time', 'Decision Point'])
     if trace['maze_type'] == 0:
@@ -1315,8 +1330,8 @@ def OccupationTimeAndFieldFraction_Interface(
 
 def PlaceFieldCoveredDensity_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Field Num', 'Position'])
     if 'field_reg' not in trace.keys():
@@ -1335,8 +1350,8 @@ def PlaceFieldCoveredDensity_Interface(
 
 def FieldCountPerSession_Interface(
     trace,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Path Type', 'Threshold', 'Field Count', 'Field Number'])
     
@@ -1362,8 +1377,8 @@ def FieldCountPerSession_Interface(
 from mylib.decoder.NaiveBayesianDecoder import NaiveBayesDecoder 
 def CrossMazeDecoder_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
     save_folder: str = r'E:\Data\Simulation_pc\cross_maze_decode_res',
     
 ):
@@ -1400,8 +1415,8 @@ def CrossMazeDecoder_Interface(
 from mylib.stats.indeptest import indeptest
 def IndeptTestForPositionAndFieldLength_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names, 
                              check_variable=['Statistic', 'P-Value', 
@@ -1435,8 +1450,8 @@ def IndeptTestForPositionAndFieldLength_Interface(
 
 def IndeptTestForPositionAndStability_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names, 
                              check_variable=['Statistic', 'P-Value', 
@@ -1478,8 +1493,8 @@ def IndeptTestForPositionAndStability_Interface(
 
 def IndeptTestForPositionAndRate_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names, 
                              check_variable=['Statistic', 'P-Value', 
@@ -1517,8 +1532,8 @@ def IndeptTestForPositionAndRate_Interface(
 # Fig0408 Statistic independence test for sibling fields' property.
 def FieldPropertyIndependence_Chi2_MI_DoubleCheck_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names, 
                              check_variable=['Chi2 Statistic', 'Mutual Information', 'Field Pair Type', 'Variable', 'Pair Num'])
@@ -1586,8 +1601,8 @@ def FieldPropertyIndependence_Chi2_MI_DoubleCheck_Interface(
 # Fig0064
 def PlaceFieldNum_Reverse_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names,
                              check_variable=['Field Number', 'Direction'])
@@ -1595,8 +1610,8 @@ def PlaceFieldNum_Reverse_Interface(
 
 def LapwiseDistance_Reverse_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names,
                              check_variable=['Lap-wise Distance', 'LapID'])
@@ -1610,8 +1625,8 @@ def LapwiseDistance_Reverse_Interface(
 
 def PlaceFieldOverlapProportion_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names,
                              check_variable=['Start Session', 'Interval', 'Cell Pair Number',
@@ -1638,8 +1653,8 @@ def PlaceFieldOverlapProportion_Interface(
 # Fig0066 
 def PlacecellOverlap_Reverse_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Cis Percentage', 'Trs Percentage', 'Overlap Percentage'])
     
@@ -1651,8 +1666,8 @@ def PlacecellOverlap_Reverse_Interface(
 # Fig0067
 def PlaceFieldNumberPerDirection_Reverse_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Field Number', 'Direction'])
     
@@ -1665,8 +1680,8 @@ def PlaceFieldNumberPerDirection_Reverse_Interface(
 # Fig0067
 def PlaceFieldNumberPerDirectionCorr_Reverse_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Corr', 'Shuffle'])
 
@@ -1685,8 +1700,8 @@ def PlaceFieldNumberPerDirectionCorr_Reverse_Interface(
 from mylib.stats.gamma_poisson import gamma_poisson_pdf
 def ModelPlaceFieldNumberPerDirection_Reverse_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10
 ):
     VariablesInputErrorCheck(input_variable=variable_names, 
                              check_variable=['Corr', 'Data Type'])
@@ -1744,8 +1759,8 @@ def ModelPlaceFieldNumberPerDirection_Reverse_Interface(
 # Fig0068
 def PoissonTest_Reverse_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['lam', 'KS Statistics', 'KS P-Value',
                                                                             'r', 'p', 'KS Gamma', 'KS Gamma P-value',
@@ -1796,8 +1811,8 @@ def PoissonTest_Reverse_Interface(
 # Fig0069 
 def PlaceFieldOverlap_Reverse_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
     overlap_thre: float = 0.6
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Cis Number', 'Trs Number', 'Overlap', 'Data Type'])
@@ -1858,8 +1873,8 @@ def PlaceFieldOverlap_Reverse_Interface(
 # Fig0070
 def CellNum_Reverse_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Cell Number', 'Place Cell Number', 'Direction'])
 
@@ -1868,8 +1883,8 @@ def CellNum_Reverse_Interface(
 # Fig0070
 def ActivationRateSpatialPosition_Interface(
     trace: dict,
-    variable_names: list or None = None,
-    spike_threshold: int or float = 10,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
 ):
     if trace['maze_type'] == 0:
         return np.array([]), np.array([]), np.array([]), np.array([])
@@ -1905,4 +1920,60 @@ def ActivationRateSpatialPosition_Interface(
         np.concatenate([act_rate_per, act_rate_err]),
         np.concatenate([np.repeat(1, act_rate_per.shape[0]), np.repeat(0, act_rate_err.shape[0])])
     )
+    
+from mylib.field.field_tracker import conditional_prob
+# Fig0313
+def ConditionalProb_Interface(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=[
+        'Duration', 'Conditional Prob.', 'No Detect Prob.', 
+        'Recover Prob.', 'Re-detect Active Prob.', 'Re-detect Prob.', 'Cumulative Prob.', 'Paradigm', 'On-Next Num'])
+    
+    if trace['paradigm'] == 'CrossMaze':
+        retained_dur, prob, nodetect_prob, recover_prob, redetect_prob, redetect_frac, on_next_num = conditional_prob(trace, thre=4)
+    
+        res = np.nancumprod(prob)*100
+        res[np.isnan(prob)] = np.nan
+        res[0] = 100
+    
+        return (retained_dur, prob*100, nodetect_prob*100, recover_prob*100, redetect_prob*100, redetect_frac*100, res, np.repeat(trace['paradigm'], res.shape[0]), on_next_num)
+    else:
+        retained_dur_cis, prob_cis, nodetect_prob_cis, recover_prob_cis, redetect_prob_cis, redetect_frac_cis, on_next_num_cis = conditional_prob(trace['cis'])
+        retained_dur_trs, prob_trs, nodetect_prob_trs, recover_prob_trs, redetect_prob_trs, redetect_frac_trs, on_next_num_trs = conditional_prob(trace['trs'])
+    
+        res_cis = np.nancumprod(prob_cis)*100
+        res_cis[np.isnan(prob_cis)] = np.nan
+        res_cis[0] = 100
+        res_trs = np.nancumprod(prob_trs)*100
+        res_trs[np.isnan(prob_trs)] = np.nan
+        res_trs[0] = 100
+    
+        return (np.concatenate([retained_dur_cis, retained_dur_trs]), 
+                np.concatenate([prob_cis*100, prob_trs*100]), 
+                np.concatenate([nodetect_prob_cis*100, nodetect_prob_trs*100]), 
+                np.concatenate([recover_prob_cis*100, recover_prob_trs*100]), 
+                np.concatenate([redetect_prob_cis*100, redetect_prob_trs*100]), 
+                np.concatenate([redetect_frac_cis*100, redetect_frac_trs*100]), 
+                np.concatenate([res_cis, res_trs]),
+                np.concatenate([np.repeat(trace['paradigm'] + ' cis', res_cis.shape[0]), np.repeat(trace['paradigm'] + ' trs', res_trs.shape[0])]),
+                np.concatenate([on_next_num_cis, on_next_num_trs]))
+    
+def Superstable_Fraction_Interface(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=[
+        'Duration', 'Superstable Frac.', 'Threshold', 'Drift Model'])
+    superstable_thre = trace['Superstable Thre']
+    
+    dur = np.concatenate([trace['days'] for i in range(superstable_thre.shape[0])])
+    superstable_frac = np.concatenate([trace['Superstable Num'][i, :] for i in range(superstable_thre.shape[0])])
+    thre = np.repeat(superstable_thre, trace['days'].shape[0])
+    
+    return dur, superstable_frac, thre, np.repeat(trace['drift_model'], superstable_frac.shape[0])
+    
     

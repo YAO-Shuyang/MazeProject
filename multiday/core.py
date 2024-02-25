@@ -14,10 +14,20 @@ class MultiDayCore:
         keys: list[str] | None = ['correct_nodes', 'correct_time', 'ms_time_behav', 'Spikes',
                                   'correct_pos', 'smooth_map_all', 'SI_all', 'is_placecell', 
                                   'DeconvSignal', 'ms_time', 'place_field_all_multiday', 'maze_type'],
-        interv_time: float = 50000
+        interv_time: float = 50000,
+        paradigm: str = 'CrossMaze',
+        direction: str = None
     ) -> None:
-                
-        self._res = {}        
+
+        self.paradigm = paradigm
+        
+        assert ((paradigm == 'CrossMaze' and direction is None) or 
+                (paradigm == 'ReverseMaze' and direction in ['cis', 'trs']) or 
+                (paradigm == 'HairpinMaze' and direction in ['cis', 'trs']))
+        self.dirction = direction
+        
+        self._num = 0
+        self._res = {}
         for k in keys:
             self._res[k] = []
         
@@ -70,7 +80,10 @@ class MultiDayCore:
             if os.path.exists(f['Trace File'][i]):
                 with open(f['Trace File'][i], 'rb') as handle:
                     trace = pickle.load(handle)
-                    
+                
+                if self.dirction is not None:
+                    trace = trace[self.dirction]
+                
                 t_max = 0
                 for k in keys:
                     if k in ['ms_time', 'ms_time_behav', 'behav_time', 'correct_time']:

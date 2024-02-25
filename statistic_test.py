@@ -9,6 +9,8 @@ from scipy.stats import linregress, pearsonr
 from matplotlib.gridspec import GridSpec
 import gc
 
+CONVERGE_MODEL_COLOR, EQUALRATE_MODEL_COLOR = '#D9A6A9', '#9C8FBC'
+
 def star(p:str):
     '''
     Note: notations of significance according to the input p value.
