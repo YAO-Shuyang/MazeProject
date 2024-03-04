@@ -463,6 +463,8 @@ if __name__ == "__main__":
     from mylib.local_path import f_CellReg_modi as f
     
     for i in range(len(f)):
+        if i != 12:
+            continue
         
         if f['paradigm'][i] == 'CrossMaze':
             if f['maze_type'][i] == 0:

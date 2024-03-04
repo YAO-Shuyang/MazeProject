@@ -2,7 +2,7 @@ import numpy as np
 from tqdm import tqdm
 from scipy.stats import norm
 import matplotlib.pyplot as plt
-
+"""
 # Exponential parameters estimated by real data.
 MEAN_K = 0.3079
 STD_K = 0.1299
@@ -24,18 +24,47 @@ B_MIN, B_MAX = 0.00874, 0.29436
 MEAN_C = 0.4121
 STD_C = 0.0886
 C_MIN, C_MAX = 0.3174, 0.5893
+"""
+# Exponential parameters estimated by real data.
+MEAN_K = 0.3187
+STD_K = 0.0307
+K_MIN, K_MAX = 0.2880, 0.3495
+
+MEAN_X0 = -3.369+2.7
+STD_X0 = 0.249
+X0_MIN, X0_MAX = -3.618+2.7, -3.120+2.7
+
+# KWW decay parameters estimated by real data.
+MEAN_A = 3.2818
+STD_A = 0.2284
+A_MIN, A_MAX = 3.0535, 3.5102
+
+MEAN_B = 0.006483
+STD_B = 0.000696
+B_MIN, B_MAX = 0.005787, 0.007179
+
+MEAN_C = 0.25178
+STD_C = 0.00109
+C_MIN, C_MAX = 0.25069, 0.25286
+
+
+# Polynomial Converge
+MEAN_POLY_K = 2.9245
+STD_POLY_K = 0.3519
+POLY_K_MIN, POLY_K_MAX = 2.5725, 3.2765
+
+MEAN_POLY_B = 0.5804-1.5
+STD_POLY_B = 0.0792
+POLY_B_MIN, POLY_B_MAX = 0.50111-1.5, 0.6596-1.5
 
 def kww_decay(x, a, b, c):
     return a*np.exp(-np.power(x/b, c))
-
-def exp_func(x, k, b):
-    return 1 - np.exp(-k * (x-b))
-
-def P1(i: int, k: float, b: float):
+    
+def P1(i: int, k: float, b: float, c):
     if i <= 0:
         raise ValueError("The index should be larger than 0!")
     else:
-        return exp_func(i, k, b)-np.random.rand()*0.02 # bottom, level
+        return c - 1 / (k*i + b)
 
 def P2(i: int, a, b, c):
     if i <= 0:
@@ -61,13 +90,16 @@ class Field(object):
     def start_session(self):
         return self._start_session
     
-    def update(self, exp_params: list | float, kww_params: list, drift_rate: str = "converged"):
+    def update(self, exp_params: list | float, kww_params: list, drift_rate: str = "converged", converge_function: str = "exp"):
         assert drift_rate in ["converged", "equal-rate"]
+        assert converge_function in ['exp', 'poly']
         
         assert drift_rate != "equal-rate" or (exp_params <= 1 and exp_params >= 0)
         
+        PF1 = P3 if converge_function == 'poly' else P1
+        
         if self._stat == 1 and drift_rate == "converged":
-            P = P1(self._hist, exp_params[0], exp_params[1])
+            P = PF1(self._hist, exp_params[0], exp_params[1])
             _stat = np.random.choice([1, 0], p = [P, 1-P])
             if _stat == 1:
                 self._hist += 1
@@ -83,11 +115,7 @@ class Field(object):
                 
         elif self._stat == 0:
             P = P2(self._hist, kww_params[0], kww_params[1], kww_params[2])
-            try:
-                _stat = np.random.choice([1, 0], p = [P, 1-P])
-            except:
-                print(P, 1-P, kww_params)
-                assert False
+            _stat = np.random.choice([1, 0], p = [P, 1-P])
                 
             if _stat == 1:
                 self._hist = 1
@@ -98,10 +126,10 @@ class Field(object):
         
         self._stat = _stat
 
-def update_fields(fields: list[Field], exp_params: list | float, kww_params: list, drift_rate: str = "converged"):
+def update_fields(fields: list[Field], exp_params: list | float, kww_params: list, drift_rate: str = "converged", converge_function: str = "exp"):
     new_fields = []
     for field in fields:
-        field.update(exp_params, kww_params, drift_rate)
+        field.update(exp_params, kww_params, drift_rate, converge_function)
         new_fields.append(field)
         
     return new_fields
@@ -174,8 +202,8 @@ def count_overlapping_fields(field_reg: np.ndarray):
         
     return overlaps
 
-def main(MiceID: int, days: int = 100, simu_fields: int = 10000, drift_model: str = "converged", drift_rate: float = None):
-    if drift_model == 'converged':
+def main(MiceID: int, days: int = 100, simu_fields: int = 10000, drift_model: str = "converged", drift_rate: float = None, converge_function: str = "exp"):
+    if drift_model == 'converged' and converge_function == 'exp':
         exp_params = [norm.rvs(loc=MEAN_K, scale=STD_K), norm.rvs(loc=MEAN_X0, scale=STD_X0)]
     
         while exp_params[0] < K_MIN or exp_params[0] > K_MAX:
@@ -183,33 +211,37 @@ def main(MiceID: int, days: int = 100, simu_fields: int = 10000, drift_model: st
         
         while exp_params[1] < X0_MIN or exp_params[1] > X0_MAX:
             exp_params[1] = norm.rvs(loc=MEAN_X0, scale=STD_X0)
-            
-        x = np.linspace(1, 26, 1000)
-        y = exp_func(x, exp_params[0], exp_params[1])
-        plt.plot(x, y)
-        plt.ylim(0, 1)
-        plt.show()
+    elif drift_model == 'converged' and converge_function == 'poly':
+        poly_params = [norm.rvs(loc=MEAN_POLY_K, scale=STD_POLY_K), norm.rvs(loc=MEAN_POLY_B, scale=STD_POLY_B)]
         
+        while poly_params[0] < POLY_K_MIN or poly_params[0] > POLY_K_MAX:
+            poly_params[0] = norm.rvs(loc=MEAN_POLY_K, scale=STD_POLY_K)
+        
+        while poly_params[1] < POLY_B_MIN or poly_params[1] > POLY_B_MAX:
+            poly_params[1] = norm.rvs(loc=MEAN_POLY_B, scale=STD_POLY_B)
+
     elif drift_model == 'equal-rate':
         exp_params = drift_rate
     else:
         raise ValueError("The drift model should be 'converged' or 'equal-rate'!")
         
     kww_params = [norm.rvs(loc=MEAN_A, scale=STD_A), norm.rvs(loc=MEAN_B, scale=STD_B), norm.rvs(loc=MEAN_C, scale=STD_C)]
+    gate = 0
+    while kww_decay(1, kww_params[0], kww_params[1], kww_params[2]) > 0.3 or gate == 0:
+        if gate == 0:
+            gate = 1
+        else:
+            kww_params = [norm.rvs(loc=MEAN_A, scale=STD_A), norm.rvs(loc=MEAN_B, scale=STD_B), norm.rvs(loc=MEAN_C, scale=STD_C)]
+            
+        while kww_params[1] < B_MIN or kww_params[1] > B_MAX:
+            kww_params[1] = norm.rvs(loc=MEAN_B, scale=STD_B)
         
-    while kww_params[1] < B_MIN or kww_params[1] > B_MAX:
-        kww_params[1] = norm.rvs(loc=MEAN_B, scale=STD_B)
+        while kww_params[2] < C_MIN or kww_params[2] > C_MAX:
+            kww_params[2] = norm.rvs(loc=MEAN_C, scale=STD_C)
         
-    while kww_params[2] < C_MIN or kww_params[2] > C_MAX:
-        kww_params[2] = norm.rvs(loc=MEAN_C, scale=STD_C)
-        
-    while kww_params[0] < A_MIN or kww_params[0] > A_MAX or kww_params[0] >= np.exp(1/np.power(kww_params[1], kww_params[2])):
-        kww_params[0] = norm.rvs(loc=MEAN_A, scale=STD_A)   
+        while kww_params[0] < A_MIN or kww_params[0] > A_MAX or kww_params[0] >= np.exp(1/np.power(kww_params[1], kww_params[2])):
+            kww_params[0] = norm.rvs(loc=MEAN_A, scale=STD_A)   
     
-    y2 = kww_decay(x, kww_params[0], kww_params[1], kww_params[2])
-    plt.plot(x, y2)
-    plt.ylim(0, 1)
-    plt.show()
     trace = {"Mouse": MiceID, "days": np.arange(1, days+1), "simu_fields": simu_fields,
              "exp_params": exp_params, "kww_params": kww_params, "drift_model": drift_model}
     
@@ -228,7 +260,7 @@ def main(MiceID: int, days: int = 100, simu_fields: int = 10000, drift_model: st
     field_reg = np.ones((simu_fields, 2), np.int64)
         
     for j in tqdm(range(2, days+1)):
-        fields = update_fields(fields, exp_params, kww_params, drift_rate=drift_model)
+        fields = update_fields(fields, exp_params, kww_params, drift_rate=drift_model, converge_function=converge_function)
         fields = add_fields(fields, j, field_num=simu_fields)
         active_field_num[j-1] = count_active_fields(fields)
         #permanent_field_num[j-1], active_field_num[j-1] = count_permanent_fields(fields)
@@ -258,8 +290,13 @@ if __name__ == '__main__':
     import os
     
     dir_name = r"E:\Data\FigData\PermenantFieldAnalysis"
-    
-    
+    for mouse in range(101, 151):
+        print(mouse, " Convergent Drift Model ---------------------------------------------------------")
+        trace = main(mouse, 50, 10000, drift_model='converged', converge_function='exp')
+        with open(os.path.join(dir_name, f'mouse_{mouse}_converged_10000fields_50days.pkl'), 'wb') as handle:
+            pickle.dump(trace, handle)
+        print(end='\n\n\n')
+    """
     # Convergent Drift Model: 50 simulated Mice
     for mouse in range(1, 51):
         print(mouse, " Convergent Drift Model ---------------------------------------------------------")
@@ -267,7 +304,7 @@ if __name__ == '__main__':
         with open(os.path.join(dir_name, f'mouse_{mouse}_converged_10000fields_50days.pkl'), 'wb') as handle:
             pickle.dump(trace, handle)
         print(end='\n\n\n')
-    """        
+      
     # Equal Rate Drift Model: 50 simulated Mice
     FIXED_RATE = [0.5, 0.6, 0.7, 0.8, 0.9]
     for mouse in range(51, 101):
@@ -277,7 +314,6 @@ if __name__ == '__main__':
             pickle.dump(trace, handle)
         print(end='\n\n\n')
     """        
-    
     """
     loc = os.path.join(figdata, "PermenantFieldAnalysis")
     if os.path.exists(loc)==False:
