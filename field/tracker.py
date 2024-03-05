@@ -319,7 +319,8 @@ def main(
     stage: str | None = None,
     session: int | None = None,
     maze_type: int | None = None,
-    behavior_paradigm: str | None = None
+    behavior_paradigm: str | None = None,
+    is_shuffle: bool = False
 ):
 
     
@@ -386,6 +387,11 @@ def main(
     print(file_indices, mouse, stage, session)
     res = core.get_trace_set(f=fdata, file_indices=file_indices, keys=['is_placecell', 'place_field_all_multiday'])
     
+    if is_shuffle:
+        for i in range(index_map.shape[0]):
+            idx = np.where(index_map[i, :] >= 1)[0]
+            index_map[i, idx] = index_map[i, np.random.permutation(idx)]
+    
     is_placecell = np.full((n_sessions, n_neurons), np.nan)
     place_field_all = [[] for _ in range(n_neurons)]
     for j in range(n_neurons):
@@ -408,8 +414,9 @@ def main(
               "n_neurons": n_neurons, "n_sessions": n_sessions, "maze_type": maze_type,
              "index_map": index_map.astype(np.int64)}
 
-    with open(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc.pkl"), 'wb') as handle:
-        print(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc.pkl"))
+    appendix = '' if is_shuffle == False else '_shuffle'
+    with open(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc"+appendix+".pkl"), 'wb') as handle:
+        print(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc"+appendix+".pkl"))
         pickle.dump(trace, handle)
         
     del res
@@ -454,8 +461,8 @@ def main(
     )
     
     DATA['trs'] = {"is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info}
-    with open(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc.pkl"), 'wb') as handle:
-        print(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc.pkl"))
+    with open(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc"+appendix+".pkl"), 'wb') as handle:
+        print(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc"+appendix+".pkl"))
         pickle.dump(DATA, handle)
 
 
@@ -463,6 +470,10 @@ if __name__ == "__main__":
     from mylib.local_path import f_CellReg_modi as f
     
     for i in range(len(f)):
+        is_shuffle = f['Type'][i] == 'Shuffle'
+        
+        if is_shuffle == False:
+            continue
         
         if f['paradigm'][i] == 'CrossMaze':
             if f['maze_type'][i] == 0:
@@ -496,7 +507,8 @@ if __name__ == "__main__":
             stage=f['Stage'][i],
             session=f['session'][i],
             maze_type=f['maze_type'][i],
-            behavior_paradigm=f['paradigm'][i]
+            behavior_paradigm=f['paradigm'][i],
+            is_shuffle=is_shuffle
         )
     """
     with open(r"E:\Data\maze_learning\PlotFigures\STAT_CellReg\trace_mdays_conc.pkl", 'rb') as handle:
