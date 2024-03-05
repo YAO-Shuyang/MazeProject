@@ -26,41 +26,50 @@ STD_C = 0.0886
 C_MIN, C_MAX = 0.3174, 0.5893
 """
 # Exponential parameters estimated by real data.
-MEAN_K = 0.3187
-STD_K = 0.0307
-K_MIN, K_MAX = 0.2880, 0.3495
+MEAN_K = 0.18752
+STD_K = 0.01022
+K_MIN, K_MAX = 0.17730, 0.19774
 
-MEAN_X0 = -3.369+2.7
-STD_X0 = 0.249
-X0_MIN, X0_MAX = -3.618+2.7, -3.120+2.7
+MEAN_X0 = -3.5082
+STD_X0 = 0.4044
+X0_MIN, X0_MAX = -3.9125, -3.1038
 
 # KWW decay parameters estimated by real data.
-MEAN_A = 3.2818
-STD_A = 0.2284
-A_MIN, A_MAX = 3.0535, 3.5102
+MEAN_A = 2.9773
+STD_A = 1.7323
+A_MIN, A_MAX = 1.2450, 4.7096
 
-MEAN_B = 0.006483
-STD_B = 0.000696
-B_MIN, B_MAX = 0.005787, 0.007179
+MEAN_B = 0.2388
+STD_B = 0.2283
+B_MIN, B_MAX = 0.20705, 0.36322
 
-MEAN_C = 0.25178
-STD_C = 0.00109
-C_MIN, C_MAX = 0.25069, 0.25286
-
+MEAN_C = 0.28513
+STD_C = 0.07808
+C_MIN, C_MAX = 0.20705, 0.36322
 
 # Polynomial Converge
-MEAN_POLY_K = 2.9245
-STD_POLY_K = 0.3519
-POLY_K_MIN, POLY_K_MAX = 2.5725, 3.2765
+MEAN_POLY_K = 0.9967
+STD_POLY_K = 0.1071
+POLY_K_MIN, POLY_K_MAX = 0.8896, 1.1038
 
-MEAN_POLY_B = 0.5804-1.5
-STD_POLY_B = 0.0792
-POLY_B_MIN, POLY_B_MAX = 0.50111-1.5, 0.6596-1.5
+MEAN_POLY_B = 1.06453
+STD_POLY_B = 0.06448
+POLY_B_MIN, POLY_B_MAX = 1.00005, 1.12901
+
+MEAN_POLY_C = 0.9903
+STD_POLY_C = 0.0097
+POLY_C_MIN, POLY_C_MAX = 0.9806, 1
 
 def kww_decay(x, a, b, c):
     return a*np.exp(-np.power(x/b, c))
-    
-def P1(i: int, k: float, b: float, c):
+
+def P1(i: int, k: float, x0: float):
+    if i <= 0:
+        raise ValueError("The index should be larger than 0!")
+    else:
+        return 1 - np.exp(-k*(i-x0))
+
+def P3(i: int, k: float, b: float, c: float):
     if i <= 0:
         raise ValueError("The index should be larger than 0!")
     else:
@@ -99,13 +108,13 @@ class Field(object):
         PF1 = P3 if converge_function == 'poly' else P1
         
         if self._stat == 1 and drift_rate == "converged":
-            P = PF1(self._hist, exp_params[0], exp_params[1])
+            P = PF1(self._hist, *exp_params)
             _stat = np.random.choice([1, 0], p = [P, 1-P])
             if _stat == 1:
                 self._hist += 1
             else:
                 self._hist = 1
-        elif self._stat == 1 and drift_rate:
+        elif self._stat == 1 and drift_rate == 'equal-rate':
             _stat = np.random.choice([1, 0], p = [exp_params, 1-exp_params])
             
             if _stat == 1:
@@ -212,14 +221,18 @@ def main(MiceID: int, days: int = 100, simu_fields: int = 10000, drift_model: st
         while exp_params[1] < X0_MIN or exp_params[1] > X0_MAX:
             exp_params[1] = norm.rvs(loc=MEAN_X0, scale=STD_X0)
     elif drift_model == 'converged' and converge_function == 'poly':
-        poly_params = [norm.rvs(loc=MEAN_POLY_K, scale=STD_POLY_K), norm.rvs(loc=MEAN_POLY_B, scale=STD_POLY_B)]
+        poly_params = [norm.rvs(loc=MEAN_POLY_K, scale=STD_POLY_K), norm.rvs(loc=MEAN_POLY_B, scale=STD_POLY_B), norm.rvs(loc=MEAN_POLY_C, scale=STD_POLY_C)]
         
         while poly_params[0] < POLY_K_MIN or poly_params[0] > POLY_K_MAX:
             poly_params[0] = norm.rvs(loc=MEAN_POLY_K, scale=STD_POLY_K)
         
         while poly_params[1] < POLY_B_MIN or poly_params[1] > POLY_B_MAX:
             poly_params[1] = norm.rvs(loc=MEAN_POLY_B, scale=STD_POLY_B)
+        
+        while poly_params[2] < POLY_C_MIN or poly_params[2] > POLY_C_MAX:
+            poly_params[2] = norm.rvs(loc=MEAN_POLY_C, scale=STD_POLY_C)
 
+        exp_params = poly_params
     elif drift_model == 'equal-rate':
         exp_params = drift_rate
     else:
@@ -290,13 +303,7 @@ if __name__ == '__main__':
     import os
     
     dir_name = r"E:\Data\FigData\PermenantFieldAnalysis"
-    for mouse in range(101, 151):
-        print(mouse, " Convergent Drift Model ---------------------------------------------------------")
-        trace = main(mouse, 50, 10000, drift_model='converged', converge_function='exp')
-        with open(os.path.join(dir_name, f'mouse_{mouse}_converged_10000fields_50days.pkl'), 'wb') as handle:
-            pickle.dump(trace, handle)
-        print(end='\n\n\n')
-    """
+        
     # Convergent Drift Model: 50 simulated Mice
     for mouse in range(1, 51):
         print(mouse, " Convergent Drift Model ---------------------------------------------------------")
@@ -313,7 +320,12 @@ if __name__ == '__main__':
         with open(os.path.join(dir_name, f'mouse_{mouse}_equal_rate_{FIXED_RATE[int((mouse-51)//10)]}_10000fields_50days.pkl'), 'wb') as handle:
             pickle.dump(trace, handle)
         print(end='\n\n\n')
-    """        
+    for mouse in range(101, 151):
+        print(mouse, " Convergent Drift Model ---------------------------------------------------------")
+        trace = main(mouse, 50, 10000, drift_model='converged', converge_function='poly')
+        with open(os.path.join(dir_name, f'mouse_{mouse}_converged_10000fields_50days_poly.pkl'), 'wb') as handle:
+            pickle.dump(trace, handle)
+        print(end='\n\n\n')       
     """
     loc = os.path.join(figdata, "PermenantFieldAnalysis")
     if os.path.exists(loc)==False:

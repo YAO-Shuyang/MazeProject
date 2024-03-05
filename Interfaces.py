@@ -44,7 +44,7 @@ def TotalPathLength_Interface(trace: dict, spike_threshold = 30, variable_names 
 # Fig0015/14
 # FiringRateProcess's interface for data analysis. Fig0015.
 def FiringRateProcess_Interface(trace = {}, spike_threshold = 10, variable_names = None, is_placecell = True):
-    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['peak_rate','mean_rate', 'cell_type'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['peak_rate','mean_rate'])
     KeyWordErrorCheck(trace, __file__, ['is_placecell', 'Spikes'])
     
     #trace = FiringRateProcess(trace, map_type = 'smooth', spike_threshold = spike_threshold)
@@ -59,10 +59,10 @@ def FiringRateProcess_Interface(trace = {}, spike_threshold = 10, variable_names
         rate_map_all = cp.deepcopy(trace['LA']['rate_map_all'])
         is_placecell = trace['LA']['is_placecell']
     
-    peak_rate = np.nanmax(rate_map_all, axis = 1)
-    mean_rate = np.nansum(Spikes, axis = 1) / np.nansum(occu_time) * 1000
+    peak_rate = np.nanmax(rate_map_all[np.where(is_placecell == 1)[0], :], axis = 1)
+    mean_rate = np.nansum(Spikes[np.where(is_placecell == 1)[0], :], axis = 1) / np.nansum(occu_time) * 1000
     
-    return peak_rate, mean_rate, is_placecell
+    return np.array([np.mean(peak_rate)]), np.array([np.mean(mean_rate)])
 
 # Fig0015/14
 # FiringRateProcess's interface for data analysis. Fig0015.
@@ -83,12 +83,12 @@ def FieldPeakRateStatistic_Interface(trace = {}, spike_threshold = 10, variable_
 # Generate spatial information map Fig0016
 def SpatialInformation_Interface(trace = {}, spike_threshold = 10, variable_names = None, is_placecell = True):
     KeyWordErrorCheck(trace, __file__, ['SI_all','is_placecell','is_placecell_isi','Spikes'])
-    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['SI', 'Cell Type'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['SI'])
     
     if trace['maze_type'] == 0:
-        return trace['SI_all'], trace['is_placecell']
+        return np.array([np.mean(trace['SI_all'][np.where(trace['is_placecell'] == 1)[0]])])
     else:
-        return trace['LA']['SI_all'], trace['LA']['is_placecell']
+        return np.array([np.mean(trace['LA']['SI_all'][np.where(trace['LA']['is_placecell'] == 1)[0]])])
     
 
 # Generate learning curve for cross maze paradigm. Fig0020
@@ -553,9 +553,9 @@ def InterSessionCorrelation_Interface(trace: dict, spike_threshold: int | float 
         trace = odd_even_correlation(trace)
       
     KeyWordErrorCheck(trace, __file__, ['fir_sec_corr', 'odd_even_corr', 'is_placecell'])
-    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Half-half Correlation', 'Odd-even Correlation', 'Cell Type'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Half-half Correlation', 'Odd-even Correlation'])
     
-    return trace['fir_sec_corr'], trace['odd_even_corr'], trace['is_placecell']
+    return np.array([np.mean(trace['fir_sec_corr'][np.where(trace['is_placecell'] == 1)[0]])]), np.array([np.mean(trace['odd_even_corr'][np.where(trace['is_placecell'] == 1)[0]])])
 
 from scipy.stats import poisson, norm
 # Fig0039

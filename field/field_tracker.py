@@ -25,9 +25,19 @@ class RegisteredField(object):
                     on_next_prob[j-i, 0] += active_num.shape[0]
                     on_next_prob[j-i, 1] += base_num.shape[0]
                     
-                else:
+                elif i == 1:
                     base_num = np.where((np.sum(field_reg[i:j, :], axis=0)==j-i)&(field_reg[j, :] == 0)&(field_reg[i-1, :] != 1))[0]
                     active_num = np.where((np.sum(field_reg[i:j+1, :], axis=0)==j-i+1)&(field_reg[i-1, :] != 1))[0]
+                    on_next_prob[j-i, 0] += active_num.shape[0]
+                    on_next_prob[j-i, 1] += base_num.shape[0]
+                
+                else:
+                    base_num = np.where((np.sum(field_reg[i:j, :], axis=0)==j-i)&(field_reg[j, :] == 0)&
+                                        ((field_reg[i-1, :] == 0)|((np.isnan(field_reg[i-1, :]))&
+                                                                     (field_reg[i-2, :] != 1))))[0]
+                    active_num = np.where((np.sum(field_reg[i:j+1, :], axis=0)==j-i+1)&
+                                          ((field_reg[i-1, :] == 0)|((np.isnan(field_reg[i-1, :]))&
+                                                                     (field_reg[i-2, :] != 1))))[0]
                     on_next_prob[j-i, 0] += active_num.shape[0]
                     on_next_prob[j-i, 1] += base_num.shape[0]
                 
@@ -43,12 +53,9 @@ class RegisteredField(object):
             idx = np.where((field_reg[i, :] == 1)&(field_reg[i+1, :] == 0))[0]
             silent_num += idx.shape[0]
         
-        print(on_next_prob)
-        print(off_next_prob)
         retained_prob = on_next_prob[:, 0] / np.sum(on_next_prob, axis=1)
 
         global_recover_prob = off_next_prob[:, 0] / silent_num
-        print(global_recover_prob)
         conditional_recover_prob = off_next_prob[:, 0] / np.sum(off_next_prob, axis=1)
     
         retained_prob[np.where(np.sum(on_next_prob, axis=1) <= thre)[0]] = np.nan
@@ -62,7 +69,7 @@ class RegisteredField(object):
         Reg = RegisteredField(field_reg)
         return Reg.report(thre=thre)
         
-    
+'''    
 def conditional_prob(trace: dict = None, field_reg: np.ndarray = None, thre: int = 5):
     """
     if trace['Stage'] in ['Stage 1', 'Stage 1+2'] or trace['maze_type'] == 2:
@@ -145,7 +152,7 @@ def conditional_prob(trace: dict = None, field_reg: np.ndarray = None, thre: int
 
     #return duration, retained_prob, nodetect_prob, conditional_recover_prob, global_recover_prob, redetect_prob, redetect_frac, np.sum(on_next_prob[:, :2], axis=1), np.sum(off_next_prob, axis=1)
     return duration, retained_prob, conditional_recover_prob, global_recover_prob, np.sum(on_next_prob[:, :2], axis=1), np.sum(off_next_prob, axis=1)
-
+'''
 
 def get_evolve_event_label(evolve_event: np.ndarray):
     n = len(evolve_event)
