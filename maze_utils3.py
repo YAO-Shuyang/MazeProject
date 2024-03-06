@@ -1729,12 +1729,20 @@ def uniform_smooth_speed(speed: np.ndarray, window: int = 30) -> np.ndarray:
 
 
 
-def field_reallocate(centers_pool: np.ndarray, field: dict, maze_type: int):
-    CP = correct_paths[(int(maze_type), 48)]
+def field_reallocate(field: dict, maze_type: int, centers_pool: np.ndarray|None = None):
+    if maze_type == 0:
+        field_area = np.arange(1, 2305)
+    elif maze_type in [1, 2, 3]:
+        CP = correct_paths[(int(maze_type), 48)]
+        field_area = cp.deepcopy(CP)
+        
     G = maze_graphs[(int(maze_type), 48)]
     
-    field_area = cp.deepcopy(CP)
-    centers = cp.deepcopy(centers_pool)
+    if centers_pool is None:
+        centers = np.arange(1, 2305)
+    else:
+        centers = cp.deepcopy(centers_pool)
+        
     shuffle_field = {}
     for i, k in enumerate(field.keys()):
         while 1:
@@ -1766,7 +1774,3 @@ def field_reallocate(centers_pool: np.ndarray, field: dict, maze_type: int):
         field_area = np.intersect1d(field_area, shuffle_field[CENTER])
     return shuffle_field
 
-
-def init_connected_matrix(maze_type: int, nx: int = 12):
-    pass    
-    

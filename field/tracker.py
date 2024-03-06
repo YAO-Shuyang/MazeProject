@@ -4,7 +4,7 @@ import pandas as pd
 from mylib.local_path import f1, f_CellReg_day, f3, f4
 from mylib.statistic_test import GetMultidayIndexmap, ReadCellReg
 from mylib.multiday.core import MultiDayCore
-from mylib.local_path import f1, f_CellReg_day
+from mylib.maze_utils3 import field_reallocate
 from tqdm import tqdm
 import os
 import pickle
@@ -307,7 +307,16 @@ class Tracker(object):
         print(field_reg.shape, field_info.shape)
 
         return field_reg[:, idx], field_info[:, idx, :]
-    
+
+def get_field_ids(field_info: np.ndarray) -> np.ndarray:
+    column_dict = {}
+    labels = []
+    for col in range(field_info.shape[1]):
+        column = tuple(field_info[:, col, 0])  # Convert column to a tuple to make it hashable
+        if column not in column_dict:
+            column_dict[column] = len(column_dict) + 1  # Assign a new ID
+        labels.append(column_dict[column])
+    return np.array(labels)
 
 def main(
     i: int,
@@ -387,18 +396,17 @@ def main(
     print(file_indices, mouse, stage, session)
     res = core.get_trace_set(f=fdata, file_indices=file_indices, keys=['is_placecell', 'place_field_all_multiday'])
     
-    if is_shuffle:
-        for i in range(index_map.shape[0]):
-            idx = np.where(index_map[i, :] >= 1)[0]
-            index_map[i, idx] = index_map[i, np.random.permutation(idx)]
-    
     is_placecell = np.full((n_sessions, n_neurons), np.nan)
     place_field_all = [[] for _ in range(n_neurons)]
     for j in range(n_neurons):
         for i in range(n_sessions):
             if index_map[i, j] > 0:
                 is_placecell[i, j] = res['is_placecell'][i][int(index_map[i, j])-1]
-                place_field_all[j].append(res['place_field_all_multiday'][i][int(index_map[i, j])-1])
+                
+                if is_shuffle == False:
+                    place_field_all[j].append(res['place_field_all_multiday'][i][int(index_map[i, j])-1])
+                else:
+                    place_field_all[j].append(field_reallocate(res['place_field_all_multiday'][i][int(index_map[i, j])-1], maze_type=maze_type))
             else:
                 place_field_all[j].append(None)
     print("Field Register...")            
@@ -408,9 +416,11 @@ def main(
         is_placecell=is_placecell,
         overlap_thre=overlap_thre
     )
+    field_ids = get_field_ids(field_info)
     
     trace = {"MiceID": mouse, "Stage": stage, "session": session, "maze_type": maze_type, "paradigm": behavior_paradigm,
-             "is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info,
+             "is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info, 
+             "field_ids": field_ids,
               "n_neurons": n_neurons, "n_sessions": n_sessions, "maze_type": maze_type,
              "index_map": index_map.astype(np.int64)}
 
@@ -427,7 +437,7 @@ def main(
         return
     else:
         DATA = {"MiceID": mouse, "Stage": stage, "session": session, "maze_type": maze_type, "paradigm": behavior_paradigm,
-                "cis":{"is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info},
+                "cis":{"is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info, 'field_ids': field_ids},
                 "n_neurons": n_neurons, "n_sessions": n_sessions, "maze_type": maze_type,
                 "index_map": index_map.astype(np.int64)}
     
@@ -459,8 +469,9 @@ def main(
         is_placecell=is_placecell,
         overlap_thre=overlap_thre
     )
+    field_ids = get_field_ids(field_info)
     
-    DATA['trs'] = {"is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info}
+    DATA['trs'] = {"is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info, 'field_ids': field_ids}
     with open(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc"+appendix+".pkl"), 'wb') as handle:
         print(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc"+appendix+".pkl"))
         pickle.dump(DATA, handle)
@@ -468,13 +479,13 @@ def main(
 
 if __name__ == "__main__":  
     from mylib.local_path import f_CellReg_modi as f
+    from tqdm import tqdm
     
-    for i in range(len(f)):
+    for i in tqdm(range(len(f))):
         is_shuffle = f['Type'][i] == 'Shuffle'
-        
         if is_shuffle == False:
             continue
-        
+
         if f['paradigm'][i] == 'CrossMaze':
             if f['maze_type'][i] == 0:
                 index_map = GetMultidayIndexmap(
@@ -488,9 +499,6 @@ if __name__ == "__main__":
                     index_map = pickle.load(handle)
         else:
             index_map = ReadCellReg(f['cellreg_folder'][i])
-            
-    # with open(r"E:\Data\maze_learning\PlotFigures\STAT_CellReg\10224\neuromatch_res.pkl", 'rb') as handle:
-    #     index_map = pickle.load(handle)
     
         index_map[np.where((index_map < 0)|np.isnan(index_map))] = 0
         mat = np.where(index_map>0, 1, 0)
@@ -510,14 +518,3 @@ if __name__ == "__main__":
             behavior_paradigm=f['paradigm'][i],
             is_shuffle=is_shuffle
         )
-    """
-    with open(r"E:\Data\maze_learning\PlotFigures\STAT_CellReg\trace_mdays_conc.pkl", 'rb') as handle:
-        trace = pickle.load(handle)
-        
-    field_reg, field_info = Tracker.field_register(
-        index_map=index_map,
-        place_field_all=trace['place_field_all'],
-        is_placecell=trace['is_placecell']
-    )
-    print(field_reg[:, :4])
-    """
