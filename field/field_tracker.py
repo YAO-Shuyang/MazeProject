@@ -154,61 +154,96 @@ def conditional_prob(trace: dict = None, field_reg: np.ndarray = None, thre: int
     return duration, retained_prob, conditional_recover_prob, global_recover_prob, np.sum(on_next_prob[:, :2], axis=1), np.sum(off_next_prob, axis=1)
 '''
 
-def get_evolve_event_label(evolve_event: np.ndarray):
-    n = len(evolve_event)
-    # Create an array of powers of 2, reversed, to match the binary representation
-    powers_of_two = 2 ** np.arange(n)[::-1]
-    # Perform dot product
-    return np.dot(evolve_event, powers_of_two)
+from numba import jit
 
-def indept_test_for_evolution_events(field_reg: np.ndarray, field_info: np.ndarray):
-    sessions, chi2_stat, MI, pair_type, pair_num = np.arange(field_reg.shape[0]-1), [], [],[], []
+@jit(nopython=True)
+def get_evolve_event_label(evolve_event: np.ndarray):
+    n = evolve_event.shape[0]
+    # Create an array of powers of 2, reversed, to match the binary representation
+    powers_of_two = 2 ** np.arange(n)
     
-    for i in range(2, field_reg.shape[0]-5):
-        print(f"    Session {i+1} -> {i+2}")
-        idx = np.where(np.isnan(np.sum(field_reg[i:i+5, :], axis=0)) == False)[0]
-        real_distribution = np.zeros(idx.shape[0])
-        for j in range(real_distribution.shape[0]):
-            real_distribution[j] = get_evolve_event_label(field_reg[i:i+5, idx[j]])
-        
-        evol_event_sib, evol_event_non = [], []
-        for j in tqdm(range(len(idx))):
-            for k in range(len(idx)):
-                if j == k:
+    # Perform dot product
+    return np.dot(powers_of_two.astype(np.float64), evolve_event)
+
+@jit(nopython=True)
+def get_evolve_event_pairs(
+    i: int,
+    j: int,
+    field_reg: np.ndarray,
+    sib_field_pairs: np.ndarray,
+    non_field_pairs: np.ndarray,
+):
+    sib_num, non_num = sib_field_pairs.shape[0], non_field_pairs.shape[0]
+    
+    evol_event_sib = np.reshape(np.concatenate((get_evolve_event_label(field_reg[i:j, sib_field_pairs[:, 0]]), get_evolve_event_label(field_reg[i:j, sib_field_pairs[:, 1]]))), (2, sib_num)).T
+
+    evol_event_sib = evol_event_sib[np.where((np.isnan(evol_event_sib[:, 0]) == False)&
+                                             (np.isnan(evol_event_sib[:, 1]) == False))[0], :]
+    
+    
+    evol_event_non = np.reshape(np.concatenate((get_evolve_event_label(field_reg[i:j, non_field_pairs[:, 0]]), get_evolve_event_label(field_reg[i:j, non_field_pairs[:, 1]]))), (2, non_num)).T
+
+    evol_event_non = evol_event_non[np.where((np.isnan(evol_event_non[:, 0]) == False)&
+                                             (np.isnan(evol_event_non[:, 1]) == False))[0], :]
+    evol_event_non = evol_event_non[np.random.randint(low=0, high=evol_event_non.shape[0], size=evol_event_sib.shape[0]), :]  
+    return evol_event_sib, evol_event_non  
+
+def indept_test_for_evolution_events(field_reg: np.ndarray, field_ids: np.ndarray):
+    sessions, chi2_stat, MI, pair_type, pair_num, dimension = [], [], [], [], [], []
+    
+    sib_field_pairs, non_field_pairs = [], []
+    for i in range(len(field_ids)-1):
+        for j in range(i+1, len(field_ids)):
+            if field_ids[i] == field_ids[j]:
+                if len(sib_field_pairs) >= 3000000:
+                    continue
+                sib_field_pairs.append([i, j])
+            else:
+                if len(non_field_pairs) >= 3000000:
                     continue
                 
-                if np.sum(field_reg[i:i+5, idx[j]]) == 0 or np.sum(field_reg[i:i+5, idx[k]]) == 0:
-                    continue
+                non_field_pairs.append([i, j])
                 
-                if int(np.nanmax(field_info[i:i+5, idx[j], 0])) == int(np.nanmax(field_info[i:i+5, idx[k], 0])):
-                    # if np.nansum(field_reg[2:, idx[j]]) >= 4 and np.nansum(field_reg[2:, idx[k]]) >= 4:
-                    evol_event_sib.append([get_evolve_event_label(field_reg[i:i+5, idx[j]]), 
-                                               get_evolve_event_label(field_reg[i:i+5, idx[k]])])
-                else:
-                    evol_event_non.append([get_evolve_event_label(field_reg[i:i+5, idx[j]]), 
-                                           get_evolve_event_label(field_reg[i:i+5, idx[k]])])
-                    
-        evol_event_sib = np.array(evol_event_sib, np.int64)
-        evol_event_non = np.array(evol_event_non, np.int64)[np.random.randint(0, len(evol_event_non), size=evol_event_sib.shape[0]), :]
-        print(evol_event_sib.shape, evol_event_non.shape)
-        chi_stat_sib, chi_stat_non, n_pair_stat, _ = indept_field_evolution_chi2(
-            real_distribution=real_distribution,
-            X_pairs=evol_event_sib,
-            Y_pairs=evol_event_non
-        )
-        mi_sib, mi_non, _, _ = indept_field_evolution_mutual_info(
-            X_pairs=evol_event_sib,
-            Y_pairs=evol_event_non
-        )
+    sib_field_pairs = np.array(sib_field_pairs)
+    non_field_pairs = np.array(non_field_pairs)
+    
+    sib_num, non_num = sib_field_pairs.shape[0], non_field_pairs.shape[0]
+    
+    for dt in np.arange(2, 6):
+        for i in range(field_reg.shape[0]-dt+1):
+            idx = np.where(np.isnan(np.sum(field_reg[i:i+dt, :], axis=0)) == False)[0]
+                
+            if idx.shape[0] == 0:
+                continue
+
+            real_distribution = get_evolve_event_label(field_reg[i:i+dt, idx])
+            
+            evol_event_sib, evol_event_non = get_evolve_event_pairs(
+                i=i,
+                j=i+dt,
+                field_reg=field_reg,
+                sib_field_pairs=sib_field_pairs,
+                non_field_pairs=non_field_pairs
+            )
+            
+            chi_stat_sib, chi_stat_non, n_pair_stat, _ = indept_field_evolution_chi2(
+                real_distribution=real_distribution,
+                X_pairs=evol_event_sib,
+                Y_pairs=evol_event_non
+            )
+            mi_sib, mi_non, _, _ = indept_field_evolution_mutual_info(
+                X_pairs=evol_event_sib,
+                Y_pairs=evol_event_non
+            )
+
+            sessions = sessions + [i+1, i+1]
+            chi2_stat = chi2_stat + [chi_stat_sib, chi_stat_non]
+            MI = MI + [mi_sib, mi_non]
+            dimension = dimension + [dt, dt]
+            pair_type = pair_type + ['Sibling', 'Non-sibling']
+            pair_num = pair_num + [evol_event_sib.shape[0], evol_event_non.shape[0]]
         
-        chi2_stat = chi2_stat + [chi_stat_sib, chi_stat_non]
-        MI = MI + [mi_sib, mi_non]
-        pair_type = pair_type + ['Sibling', 'Non-sibling']
-        pair_num = pair_num + [evol_event_sib.shape[0], evol_event_non.shape[0]]
-        print("      Chi2 test: ", chi_stat_sib, chi_stat_non)
-        print("      Mutual info: ", mi_sib, mi_non)
-        
-    return sessions, np.array(chi2_stat), np.array(MI), np.array(pair_type), np.ndarray(pair_num)
+    return np.array(sessions), np.array(chi2_stat), np.array(MI), np.array(pair_type), np.array(pair_num), np.array(dimension)
 
         
 

@@ -1921,7 +1921,7 @@ def ActivationRateSpatialPosition_Interface(
         np.concatenate([np.repeat(1, act_rate_per.shape[0]), np.repeat(0, act_rate_err.shape[0])])
     )
     
-from mylib.field.field_tracker import RegisteredField, conditional_prob
+from mylib.field.field_tracker import RegisteredField
 # Fig0313
 def ConditionalProb_Interface(
     trace: dict,
@@ -1974,6 +1974,7 @@ def ConditionalProb_Interface(
                 np.concatenate([off_next_num_cis, off_next_num_trs]))
 
 
+# Fig0321
 from mylib.field.counter import calculate_superstable_fraction, calculate_survival_fraction
 def Superstable_Fraction_Interface(
     trace: dict,
@@ -1981,7 +1982,7 @@ def Superstable_Fraction_Interface(
     spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=[
-        'Duration', 'Superstable Frac.', 'Threshold', 'Drift Model'])
+        'Duration', 'Superstable Frac.', 'Threshold'])
     superstable_thre = np.arange(3, 51)
     
     dur = np.concatenate([trace['days'] for i in range(superstable_thre.shape[0])])
@@ -1989,7 +1990,7 @@ def Superstable_Fraction_Interface(
     #superstable_frac = np.concatenate([trace['Superstable Num'][i, :] for i in range(superstable_thre.shape[0])])
     thre = np.repeat(np.arange(3, 51), trace['days'].shape[0])
     
-    return dur, superstable_frac, thre, np.repeat(trace['drift_model'], superstable_frac.shape[0])
+    return dur, superstable_frac, thre
 
 def Superstable_Fraction_Data_Interface(
     trace: dict,
@@ -1997,21 +1998,44 @@ def Superstable_Fraction_Data_Interface(
     spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=[
-        'Duration', 'Superstable Frac.', 'Threshold', 'Drift Model'])
+        'Duration', 'Superstable Frac.', 'Threshold', 'Paradigm'])
     
-    field_reg = trace['field_reg']
-    num = np.where(np.isnan(field_reg), 0, 1)
-    count = np.sum(num, axis=0)
-    field_reg = field_reg[:, np.where(count == field_reg.shape[0])[0]]
-    superstable_thre = np.arange(3, field_reg.shape[0]+1)
+    if trace['paradigm'] == 'CrossMaze':
+        field_reg = trace['field_reg']
+        num = np.where(np.isnan(field_reg), 0, 1)
+        count = np.sum(num, axis=0)
+        field_reg = field_reg[:, np.where(count == field_reg.shape[0])[0]]
+        superstable_thre = np.arange(3, field_reg.shape[0]+1)
     
-    dur = np.concatenate([np.arange(1, field_reg.shape[0]+1) for i in range(superstable_thre.shape[0])])
-    superstable_frac = calculate_superstable_fraction(field_reg, thres=superstable_thre).flatten()
-    #superstable_frac = np.concatenate([trace['Superstable Num'][i, :] for i in range(superstable_thre.shape[0])])
-    thre = np.repeat(superstable_thre, field_reg.shape[0])
+        dur = np.concatenate([np.arange(1, field_reg.shape[0]+1) for i in range(superstable_thre.shape[0])])
+        superstable_frac = calculate_superstable_fraction(field_reg, thres=superstable_thre).flatten()
+        #superstable_frac = np.concatenate([trace['Superstable Num'][i, :] for i in range(superstable_thre.shape[0])])
+        thre = np.repeat(superstable_thre, field_reg.shape[0])
     
-    return dur, superstable_frac, thre, np.repeat('real', superstable_frac.shape[0])
-    
+        return dur, superstable_frac, thre, np.repeat(trace['paradigm'], dur.shape[0])
+    else:
+        field_reg = trace['cis']['field_reg']
+        num = np.where(np.isnan(field_reg), 0, 1)
+        count = np.sum(num, axis=0)
+        field_reg = field_reg[:, np.where(count == field_reg.shape[0])[0]]
+        superstable_thre = np.arange(3, field_reg.shape[0]+1)
+        
+        dur = np.concatenate([np.arange(1, field_reg.shape[0]+1) for i in range(superstable_thre.shape[0])])
+        superstable_frac_cis = calculate_superstable_fraction(trace['cis']['field_reg'], thres=superstable_thre).flatten()
+        superstable_frac_trs = calculate_superstable_fraction(trace['trs']['field_reg'], thres=superstable_thre).flatten()
+        thre = np.repeat(superstable_thre, field_reg.shape[0])
+        
+        return (
+            np.concatenate([dur, dur]), 
+            np.concatenate([superstable_frac_cis, superstable_frac_trs]), 
+            np.concatenate([thre, thre]), 
+            np.concatenate([np.repeat(trace['paradigm']+' cis', dur.shape[0]), 
+                            np.repeat(trace['paradigm']+' trs', dur.shape[0])])
+        )
+        
+        
+
+# Fig0322
 def SurvivalField_Fraction_Interface(
     trace: dict,
     variable_names: list | None = None,
@@ -2019,7 +2043,7 @@ def SurvivalField_Fraction_Interface(
 ):
     VariablesInputErrorCheck(input_variable=variable_names, 
                              check_variable=['Session Interval', 'Start Session', 
-                                             'Survival Frac.', 'Drift Model'])
+                                             'Survival Frac.'])
     
     survival_frac, start_sessions, training_day = calculate_survival_fraction(trace['field_reg'].T)
     survival_frac = survival_frac.flatten()
@@ -2032,7 +2056,7 @@ def SurvivalField_Fraction_Interface(
     start_sessions = start_sessions[idx]
     training_day = training_day[idx]
     
-    return training_day, start_sessions, survival_frac, np.repeat(trace['drift_model'], survival_frac.shape[0])
+    return training_day, start_sessions, survival_frac
 
 def SurvivalField_Fraction_Data_Interface(
     trace: dict,
@@ -2040,23 +2064,106 @@ def SurvivalField_Fraction_Data_Interface(
     spike_threshold: int | float = 10,
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=[
-        'Session Interval', 'Start Session', 'Survival Frac.', 'Drift Model'])
+        'Session Interval', 'Start Session', 'Survival Frac.', 'Paradigm'])
     
-    field_reg = trace['field_reg']
-    num = np.where(np.isnan(field_reg), 0, 1)
-    count = np.sum(num, axis=0)
-    field_reg = field_reg[:, np.where(count >= field_reg.shape[0]-4)[0]]
+    if trace['paradigm'] == 'CrossMaze':
+        field_reg = trace['field_reg']
+        num = np.where(np.isnan(field_reg), 0, 1)
+        count = np.sum(num, axis=0)
+        field_reg = field_reg[:, np.where(count >= field_reg.shape[0]-4)[0]]
 
-    survival_frac, start_sessions, training_day = calculate_survival_fraction(field_reg)
-    survival_frac = survival_frac.flatten()
-    start_sessions = start_sessions.flatten()
-    training_day = training_day.flatten()
+        survival_frac, start_sessions, training_day = calculate_survival_fraction(field_reg)
+        survival_frac = survival_frac.flatten()
+        start_sessions = start_sessions.flatten()
+        training_day = training_day.flatten()
     
-    # Remove nan
-    idx = np.where((np.isnan(survival_frac) == False)&(np.isnan(start_sessions) == False)&(np.isnan(training_day) == False))[0]
-    survival_frac = survival_frac[idx]
-    start_sessions = start_sessions[idx]
-    training_day = training_day[idx]
+        # Remove nan
+        idx = np.where((np.isnan(survival_frac) == False)&(np.isnan(start_sessions) == False)&(np.isnan(training_day) == False))[0]
+        survival_frac = survival_frac[idx]
+        start_sessions = start_sessions[idx]
+        training_day = training_day[idx]
     
-    return training_day, start_sessions, survival_frac, np.repeat('real', survival_frac.shape[0])
+        return training_day, start_sessions, survival_frac, np.repeat(trace['paradigm'], survival_frac.shape[0])
+    else:
+        field_reg = trace['cis']['field_reg']
+        num = np.where(np.isnan(field_reg), 0, 1)
+        count = np.sum(num, axis=0)
+        field_reg = field_reg[:, np.where(count == field_reg.shape[0])[0]]
+        
+        survival_frac_cis, start_sessions_cis, training_day_cis = calculate_survival_fraction(field_reg)
+        survival_frac_cis = survival_frac_cis.flatten()
+        start_sessions_cis = start_sessions_cis.flatten()
+        training_day_cis = training_day_cis.flatten()
+        
+        # Remove nan
+        idx = np.where((np.isnan(survival_frac_cis) == False)&
+                       (np.isnan(start_sessions_cis) == False)&
+                       (np.isnan(training_day_cis) == False))[0]
+        survival_frac_cis = survival_frac_cis[idx]
+        start_sessions_cis = start_sessions_cis[idx]
+        training_day_cis = training_day_cis[idx]
+        
+        field_reg = trace['trs']['field_reg']
+        num = np.where(np.isnan(field_reg), 0, 1)
+        count = np.sum(num, axis=0)
+        field_reg = field_reg[:, np.where(count == field_reg.shape[0])[0]]
+        
+        survival_frac_trs, start_sessions_trs, training_day_trs = calculate_survival_fraction(field_reg)
+        survival_frac_trs = survival_frac_trs.flatten()
+        start_sessions_trs = start_sessions_trs.flatten()
+        training_day_trs = training_day_trs.flatten()
+        
+        # Remove nan
+        idx = np.where((np.isnan(survival_frac_trs) == False)&
+                       (np.isnan(start_sessions_trs) == False)&
+                       (np.isnan(training_day_trs) == False))[0]
+        survival_frac_trs = survival_frac_trs[idx]
+        start_sessions_trs = start_sessions_trs[idx]
+        training_day_trs = training_day_trs[idx]
+        
+        return (
+            np.concatenate([training_day_cis, training_day_trs]),
+            np.concatenate([start_sessions_cis, start_sessions_trs]),
+            np.concatenate([survival_frac_cis, survival_frac_trs]),
+            np.concatenate([np.repeat(trace['paradigm']+' cis', survival_frac_cis.shape[0]),
+                            np.repeat(trace['paradigm']+' trs', survival_frac_trs.shape[0])])
+        )
+
+# Fig0318
+from mylib.field.field_tracker import indept_test_for_evolution_events
+def IndependentEvolution_Interface(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
+):
+    VariablesInputErrorCheck(
+        input_variable=variable_names,
+        check_variable=['Training Session', 'Chi-Square Statistic', 'MI', 'Dimension', 'Pair Type', 'Pair Num', 'Paradigm'])
     
+    if trace['paradigm'] == 'CrossMaze':
+        start_session, chi_stat, mi, pair_type, pair_num, dim = indept_test_for_evolution_events(
+            trace['field_reg'],
+            trace['field_ids']
+        )
+        return (start_session, chi_stat, mi, dim, pair_type, pair_num, np.repeat(trace['paradigm'], start_session.shape[0]))
+        
+    else:
+        start_session_cis, chi_stat_cis, mi_cis, pair_type_cis, pair_num_cis, dim_cis = indept_test_for_evolution_events(
+            trace['cis']['field_reg'],
+            trace['cis']['field_ids']
+        )
+        start_session_trs, chi_stat_trs, mi_trs, pair_type_trs, pair_num_trs, dim_trs = indept_test_for_evolution_events(
+            trace['trs']['field_reg'],
+            trace['trs']['field_ids']
+        )
+    
+    
+        return (np.concatenate([start_session_cis, start_session_trs]),
+                np.concatenate([chi_stat_cis, chi_stat_trs]),
+                np.concatenate([mi_cis, mi_trs]),
+                np.concatenate([dim_cis, dim_trs]),
+                np.concatenate([pair_type_cis, pair_type_trs]),
+                np.concatenate([pair_num_cis, pair_num_trs]),
+                np.concatenate([np.repeat(trace['paradigm']+' cis', start_session_cis.shape[0]), 
+                                np.repeat(trace['paradigm']+' trs', start_session_trs.shape[0])])
+                )
