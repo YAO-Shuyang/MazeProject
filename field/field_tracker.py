@@ -45,7 +45,7 @@ class RegisteredField(object):
                     continue
                      
                 recover_num = np.where((np.sum(field_reg[i+1:j, :], axis=0)==0)&(field_reg[i, :] == 1)&(field_reg[j, :] == 1))[0]
-                non_recover_num = np.where((np.sum(field_reg[i+1:j, :], axis=0)==0)&(field_reg[i, :] == 1)&(field_reg[j, :] == 0))[0]
+                non_recover_num = np.where((np.nansum(field_reg[i+1:j, :], axis=0)==0)&(field_reg[i, :] == 1)&(field_reg[j, :] == 0))[0]
                 off_next_prob[j-i-1, 0] += recover_num.shape[0]
                 off_next_prob[j-i-1, 1] += non_recover_num.shape[0]
                 
@@ -188,7 +188,11 @@ def get_evolve_event_pairs(
     evol_event_non = evol_event_non[np.random.randint(low=0, high=evol_event_non.shape[0], size=evol_event_sib.shape[0]), :]  
     return evol_event_sib, evol_event_non  
 
-def indept_test_for_evolution_events(field_reg: np.ndarray, field_ids: np.ndarray):
+def indept_test_for_evolution_events(
+    field_reg: np.ndarray, 
+    field_ids: np.ndarray, 
+    N: None|int = None
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     sessions, chi2_stat, MI, pair_type, pair_num, dimension = [], [], [], [], [], []
     
     sib_field_pairs, non_field_pairs = [], []
@@ -198,11 +202,13 @@ def indept_test_for_evolution_events(field_reg: np.ndarray, field_ids: np.ndarra
                 if len(sib_field_pairs) >= 3000000:
                     continue
                 sib_field_pairs.append([i, j])
+                sib_field_pairs.append([j, i])
             else:
                 if len(non_field_pairs) >= 3000000:
                     continue
                 
                 non_field_pairs.append([i, j])
+                non_field_pairs.append([j, i])
                 
     sib_field_pairs = np.array(sib_field_pairs)
     non_field_pairs = np.array(non_field_pairs)
@@ -226,6 +232,14 @@ def indept_test_for_evolution_events(field_reg: np.ndarray, field_ids: np.ndarra
                 non_field_pairs=non_field_pairs
             )
             
+            if N is None:
+                N = min(evol_event_non.shape[0], evol_event_sib.shape[0])
+            else:
+                N = min(N, min(evol_event_non.shape[0], evol_event_sib.shape[0]))
+            
+            evol_event_non = evol_event_non[np.random.randint(low=0, high=evol_event_non.shape[0], size=N), :]
+            evol_event_sib = evol_event_sib[np.random.randint(low=0, high=evol_event_sib.shape[0], size=N), :]
+            
             chi_stat_sib, chi_stat_non, n_pair_stat, _ = indept_field_evolution_chi2(
                 real_distribution=real_distribution,
                 X_pairs=evol_event_sib,
@@ -245,7 +259,69 @@ def indept_test_for_evolution_events(field_reg: np.ndarray, field_ids: np.ndarra
         
     return np.array(sessions), np.array(chi2_stat), np.array(MI), np.array(pair_type), np.array(pair_num), np.array(dimension)
 
+
+def compute_joint_probability_matrix(
+    field_reg: np.ndarray, 
+    field_ids: np.ndarray, 
+    N: None|int = None,
+    dim: int = 2
+):
+    sessions, mat = [], []
+    
+    sib_field_pairs, non_field_pairs = [], []
+    for i in range(len(field_ids)-1):
+        for j in range(i+1, len(field_ids)):
+            if field_ids[i] == field_ids[j]:
+                if len(sib_field_pairs) >= 3000000:
+                    continue
+                sib_field_pairs.append([i, j])
+                sib_field_pairs.append([j, i])
+            else:
+                if len(non_field_pairs) >= 3000000:
+                    continue
+                
+                non_field_pairs.append([i, j])
+                non_field_pairs.append([j, i])
+                
+    sib_field_pairs = np.array(sib_field_pairs)
+    non_field_pairs = np.array(non_field_pairs)
+    
+    sib_num, non_num = sib_field_pairs.shape[0], non_field_pairs.shape[0]
+    
+    dt = dim
+    for i in range(field_reg.shape[0]-dt+1):
+        idx = np.where(np.isnan(np.sum(field_reg[i:i+dt, :], axis=0)) == False)[0]
+                
+        if idx.shape[0] == 0:
+            continue
+
+        real_distribution = get_evolve_event_label(field_reg[i:i+dt, idx])
+            
+        evol_event_sib, evol_event_non = get_evolve_event_pairs(
+            i=i,
+            j=i+dt,
+            field_reg=field_reg,
+            sib_field_pairs=sib_field_pairs,
+            non_field_pairs=non_field_pairs
+        )
+            
+        if N is None:
+            N = min(evol_event_non.shape[0], evol_event_sib.shape[0])
+            
+        evol_event_non = evol_event_non[np.random.randint(low=0, high=evol_event_non.shape[0], size=N), :]
+        evol_event_sib = evol_event_sib[np.random.randint(low=0, high=evol_event_sib.shape[0], size=N), :]
         
+        sib_mat, non_sib, joint_mat = indept_field_evolution_chi2(
+            real_distribution=real_distribution,
+            X_pairs=evol_event_sib,
+            Y_pairs=evol_event_non,
+            return_mat=True
+        )
+
+        sessions.append(i+1)
+        mat.append(sib_mat/np.sum(sib_mat)-joint_mat/np.sum(joint_mat))
+    return np.array(sessions), np.stack(mat)
+
 
 
 if __name__ == '__main__':

@@ -417,10 +417,11 @@ def main(
         overlap_thre=overlap_thre
     )
     field_ids = get_field_ids(field_info)
+    shuffle_type = 'Shuffle' if is_shuffle else 'Real'
     
     trace = {"MiceID": mouse, "Stage": stage, "session": session, "maze_type": maze_type, "paradigm": behavior_paradigm,
              "is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info, 
-             "field_ids": field_ids,
+             "field_ids": field_ids, 'is_shuffle': shuffle_type,
               "n_neurons": n_neurons, "n_sessions": n_sessions, "maze_type": maze_type,
              "index_map": index_map.astype(np.int64)}
 
@@ -438,7 +439,7 @@ def main(
     else:
         DATA = {"MiceID": mouse, "Stage": stage, "session": session, "maze_type": maze_type, "paradigm": behavior_paradigm,
                 "cis":{"is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info, 'field_ids': field_ids},
-                "n_neurons": n_neurons, "n_sessions": n_sessions, "maze_type": maze_type,
+                "n_neurons": n_neurons, "n_sessions": n_sessions, "maze_type": maze_type, 'is_shuffle': shuffle_type,
                 "index_map": index_map.astype(np.int64)}
     
     n_neurons = index_map.shape[1]
@@ -459,7 +460,10 @@ def main(
         for i in range(n_sessions):
             if index_map[i, j] > 0:
                 is_placecell[i, j] = res['is_placecell'][i][int(index_map[i, j])-1]
-                place_field_all[j].append(res['place_field_all_multiday'][i][int(index_map[i, j])-1])
+                if is_shuffle == False:
+                    place_field_all[j].append(res['place_field_all_multiday'][i][int(index_map[i, j])-1])
+                else:
+                    place_field_all[j].append(field_reallocate(res['place_field_all_multiday'][i][int(index_map[i, j])-1], maze_type=maze_type))
             else:
                 place_field_all[j].append(None)
     print("Field Register...")            
@@ -480,12 +484,13 @@ def main(
 if __name__ == "__main__":  
     from mylib.local_path import f_CellReg_modi as f
     from tqdm import tqdm
-    
+
     for i in tqdm(range(len(f))):
         is_shuffle = f['Type'][i] == 'Shuffle'
+        
         if is_shuffle == False:
             continue
-
+        
         if f['paradigm'][i] == 'CrossMaze':
             if f['maze_type'][i] == 0:
                 index_map = GetMultidayIndexmap(
