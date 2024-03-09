@@ -308,10 +308,10 @@ class MultiDayLayout:
                                      'DeconvSignal', 'ms_time', 'place_field_all_multiday', 'maze_type', 
                                      'old_map_clear'])
              
-        for i in cell_pairs:
+        for n, i in enumerate(cell_pairs):
             cell_indices = index_map[:, i]
             print("Cell Indices: ", cell_indices)
-            print(f"   {i}/{len(cell_pairs)}, cell num = {np.count_nonzero(cell_indices)}")
+            print(f"   {n}/{len(cell_pairs)}, cell num = {np.count_nonzero(cell_indices)}")
             core2 = MultiDayCore.concat_core(f, file_indices, cell_indices, core=core, interv_time=interv_time)
             Visualizer = MultiDayLayout(f, file_indices, cell_indices, core=core2, **layout_kw)   
             Visualizer.visualize(
@@ -574,10 +574,10 @@ class MultiDayLayout2:
                                      'DeconvSignal', 'ms_time', 'place_field_all_multiday', 
                                      'maze_type', 'old_map_clear'])
              
-        for i in cell_pairs:
+        for n, i in enumerate(cell_pairs):
             cell_indices = index_map[:, i]
             print("    Cell Indices: ", cell_indices)
-            print(f"{i}/{len(cell_pairs)}, cell num = {cell_indices.shape[0]}")
+            print(f"{n}/{len(cell_pairs)}, cell num = {cell_indices.shape[0]}")
             core2 = MultiDayCore.concat_core(f, file_indices, cell_indices, core=core, interv_time=interv_time)
             Visualizer = MultiDayLayout2(f, footprint_dirs, file_indices, cell_indices, core=core2, **layout_kw)
             Visualizer.visualize(
@@ -648,7 +648,7 @@ class MultiDayLayout3:
         ax.imshow(footprint.T, cmap = 'gray')
         ax.plot([center_x], [center_y], 'o', markeredgewidth=0, markersize = 3, color = 'orange')
         ax.set_aspect("equal")
-        ax.axis([center_x - 15, center_x + 15, center_y - 15, center_y + 15])
+        ax.axis([center_x - 8, center_x + 8, center_y - 8, center_y + 8])
         return ax
             
     
@@ -848,10 +848,10 @@ class MultiDayLayout3:
                                      'DeconvSignal', 'ms_time', 'place_field_all_multiday', 'maze_type', 
                                      'old_map_clear'])
              
-        for i in cell_pairs:
+        for n, i in enumerate(cell_pairs):
             cell_indices = index_map[:, i]
             print("    Cell Indices: ", cell_indices)
-            print(f"{i}/{len(cell_pairs)}, cell num = {cell_indices.shape[0]}")
+            print(f"{n}/{len(cell_pairs)}, cell num = {cell_indices.shape[0]}")
             core2 = MultiDayCore.concat_core(f, file_indices, cell_indices, core=core, interv_time=interv_time)
             Visualizer = MultiDayLayout3(f, footprint_dirs, file_indices, cell_indices, core=core2, **layout_kw)
             Visualizer.visualize(
