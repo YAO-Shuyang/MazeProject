@@ -264,8 +264,12 @@ def compute_joint_probability_matrix(
     field_reg: np.ndarray, 
     field_ids: np.ndarray, 
     N: None|int = None,
-    dim: int = 2
+    dim: int = 2,
+    return_item: str = "sib"
 ):
+    if return_item not in ['sib', 'non']:
+        raise ValueError(f"return_item must be 'sib' or 'non', rather than {return_item}")
+    
     sessions, mat = [], []
     
     sib_field_pairs, non_field_pairs = [], []
@@ -319,7 +323,11 @@ def compute_joint_probability_matrix(
         )
 
         sessions.append(i+1)
-        mat.append(sib_mat/np.sum(sib_mat)-joint_mat/np.sum(joint_mat))
+        if return_item == 'sib':
+            mat.append(sib_mat/np.sum(sib_mat)-joint_mat/np.sum(joint_mat))
+        else:
+            mat.append(non_sib/np.sum(non_sib)-joint_mat/np.sum(joint_mat))
+            
     return np.array(sessions), np.stack(mat)
 
 

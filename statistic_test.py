@@ -527,25 +527,51 @@ def GetMultidayIndexmap(
     stage: str = None,
     session: int = None,
     i: int = None,
-    occu_num: int = None
-):
-    f = f_CellReg_day
-    if i is None:
-        idx = np.where((f['MiceID'] == mouse)&(f['Stage'] == stage)&(f['session'] == session))[0]
-    
-        if len(idx) == 0:
-            print(f"    Mouse {mouse} does not have {stage} session {session} data.")
-            return np.array([], dtype = np.int64)
-        i = idx[0]
-    
-    if occu_num is None:
-        occu_time = 6
-        
-    with open(os.path.join(CellregDate, f['dates'][i]), 'rb') as handle:
-        order = pickle.load(handle)
-    
-    return Read_and_Sort_IndexMap(path = f['cellreg_folder'][i], occur_num = occu_num, align_type = 'cross_day', name_label = f['label'][i], order=order)
+    occu_num: int = None,
+    f: pd.DataFrame | None = None
+):  
+    if f is None:
+        f = f_CellReg_day
 
+        if i is None:
+            idx = np.where((f['MiceID'] == mouse)&(f['Stage'] == stage)&(f['session'] == session))[0]
+    
+            if len(idx) == 0:
+                print(f"    Mouse {mouse} does not have {stage} session {session} data.")
+                return np.array([], dtype = np.int64)
+            i = idx[0]
+    
+        if occu_num is None:
+            occu_num = 6
+            
+        with open(os.path.join(CellregDate, f['dates'][i]), 'rb') as handle:
+            order = pickle.load(handle)
+    
+        return Read_and_Sort_IndexMap(path = f['cellreg_folder'][i], occur_num = occu_num, align_type = 'cross_day', name_label = f['label'][i], order=order)
+    else:
+        if i is None:
+            idx = np.where((f['MiceID'] == mouse)&(f['Stage'] == stage)&(f['session'] == session)&(f['Type'] == 'Real'))[0]
+    
+            if len(idx) == 0:
+                print(f"    Mouse {mouse} does not have {stage} session {session} data.")
+                return np.array([], dtype = np.int64)
+            i = idx[0]
+    
+        if occu_num is None:
+            occu_num = 6
+        
+        if f['File Type'][i] == 'PKL':
+            with open(f['cellreg_folder'][i], 'rb') as handle:
+                index_map = pickle.load(handle)
+        else:
+            index_map = ReadCellReg(f['cellreg_folder'][i])
+            
+        print(f['cellreg_folder'][i])
+
+        cellnum = np.where(index_map == 0, 0, 1)
+        idx = np.where(np.nansum(cellnum, axis=0) >= occu_num)[0]
+        return index_map[:, idx]
+    
 def GetSFPSet(
     cellreg_path: str,
     f: pd.DataFrame,
