@@ -2248,38 +2248,39 @@ def CoordinatedDrift_Interface(
             axis = np.concatenate([axis, ax])
             pair_types = np.concatenate([pair_types, np.repeat('Sibling', sessions.shape[0])])
             
-            session, mat = compute_joint_probability_matrix(
-                trace['field_reg'],
-                trace['field_ids'],
-                dim=dim,
-                return_item='non'
-            )
+            for i in range(10):
+                session, mat = compute_joint_probability_matrix(
+                    trace['field_reg'],
+                    trace['field_ids'],
+                    dim=dim,
+                    return_item='non'
+                )
             
-            sessions = np.concatenate([np.arange(1, session.shape[0]+1) for i in range(size)])
-            detP = np.concatenate([mat[:, i, i] for i in range(size)])
-            dimen = np.repeat(dim, sessions.shape[0])
-            ax = np.repeat("IP axis", sessions.shape[0])
-            x = np.concatenate([np.repeat(i+1, session.shape[0]) for i in range(size)])
+                sessions = np.concatenate([np.arange(1, session.shape[0]+1) for i in range(size)])
+                detP = np.concatenate([mat[:, i, i] for i in range(size)])
+                dimen = np.repeat(dim, sessions.shape[0])
+                ax = np.repeat("IP axis", sessions.shape[0])
+                x = np.concatenate([np.repeat(i+1, session.shape[0]) for i in range(size)])
             
-            start_session = np.concatenate([start_session, sessions])
-            dP = np.concatenate([dP, detP])
-            dims = np.concatenate([dims, dimen])
-            xs = np.concatenate([xs, x])
-            axis = np.concatenate([axis, ax])
-            pair_types = np.concatenate([pair_types, np.repeat('Non-sibling', sessions.shape[0])])
+                start_session = np.concatenate([start_session, sessions])
+                dP = np.concatenate([dP, detP])
+                dims = np.concatenate([dims, dimen])
+                xs = np.concatenate([xs, x])
+                axis = np.concatenate([axis, ax])
+                pair_types = np.concatenate([pair_types, np.repeat('Non-sibling', sessions.shape[0])])
             
-            sessions = np.concatenate([np.arange(1, session.shape[0]+1) for i in range(size-1)])
-            detP = np.concatenate([mat[:, i, size-i-2] for i in range(size-1)])
-            dimen = np.repeat(dim, sessions.shape[0])
-            ax = np.repeat("CP axis", sessions.shape[0])
-            x = np.concatenate([np.repeat(i+1, session.shape[0]) for i in range(size-1)])
+                sessions = np.concatenate([np.arange(1, session.shape[0]+1) for i in range(size-1)])
+                detP = np.concatenate([mat[:, i, size-i-2] for i in range(size-1)])
+                dimen = np.repeat(dim, sessions.shape[0])
+                ax = np.repeat("CP axis", sessions.shape[0])
+                x = np.concatenate([np.repeat(i+1, session.shape[0]) for i in range(size-1)])
             
-            start_session = np.concatenate([start_session, sessions])
-            dP = np.concatenate([dP, detP])
-            dims = np.concatenate([dims, dimen])
-            xs = np.concatenate([xs, x])
-            axis = np.concatenate([axis, ax])
-            pair_types = np.concatenate([pair_types, np.repeat('Non-sibling', sessions.shape[0])])
+                start_session = np.concatenate([start_session, sessions])
+                dP = np.concatenate([dP, detP])
+                dims = np.concatenate([dims, dimen])
+                xs = np.concatenate([xs, x])
+                axis = np.concatenate([axis, ax])
+                pair_types = np.concatenate([pair_types, np.repeat('Non-sibling', sessions.shape[0])])
     
         return start_session, dP, dims, axis, pair_types, np.repeat("CrossMaze", xs.shape[0]), xs
     else:
@@ -2287,8 +2288,8 @@ def CoordinatedDrift_Interface(
             for dim in range(2, 6):
             
                 session, mat = compute_joint_probability_matrix(
-                    trace[k]['cis']['field_reg'],
-                    trace[k]['cis']['field_ids'],
+                    trace[k]['field_reg'],
+                    trace[k]['field_ids'],
                     dim=dim,
                     return_item='sib'
                 )
@@ -2321,41 +2322,42 @@ def CoordinatedDrift_Interface(
                 axis = np.concatenate([axis, ax])
                 pair_types = np.concatenate([pair_types, np.repeat('Sibling', sessions.shape[0])])
                 direction = np.concatenate([direction, np.repeat(trace['paradigm']+' '+k, sessions.shape[0])])
+
+                for i in range(10):
+                    session, mat = compute_joint_probability_matrix(
+                        trace[k]['field_reg'],
+                        trace[k]['field_ids'],
+                        dim=dim,
+                        return_item='non'
+                    )
             
-                session, mat = compute_joint_probability_matrix(
-                    trace['trs']['field_reg'],
-                    trace['trs']['field_ids'],
-                    dim=dim,
-                    return_item='non'
-                )
+                    sessions = np.concatenate([np.arange(1, session.shape[0]+1) for i in range(size)])
+                    detP = np.concatenate([mat[:, i, i] for i in range(size)])
+                    dimen = np.repeat(dim, sessions.shape[0])
+                    ax = np.repeat("IP axis", sessions.shape[0])
+                    x = np.concatenate([np.repeat(i+1, session.shape[0]) for i in range(size)])
             
-                sessions = np.concatenate([np.arange(1, session.shape[0]+1) for i in range(size)])
-                detP = np.concatenate([mat[:, i, i] for i in range(size)])
-                dimen = np.repeat(dim, sessions.shape[0])
-                ax = np.repeat("IP axis", sessions.shape[0])
-                x = np.concatenate([np.repeat(i+1, session.shape[0]) for i in range(size)])
+                    start_session = np.concatenate([start_session, sessions])
+                    dP = np.concatenate([dP, detP])
+                    dims = np.concatenate([dims, dimen])
+                    xs = np.concatenate([xs, x])
+                    axis = np.concatenate([axis, ax])
+                    pair_types = np.concatenate([pair_types, np.repeat('Non-sibling', sessions.shape[0])])
+                    direction = np.concatenate([direction, np.repeat(trace['paradigm']+' '+k, sessions.shape[0])])
             
-                start_session = np.concatenate([start_session, sessions])
-                dP = np.concatenate([dP, detP])
-                dims = np.concatenate([dims, dimen])
-                xs = np.concatenate([xs, x])
-                axis = np.concatenate([axis, ax])
-                pair_types = np.concatenate([pair_types, np.repeat('Non-sibling', sessions.shape[0])])
-                direction = np.concatenate([direction, np.repeat(trace['paradigm']+' '+k, sessions.shape[0])])
+                    sessions = np.concatenate([np.arange(1, session.shape[0]+1) for i in range(size-1)])
+                    detP = np.concatenate([mat[:, i, size-i-2] for i in range(size-1)])
+                    dimen = np.repeat(dim, sessions.shape[0])
+                    ax = np.repeat("CP axis", sessions.shape[0])
+                    x = np.concatenate([np.repeat(i+1, session.shape[0]) for i in range(size-1)])
             
-                sessions = np.concatenate([np.arange(1, session.shape[0]+1) for i in range(size-1)])
-                detP = np.concatenate([mat[:, i, size-i-2] for i in range(size-1)])
-                dimen = np.repeat(dim, sessions.shape[0])
-                ax = np.repeat("CP axis", sessions.shape[0])
-                x = np.concatenate([np.repeat(i+1, session.shape[0]) for i in range(size-1)])
-            
-                start_session = np.concatenate([start_session, sessions])
-                dP = np.concatenate([dP, detP])
-                dims = np.concatenate([dims, dimen])
-                xs = np.concatenate([xs, x])
-                axis = np.concatenate([axis, ax])
-                pair_types = np.concatenate([pair_types, np.repeat('Non-sibling', sessions.shape[0])])
-                direction = np.concatenate([direction, np.repeat(trace['paradigm']+' '+k, sessions.shape[0])])
+                    start_session = np.concatenate([start_session, sessions])
+                    dP = np.concatenate([dP, detP])
+                    dims = np.concatenate([dims, dimen])
+                    xs = np.concatenate([xs, x])
+                    axis = np.concatenate([axis, ax])
+                    pair_types = np.concatenate([pair_types, np.repeat('Non-sibling', sessions.shape[0])])
+                    direction = np.concatenate([direction, np.repeat(trace['paradigm']+' '+k, sessions.shape[0])])
             
         return start_session, dP, dims, axis, pair_types, direction, xs
             
