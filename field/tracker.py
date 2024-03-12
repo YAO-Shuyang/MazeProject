@@ -4,7 +4,7 @@ import pandas as pd
 from mylib.local_path import f1, f_CellReg_day, f3, f4
 from mylib.statistic_test import GetMultidayIndexmap, ReadCellReg
 from mylib.multiday.core import MultiDayCore
-from mylib.maze_utils3 import field_reallocate
+from mylib.maze_utils3 import field_reallocate, GetDMatrices
 from tqdm import tqdm
 import os
 import pickle
@@ -318,6 +318,16 @@ def get_field_ids(field_info: np.ndarray) -> np.ndarray:
         labels.append(column_dict[column])
     return np.array(labels)
 
+def get_field_centers(field_info: np.ndarray, maze_type: int) -> np.ndarray:
+    D = GetDMatrices(maze_type, 48)
+    
+    field_centers = np.zeros(field_info.shape[1])
+    for col in range(field_info.shape[1]):
+        distances = D[0, field_info[:, col, 2][np.where(np.isnan(field_info[:, col, 2]) == False)[0]].astype(int)-1]
+        field_centers[col] = field_info[:, col, 2][np.where(np.isnan(field_info[:, col, 2]) == False)[0]][np.where(distances >= np.median(distances))[0][0]]
+    
+    return field_centers
+
 def main(
     i: int,
     f: pd.DataFrame = f_CellReg_day,
@@ -421,7 +431,7 @@ def main(
     
     trace = {"MiceID": mouse, "Stage": stage, "session": session, "maze_type": maze_type, "paradigm": behavior_paradigm,
              "is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info, 
-             "field_ids": field_ids, 'is_shuffle': shuffle_type,
+             "field_ids": field_ids, 'is_shuffle': shuffle_type, "field_centers": get_field_centers(field_info, maze_type),
               "n_neurons": n_neurons, "n_sessions": n_sessions, "maze_type": maze_type,
              "index_map": index_map.astype(np.int64)}
 
@@ -438,7 +448,8 @@ def main(
         return
     else:
         DATA = {"MiceID": mouse, "Stage": stage, "session": session, "maze_type": maze_type, "paradigm": behavior_paradigm,
-                "cis":{"is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info, 'field_ids': field_ids},
+                "cis":{"is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info, 'field_ids': field_ids,
+                       "field_centers": get_field_centers(field_info, maze_type)},
                 "n_neurons": n_neurons, "n_sessions": n_sessions, "maze_type": maze_type, 'is_shuffle': shuffle_type,
                 "index_map": index_map.astype(np.int64)}
     
@@ -475,7 +486,8 @@ def main(
     )
     field_ids = get_field_ids(field_info)
     
-    DATA['trs'] = {"is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info, 'field_ids': field_ids}
+    DATA['trs'] = {"is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info, 'field_ids': field_ids,
+                   "field_centers": get_field_centers(field_info, maze_type)}
     with open(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc"+appendix+".pkl"), 'wb') as handle:
         print(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc"+appendix+".pkl"))
         pickle.dump(DATA, handle)
@@ -486,6 +498,15 @@ if __name__ == "__main__":
     from tqdm import tqdm
 
     for i in tqdm(range(len(f))):
+        with open(f['Trace File'][i], 'rb') as handle:
+            trace = pickle.load(handle)
+        
+        j = 50
+        idx = np.where(trace['field_ids'] == j)[0]
+        print(trace['field_ids'][idx])
+        print(trace['field_info'][:, idx, 0])
+
+        """
         is_shuffle = f['Type'][i] == 'Shuffle'
         
         if is_shuffle == False:
@@ -523,3 +544,4 @@ if __name__ == "__main__":
             behavior_paradigm=f['paradigm'][i],
             is_shuffle=is_shuffle
         )
+        """

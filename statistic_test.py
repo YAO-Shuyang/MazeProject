@@ -566,7 +566,7 @@ def GetMultidayIndexmap(
         else:
             index_map = ReadCellReg(f['cellreg_folder'][i])
             
-        print(f['cellreg_folder'][i])
+        print(f['cellreg_folder'])
 
         cellnum = np.where(index_map == 0, 0, 1)
         idx = np.where(np.nansum(cellnum, axis=0) >= occu_num)[0]
