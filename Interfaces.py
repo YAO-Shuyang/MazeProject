@@ -2135,7 +2135,9 @@ def IndependentEvolution_Interface(
     trace: dict,
     variable_names: list | None = None,
     spike_threshold: int | float = 10,
-    N = None
+    N = None,
+    if_consider_distance: bool = False,
+    dis_thre: float = 1
 ):
     VariablesInputErrorCheck(
         input_variable=variable_names,
@@ -2146,13 +2148,21 @@ def IndependentEvolution_Interface(
             start_session, chi_stat, mi, pair_type, pair_num, dim = indept_test_for_evolution_events(
                 trace['field_reg'],
                 trace['field_ids'],
-                N=N[('CrossMaze', trace['is_shuffle'], trace['maze_type'])]
+                maze_type=trace['maze_type'],
+                N=N[('CrossMaze', trace['is_shuffle'], trace['maze_type'])],
+                field_centers=trace['field_centers'],
+                if_consider_distance=if_consider_distance,
+                dis_thre=dis_thre
             )
         else:
             start_session, chi_stat, mi, pair_type, pair_num, dim = indept_test_for_evolution_events(
                 trace['field_reg'],
                 trace['field_ids'],
-                N=N
+                maze_type=trace['maze_type'],
+                N=N,
+                field_centers=trace['field_centers'],
+                if_consider_distance=if_consider_distance,
+                dis_thre=dis_thre
             )
         return (start_session, chi_stat, mi, dim, pair_type, pair_num, np.repeat(trace['paradigm'], start_session.shape[0]))
         
@@ -2161,23 +2171,39 @@ def IndependentEvolution_Interface(
             start_session_cis, chi_stat_cis, mi_cis, pair_type_cis, pair_num_cis, dim_cis = indept_test_for_evolution_events(
                 trace['cis']['field_reg'],
                 trace['cis']['field_ids'],
-                N=N[(trace['paradigm']+' cis', trace['is_shuffle'], trace['maze_type'])]
+                maze_type=trace['maze_type'],
+                N=N[(trace['paradigm']+' cis', trace['is_shuffle'], trace['maze_type'])],
+                field_centers=trace['cis']['field_centers'],
+                if_consider_distance=if_consider_distance,
+                dis_thre=dis_thre
             )
             start_session_trs, chi_stat_trs, mi_trs, pair_type_trs, pair_num_trs, dim_trs = indept_test_for_evolution_events(
                 trace['trs']['field_reg'],
                 trace['trs']['field_ids'],
-                N=N[(trace['paradigm']+' trs', trace['is_shuffle'], trace['maze_type'])]
+                maze_type=trace['maze_type'],
+                N=N[(trace['paradigm']+' trs', trace['is_shuffle'], trace['maze_type'])],
+                field_centers=trace['trs']['field_centers'],
+                if_consider_distance=if_consider_distance,
+                dis_thre=dis_thre
             )
         else:
             start_session_cis, chi_stat_cis, mi_cis, pair_type_cis, pair_num_cis, dim_cis = indept_test_for_evolution_events(
                 trace['cis']['field_reg'],
                 trace['cis']['field_ids'],
-                N=N
+                maze_type=trace['maze_type'],
+                N=N,
+                field_centers=trace['cis']['field_centers'],
+                if_consider_distance=if_consider_distance,
+                dis_thre=dis_thre
             )
             start_session_trs, chi_stat_trs, mi_trs, pair_type_trs, pair_num_trs, dim_trs = indept_test_for_evolution_events(
                 trace['trs']['field_reg'],
                 trace['trs']['field_ids'],
-                N=N
+                maze_type=trace['maze_type'],
+                N=N,
+                field_centers=trace['trs']['field_centers'],
+                if_consider_distance=if_consider_distance,
+                dis_thre=dis_thre
             )
     
     
@@ -2218,7 +2244,7 @@ def CoordinatedDrift_Interface(
                 trace['field_reg'],
                 trace['field_ids'],
                 dim=dim,
-                return_item='sib'
+                return_item='sib',
             )
             size = mat.shape[1]
             
