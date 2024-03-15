@@ -7,6 +7,7 @@ from scipy.stats import ttest_rel, levene, spearmanr
 from mylib.stats.kstest import poisson_kstest, normal_kstest, nbinom_kstest
 from mylib.behavior.correct_rate import lapwise_behavioral_score
 from mylib.stats.indeptest import indept_field_properties, indept_field_properties_mutual_info
+from mylib.stats.kstest import lognorm_kstest
 
 # Fig0007 Cell Number
 def CellNumber_Interface(trace: dict, spike_threshold = 30, variable_names = None, is_placecell = False):
@@ -1756,6 +1757,35 @@ def ModelPlaceFieldNumberPerDirection_Reverse_Interface(
 
     return [corr, corr_shuf], ['Data', 'Shuffle']
 
+# Fig0067 Statistics for field sizes in each spatial maps
+def FieldSizeTestLogNormal_Reverse_Interface(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=[
+        'Log-normal P-value', 'Log-normal Statistics', 'Direction'])
+
+    field_size_cis, field_size_trs = [], []
+    
+    for i in range(trace['n_neuron']):
+        if trace['cis']['is_placecell'][i] == 1:
+            for k in trace['cis']['place_field_all'][i].keys():
+                field_size_cis.append(len(trace['cis']['place_field_all'][i][k]))
+        
+        if trace['trs']['is_placecell'][i] == 1:
+            for k in trace['trs']['place_field_all'][i].keys():
+                field_size_trs.append(len(trace['trs']['place_field_all'][i][k]))
+    
+    field_size_cis = np.array(field_size_cis)
+    field_size_trs = np.array(field_size_trs)    
+    
+    stat_cis, p_cis = lognorm_kstest(field_size_cis, resample_size=1629)
+    stat_trs, p_trs = lognorm_kstest(field_size_trs, resample_size=1629)
+    
+    return [p_cis, p_trs], [stat_cis, stat_trs], ['cis', 'trs']
+        
+
 # Fig0068
 def PoissonTest_Reverse_Interface(
     trace: dict,
@@ -1821,14 +1851,22 @@ def PlaceFieldOverlap_Reverse_Interface(
     n_neuron = trace['cis']['n_neuron']
     maze_type = trace['maze_type']
     
-    overlap_num = 0
-    overlap_num_shuf = 0
-    cis_num, trs_num = 0, 0
+    get_centers_cis, get_centers_trs = [], []
+    for i in range(len(trace['cis'])):
+        if trace['cis']['is_placecell'][i] == 1:
+            for k in trace['cis']['place_field_all'][i].keys():
+                get_centers_cis.append(k)
+
+    for i in range(len(trace['trs'])):
+        if trace['trs']['is_placecell'][i] == 1:
+            for k in trace['trs']['place_field_all'][i].keys():
+                get_centers_trs.append(k)
     
-    idx = np.zeros((10, n_neuron), np.int64)
-    for i in range(10):
-        idx[i, :] = np.arange(n_neuron)
-        np.random.shuffle(idx[i, :])
+    cis_num, trs_num = 0, 0
+    overlap_num = 0
+    shuf_num = 0
+    
+    shuf_idx = np.random.permutation(np.arange(n_neuron))
     
     for i in range(n_neuron):
         cis_num += len(fields_cis[i].keys())
@@ -1848,27 +1886,76 @@ def PlaceFieldOverlap_Reverse_Interface(
             if is_matched:
                 overlap_num += 1
         
-        shuf_num = 0
-        for n in range(10):
-            fields1 = fields_cis[i]
-            fields2 = fields_trs[idx[n, i]]
+        field_reallocate
+        fields1 = fields_cis[i] # field_reallocate(, maze_type=trace['maze_type'], centers_pool=get_centers_cis)
+        fields2 = fields_trs[shuf_idx[i]] # field_reallocate(fields_trs[i], maze_type=trace['maze_type'], centers_pool=get_centers_trs)
 
-            for k1 in fields1.keys():
-                is_matched = False
-                field1 = fields1[k1]
-                for k2 in fields2.keys():
-                    field2 = fields2[k2]
-                    overlap = np.intersect1d(field1, field2)
-                    if len(overlap)/len(field1) > overlap_thre or len(overlap)/len(field2) > overlap_thre:
-                        is_matched = True
-                        break
+        for k1 in fields1.keys():
+            is_matched = False
+            field1 = fields1[k1]
+            for k2 in fields2.keys():
+                field2 = fields2[k2]
+                overlap = np.intersect1d(field1, field2)
+                if len(overlap)/len(field1) > overlap_thre or len(overlap)/len(field2) > overlap_thre:
+                    is_matched = True
+                    break
             
-                if is_matched:
-                    shuf_num += 1
+            if is_matched:
+                shuf_num += 1
         
-        overlap_num_shuf += shuf_num/10
-        
-    return [cis_num, cis_num], [trs_num, trs_num], [(overlap_num/cis_num + overlap_num/trs_num)/2, (overlap_num_shuf/cis_num + overlap_num_shuf/trs_num)/2], ['Data', 'Shuffle']
+    return [cis_num, cis_num], [trs_num, trs_num], [(overlap_num/cis_num + overlap_num/trs_num)/2, (shuf_num/cis_num + shuf_num/trs_num)/2], ['Data', 'Shuffle']
+
+def PlacecellPercentage_Reverse_Interface(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Percentage', 'Direction'])
+    
+    return [np.mean(trace['cis']['is_placecell']), np.mean(trace['trs']['is_placecell'])], ['cis', 'trs']
+
+
+def PlacecellPercentageOverlap_Reverse_Interface(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Percentage'])
+
+    return [np.where((trace['cis']['is_placecell'] == 1)&(trace['trs']['is_placecell'] == 1))[0].shape[0] / trace['cis']['is_placecell'].shape[0]]
+
+# Fig0069 - Place cell percentage - Reverse&Hairpin
+def FractionOfPCmf_Reverse_Interface(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Fraction', 'Direction'])
+    
+    frac_cis, frac_trs = 0, 0
+    for i in range(trace['cis']['is_placecell'].shape[0]):
+        if trace['cis']['is_placecell'][i] == 1:
+            if len(trace['cis']['place_field_all'][i].keys()) > 1:
+                frac_cis += 1
+            
+    for i in range(trace['trs']['is_placecell'].shape[0]):
+        if trace['trs']['is_placecell'][i] == 1:
+            if len(trace['trs']['place_field_all'][i].keys()) > 1:
+                frac_trs += 1
+    
+    return [frac_cis/np.sum(trace['cis']['is_placecell']), frac_trs/np.sum(trace['trs']['is_placecell'])], ['cis', 'trs']
+
+# Fig0069 - Place cell percentage - Reverse&Hairpin
+def AverageFieldNumber_Reverse_Interface(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Field Number', 'Direction'])
+
+    return ([np.mean(trace['cis']['place_field_num'][np.where(trace['cis']['is_placecell'] == 1)[0]]), 
+             np.mean(trace['trs']['place_field_num'][np.where(trace['trs']['is_placecell'] == 1)[0]])], 
+            ['cis', 'trs'])
 
 # Fig0070
 def CellNum_Reverse_Interface(
