@@ -180,14 +180,18 @@ def get_evolve_event_pairs(
                                                 get_evolve_event_label(field_reg[i:j, sib_field_pairs[:, 1]]))), (2, sib_num)).T
 
     evol_event_sib = evol_event_sib[np.where((np.isnan(evol_event_sib[:, 0]) == False)&
-                                             (np.isnan(evol_event_sib[:, 1]) == False))[0], :]
+                                             (np.isnan(evol_event_sib[:, 1]) == False)&
+                                             (evol_event_sib[:, 0] != 0)&
+                                             (evol_event_sib[:, 1] != 0))[0], :]
     
     
     evol_event_non = np.reshape(np.concatenate((get_evolve_event_label(field_reg[i:j, non_field_pairs[:, 0]]), 
                                                 get_evolve_event_label(field_reg[i:j, non_field_pairs[:, 1]]))), (2, non_num)).T
 
     evol_event_non = evol_event_non[np.where((np.isnan(evol_event_non[:, 0]) == False)&
-                                             (np.isnan(evol_event_non[:, 1]) == False))[0], :]
+                                             (np.isnan(evol_event_non[:, 1]) == False)&
+                                             (evol_event_non[:, 0] != 0)&
+                                             (evol_event_non[:, 1] != 0))[0], :]
     evol_event_non = evol_event_non[np.random.choice(np.arange(evol_event_non.shape[0]), size=evol_event_sib.shape[0], replace=False), :]  
     return evol_event_sib, evol_event_non  
 
@@ -235,6 +239,7 @@ def indept_test_for_evolution_events(
                 continue
 
             real_distribution = get_evolve_event_label(field_reg[i:i+dt, idx])
+            real_distribution = real_distribution[np.where(real_distribution != 0)[0]]
             
             evol_event_sib, evol_event_non = get_evolve_event_pairs(
                 i=i,
@@ -310,6 +315,7 @@ def coordination_index_for_evolution_events(
                 continue
 
             real_distribution = get_evolve_event_label(field_reg[i:i+dt, idx])
+            real_distribution = real_distribution[np.where(real_distribution != 0)[0]]
             
             evol_event_sib, evol_event_non = get_evolve_event_pairs(
                 i=i,
@@ -373,6 +379,7 @@ def compute_joint_probability_matrix(
             continue
 
         real_distribution = get_evolve_event_label(field_reg[i:i+dt, idx])
+        real_distribution = real_distribution[np.where(real_distribution != 0)[0]]
             
         evol_event_sib, evol_event_non = get_evolve_event_pairs(
             i=i,
