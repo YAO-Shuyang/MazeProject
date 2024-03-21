@@ -6,7 +6,7 @@ from scipy.stats import linregress, pearsonr, chisquare, ttest_1samp, ttest_ind
 from scipy.stats import ttest_rel, levene, spearmanr
 from mylib.stats.kstest import poisson_kstest, normal_kstest, nbinom_kstest
 from mylib.behavior.correct_rate import lapwise_behavioral_score
-from mylib.stats.indeptest import indept_field_properties, indept_field_properties_mutual_info
+from mylib.stats.indeptest import indept_field_properties, indept_field_properties_mutual_info, indept_field_evolution_CI
 from mylib.stats.kstest import lognorm_kstest
 
 # Fig0007 Cell Number
@@ -2473,4 +2473,91 @@ def CoordinatedDrift_Interface(
                     direction = np.concatenate([direction, np.repeat(trace['paradigm']+' '+k, sessions.shape[0])])
             
         return start_session, dP, dims, axis, pair_types, direction, xs
-            
+
+
+# Fig0325 Coordinate Index
+from mylib.field.field_tracker import coordination_index_for_evolution_events
+def CoordinateIndex_Interface(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
+    N = None,
+    if_consider_distance: bool = False,
+    dis_thre: float = 1
+):
+    VariablesInputErrorCheck(
+        input_variable=variable_names,
+        check_variable=['Training Session', 'Coordinate Index', 'Dimension', 'Pair Type', 'Pair Num', 'Paradigm'])
+    
+    if trace['paradigm'] == 'CrossMaze':
+        if isinstance(N, dict):
+            start_session, CI, pair_type, pair_num, dim = coordination_index_for_evolution_events(
+                trace['field_reg'],
+                trace['field_ids'],
+                maze_type=trace['maze_type'],
+                N=N[('CrossMaze', trace['is_shuffle'], trace['maze_type'])],
+                field_centers=trace['field_centers'],
+                if_consider_distance=if_consider_distance,
+                dis_thre=dis_thre
+            )
+        else:
+            start_session, CI, pair_type, pair_num, dim = coordination_index_for_evolution_events(
+                trace['field_reg'],
+                trace['field_ids'],
+                maze_type=trace['maze_type'],
+                N=N,
+                field_centers=trace['field_centers'],
+                if_consider_distance=if_consider_distance,
+                dis_thre=dis_thre
+            )
+        return (start_session, CI, dim, pair_type, pair_num, np.repeat(trace['paradigm'], start_session.shape[0]))
+        
+    else:
+        if isinstance(N, dict):
+            start_session_cis, CI_cis, pair_type_cis, pair_num_cis, dim_cis = coordination_index_for_evolution_events(
+                trace['cis']['field_reg'],
+                trace['cis']['field_ids'],
+                maze_type=trace['maze_type'],
+                N=N[(trace['paradigm']+' cis', trace['is_shuffle'], trace['maze_type'])],
+                field_centers=trace['cis']['field_centers'],
+                if_consider_distance=if_consider_distance,
+                dis_thre=dis_thre
+            )
+            start_session_trs, CI_trs, pair_type_trs, pair_num_trs, dim_trs = coordination_index_for_evolution_events(
+                trace['trs']['field_reg'],
+                trace['trs']['field_ids'],
+                maze_type=trace['maze_type'],
+                N=N[(trace['paradigm']+' trs', trace['is_shuffle'], trace['maze_type'])],
+                field_centers=trace['trs']['field_centers'],
+                if_consider_distance=if_consider_distance,
+                dis_thre=dis_thre
+            )
+        else:
+            start_session_cis, CI_cis, pair_type_cis, pair_num_cis, dim_cis = coordination_index_for_evolution_events(
+                trace['cis']['field_reg'],
+                trace['cis']['field_ids'],
+                maze_type=trace['maze_type'],
+                N=N,
+                field_centers=trace['cis']['field_centers'],
+                if_consider_distance=if_consider_distance,
+                dis_thre=dis_thre
+            )
+            start_session_trs, CI_trs, pair_type_trs, pair_num_trs, dim_trs = coordination_index_for_evolution_events(
+                trace['trs']['field_reg'],
+                trace['trs']['field_ids'],
+                maze_type=trace['maze_type'],
+                N=N,
+                field_centers=trace['trs']['field_centers'],
+                if_consider_distance=if_consider_distance,
+                dis_thre=dis_thre
+            )
+    
+    
+        return (np.concatenate([start_session_cis, start_session_trs]),
+                np.concatenate([CI_cis, CI_trs]),
+                np.concatenate([dim_cis, dim_trs]),
+                np.concatenate([pair_type_cis, pair_type_trs]),
+                np.concatenate([pair_num_cis, pair_num_trs]),
+                np.concatenate([np.repeat(trace['paradigm']+' cis', start_session_cis.shape[0]), 
+                                np.repeat(trace['paradigm']+' trs', start_session_trs.shape[0])])
+                )
