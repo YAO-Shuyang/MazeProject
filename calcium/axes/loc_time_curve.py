@@ -16,7 +16,8 @@ def LocTimeCurveAxes(
     title_color: str = "black",
     is_invertx: bool = False,
     line_kwargs: dict = {'markeredgewidth': 0, 'markersize': 1, 'color': 'black'},
-    bar_kwargs: dict = {'markeredgewidth': 1, 'markersize': 4}
+    bar_kwargs: dict = {'markeredgewidth': 1, 'markersize': 4},
+    is_dotted_line: bool = True
 ) -> tuple[Axes, list, list]:
 
     ax = Clear_Axes(axes=ax, close_spines=['top', 'right'], ifxticks=True, ifyticks=True)
@@ -33,6 +34,15 @@ def LocTimeCurveAxes(
         linearized_x = linearized_x + np.random.rand(behav_nodes.shape[0]) - 0.5
     else:
         linearized_x = given_x
+        
+    if maze_type == 1:
+        thre = 111
+    elif maze_type == 2:
+        thre = 101
+    elif maze_type == 3:
+        thre = 144
+    else:
+        raise ValueError(f"Invalid maze type: {maze_type}")
     
     spike_burst_time = spike_time[np.where(spikes == 1)[0]]
     spike_loc_id = np.zeros_like(spike_burst_time, dtype=np.int64)
@@ -47,8 +57,14 @@ def LocTimeCurveAxes(
     t_spikes = behav_time[spike_loc_id]
 
     t_max = int(np.nanmax(behav_time)/1000)
+    
+    idx = np.where(linearized_x > thre+0.5)[0]
 
-    a = ax.plot(linearized_x, behav_time/1000, 'o', **line_kwargs)
+    if is_dotted_line:
+        a = ax.plot(linearized_x[idx], behav_time[idx]/1000, 'o', **line_kwargs)
+    else:
+        a = ax.plot(linearized_x[idx], behav_time[idx]/1000, **line_kwargs)
+        
     b = ax.plot(x_spikes, t_spikes/1000, '|', color='red', **bar_kwargs)
 
     ax.set_title(title, color=title_color)

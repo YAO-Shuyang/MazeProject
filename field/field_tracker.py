@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from mylib.stats.indeptest import indept_field_evolution_chi2, indept_field_evolution_mutual_info
+from mylib.stats.indeptest import indept_field_evolution_chi2, indept_field_evolution_mutual_info, indept_field_evolution_CI
 from mylib.maze_utils3 import GetDMatrices
 import copy as cp
 
@@ -265,6 +265,75 @@ def indept_test_for_evolution_events(
     return np.array(sessions), np.array(chi2_stat), np.array(MI), np.array(pair_type), np.array(pair_num), np.array(dimension)
 
 
+# Return Coordination Matrix
+def coordination_index_for_evolution_events(
+    field_reg: np.ndarray, 
+    field_ids: np.ndarray, 
+    maze_type: int = 1,
+    N: None|int = None,
+    field_centers: None|np.ndarray = None,
+    if_consider_distance: bool = False,
+    dis_thre: float = 1
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    sessions, CI, pair_type, pair_num, dimension = [], [], [], [], []
+    
+    D = GetDMatrices(maze_type, 48)
+    thre = dis_thre if maze_type != 0 else 0.4
+    print(field_reg.shape, field_ids.shape)
+    sib_field_pairs, non_field_pairs = [], []
+    for i in range(len(field_ids)-1):
+        for j in range(i+1, len(field_ids)):
+            if field_ids[i] == field_ids[j]:
+                if len(sib_field_pairs) >= 3000000:
+                    continue
+                
+                if if_consider_distance and D[int(field_centers[i])-1, int(field_centers[j])-1] <= thre*100:
+                    continue
+                
+                sib_field_pairs.append([i, j])
+            else:
+                if len(non_field_pairs) >= 200000000:
+                    continue
+                
+                non_field_pairs.append([i, j])
+                
+    sib_field_pairs = np.array(sib_field_pairs)
+    non_field_pairs = np.array(non_field_pairs)
+    print(" init size ", sib_field_pairs.shape, non_field_pairs.shape)
+    sib_num, non_num = sib_field_pairs.shape[0], non_field_pairs.shape[0]
+    
+    for dt in np.arange(2, 6):
+        for i in range(field_reg.shape[0]-dt+1):
+            idx = np.where(np.isnan(np.sum(field_reg[i:i+dt, :], axis=0)) == False)[0]
+                
+            if idx.shape[0] == 0:
+                continue
+
+            real_distribution = get_evolve_event_label(field_reg[i:i+dt, idx])
+            
+            evol_event_sib, evol_event_non = get_evolve_event_pairs(
+                i=i,
+                j=i+dt,
+                field_reg=field_reg,
+                sib_field_pairs=sib_field_pairs,
+                non_field_pairs=non_field_pairs
+            ) 
+            print("    ", evol_event_sib.shape, evol_event_non.shape)
+      
+            CI_stat_sib, CI_stat_non, n_pair_stat, _ = indept_field_evolution_CI(
+                real_distribution=real_distribution,
+                X_pairs=evol_event_sib,
+                Y_pairs=evol_event_non
+            )
+
+            sessions = sessions + [i+1, i+1]
+            CI = CI + [CI_stat_sib, CI_stat_non]
+            dimension = dimension + [dt, dt]
+            pair_type = pair_type + ['Sibling', 'Non-sibling']
+            pair_num = pair_num + [evol_event_sib.shape[0], evol_event_non.shape[0]]
+        
+    return np.array(sessions), np.array(CI), np.array(pair_type), np.array(pair_num), np.array(dimension)
+
 def compute_joint_probability_matrix(
     field_reg: np.ndarray, 
     field_ids: np.ndarray, 
@@ -283,10 +352,12 @@ def compute_joint_probability_matrix(
                 if len(sib_field_pairs) >= 3000000:
                     continue
                 sib_field_pairs.append([i, j])
+                sib_field_pairs.append([j, i])
             else:
                 if len(non_field_pairs) >= 200000000:
                     continue
                 non_field_pairs.append([i, j])
+                non_field_pairs.append([j, i])
                 
     sib_field_pairs = np.array(sib_field_pairs)
     non_field_pairs = np.array(non_field_pairs)
