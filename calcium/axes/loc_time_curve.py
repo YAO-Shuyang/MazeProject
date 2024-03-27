@@ -17,7 +17,7 @@ def LocTimeCurveAxes(
     is_invertx: bool = False,
     line_kwargs: dict = {'markeredgewidth': 0, 'markersize': 1, 'color': 'black'},
     bar_kwargs: dict = {'markeredgewidth': 1, 'markersize': 4},
-    is_dotted_line: bool = True
+    is_dotted_line: bool = False
 ) -> tuple[Axes, list, list]:
 
     ax = Clear_Axes(axes=ax, close_spines=['top', 'right'], ifxticks=True, ifyticks=True)
@@ -58,12 +58,18 @@ def LocTimeCurveAxes(
 
     t_max = int(np.nanmax(behav_time)/1000)
     
-    idx = np.where(linearized_x > thre+0.5)[0]
+    idx = np.where(linearized_x < thre+0.5)[0]
+    linearized_x = linearized_x[idx]
+    behav_time = behav_time[idx]
 
     if is_dotted_line:
-        a = ax.plot(linearized_x[idx], behav_time[idx]/1000, 'o', **line_kwargs)
+        a = ax.plot(linearized_x, behav_time/1000, 'o', **line_kwargs)
     else:
-        a = ax.plot(linearized_x[idx], behav_time[idx]/1000, **line_kwargs)
+        dx = np.ediff1d(linearized_x)
+        idx = np.where(dx < -50)[0]
+        linearized_x = np.insert(linearized_x, idx+1, np.nan)
+        behav_time = np.insert(behav_time.astype(float), idx+1, np.nan)
+        a = ax.plot(linearized_x, behav_time/1000, **line_kwargs)
         
     b = ax.plot(x_spikes, t_spikes/1000, '|', color='red', **bar_kwargs)
 

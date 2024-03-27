@@ -166,10 +166,7 @@ def place_field(trace: dict, thre_type: int = 2, parameter: float = 0.4, events_
     smooth_map_all = cp.deepcopy(trace['smooth_map_all'])
     maze_type = trace['maze_type']
     for k in tqdm(range(trace['n_neuron'])):
-        if k in trace['SilentNeuron'] or trace['is_placecell'][k] == 0:
-            place_field_all.append({})
-        else:
-            a_field = GetPlaceField(
+        a_field = GetPlaceField(
                 trace=trace, 
                 n=k, 
                 thre_type=thre_type, 
@@ -177,8 +174,8 @@ def place_field(trace: dict, thre_type: int = 2, parameter: float = 0.4, events_
                 events_num_crit=events_num_crit, 
                 need_events_num=need_events_num,
                 split_thre=split_thre
-            )
-            place_field_all.append(a_field)
+        )
+        place_field_all.append(a_field)
     print("    Place field has been generated successfully.")
     return place_field_all
 

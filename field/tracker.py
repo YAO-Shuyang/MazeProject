@@ -114,13 +114,13 @@ class Field(object):
         return self._is_overlap(self._area[active_idx[-1]], area)
         
         """
-        # Criterion 2: It should have overlap with 50% or more the remaining detected fields.
+        # Criterion 2: It should have overlap with 60% or more the remaining detected fields.
         prev_overlap = 1
         for i in range(len(active_idx)):
             if np.intersect1d(self._area[active_idx[i]], area).shape[0] > 0:
                 prev_overlap += 1
         
-        if prev_overlap/active_idx.shape[0] < 0.2:
+        if prev_overlap/active_idx.shape[0] < 0.6:
             return False
         else:  
             return True
@@ -339,7 +339,8 @@ def main(
     session: int | None = None,
     maze_type: int | None = None,
     behavior_paradigm: str | None = None,
-    is_shuffle: bool = False
+    is_shuffle: bool = False,
+    prefix: str = 'trace_mdays_conc'
 ):
 
     
@@ -436,8 +437,8 @@ def main(
              "index_map": index_map.astype(np.int64)}
 
     appendix = '' if is_shuffle == False else '_shuffle'
-    with open(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc"+appendix+".pkl"), 'wb') as handle:
-        print(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc"+appendix+".pkl"))
+    with open(os.path.join(os.path.dirname(cellreg_dir), prefix+appendix+".pkl"), 'wb') as handle:
+        print(os.path.join(os.path.dirname(cellreg_dir), prefix+appendix+".pkl"))
         pickle.dump(trace, handle)
         
     del res
@@ -488,16 +489,27 @@ def main(
     
     DATA['trs'] = {"is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info, 'field_ids': field_ids,
                    "field_centers": get_field_centers(field_info, maze_type)}
-    with open(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc"+appendix+".pkl"), 'wb') as handle:
-        print(os.path.join(os.path.dirname(cellreg_dir), "trace_mdays_conc"+appendix+".pkl"))
+    with open(os.path.join(os.path.dirname(cellreg_dir), prefix+appendix+".pkl"), 'wb') as handle:
+        print(os.path.join(os.path.dirname(cellreg_dir), prefix+appendix+".pkl"))
         pickle.dump(DATA, handle)
 
 
 if __name__ == "__main__":  
-    from mylib.local_path import f_CellReg_modi as f
+    import pickle
+    with open(r"E:\Data\maze_learning\PlotFigures\STAT_CellReg\10227\Maze1-footprint\neuromatch_res.pkl", 'rb') as handle:
+        index_map = pickle.load(handle)
+    
+    num = np.where(index_map > 0, 1, 0)
+    sums = np.sum(num, axis=0)
+    print(len(np.where(sums == 26)[0]))
+'''    
+    from mylib.local_path import f_CellReg_day as f
     from tqdm import tqdm
 
     for i in tqdm(range(len(f))):
+        if f['include'][i] == 0:
+            continue
+        """
         with open(f['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
         
@@ -509,9 +521,7 @@ if __name__ == "__main__":
         """
         is_shuffle = f['Type'][i] == 'Shuffle'
         
-        if is_shuffle == False:
-            continue
-        
+        """
         if f['paradigm'][i] == 'CrossMaze':
             if f['maze_type'][i] == 0:
                 index_map = GetMultidayIndexmap(
@@ -519,13 +529,24 @@ if __name__ == "__main__":
                     stage=f['Stage'][i],
                     session=f['session'][i],
                     occu_num=2
-                )
+                )    
             else:
                 with open(f['cellreg_folder'][i], 'rb') as handle:
                     index_map = pickle.load(handle)
         else:
             index_map = ReadCellReg(f['cellreg_folder'][i])
-    
+        """
+
+        try:
+            index_map = GetMultidayIndexmap(
+                    mouse=f['MiceID'][i],
+                    stage=f['Stage'][i],
+                    session=f['session'][i],
+                    occu_num=2
+            )            
+        except:
+            index_map = ReadCellReg(f['cellreg_folder'][i])
+        
         index_map[np.where((index_map < 0)|np.isnan(index_map))] = 0
         mat = np.where(index_map>0, 1, 0)
         num = np.sum(mat, axis = 0)
@@ -542,6 +563,7 @@ if __name__ == "__main__":
             session=f['session'][i],
             maze_type=f['maze_type'][i],
             behavior_paradigm=f['paradigm'][i],
-            is_shuffle=is_shuffle
+            is_shuffle=is_shuffle,
+            prefix='trace_mdays',
         )
-        """
+'''
