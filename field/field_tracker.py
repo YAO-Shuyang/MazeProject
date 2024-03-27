@@ -345,30 +345,33 @@ def compute_joint_probability_matrix(
     field_ids: np.ndarray, 
     N: None|int = None,
     dim: int = 2,
-    return_item: str = "sib"
+    return_item: str = "sib", 
+    sib_field_pairs: None|np.ndarray = None,
+    non_field_pairs: None|np.ndarray = None
 ):
     if return_item not in ['sib', 'non']:
         raise ValueError(f"return_item must be 'sib' or 'non', rather than {return_item}")
 
     sessions, mat = [], []
-    sib_field_pairs, non_field_pairs = [], []
-    for i in range(len(field_ids)-1):
-        for j in range(i+1, len(field_ids)):
-            if field_ids[i] == field_ids[j]:
-                if len(sib_field_pairs) >= 3000000:
-                    continue
-                sib_field_pairs.append([i, j])
-                sib_field_pairs.append([j, i])
-            else:
-                if len(non_field_pairs) >= 200000000:
-                    continue
-                non_field_pairs.append([i, j])
-                non_field_pairs.append([j, i])
+    if sib_field_pairs is None or non_field_pairs is None:
+        sib_field_pairs, non_field_pairs = [], []
+        for i in range(len(field_ids)-1):
+            for j in range(i+1, len(field_ids)):
+                if field_ids[i] == field_ids[j]:
+                    if len(sib_field_pairs) >= 3000000:
+                        continue
+                    sib_field_pairs.append([i, j])
+                    sib_field_pairs.append([j, i])
+                else:
+                    if len(non_field_pairs) >= 200000000:
+                        continue
+                    non_field_pairs.append([i, j])
+                    non_field_pairs.append([j, i])
                 
-    sib_field_pairs = np.array(sib_field_pairs)
-    non_field_pairs = np.array(non_field_pairs)
+        sib_field_pairs = np.array(sib_field_pairs)
+        non_field_pairs = np.array(non_field_pairs)
+        
     print(" init size ", sib_field_pairs.shape, non_field_pairs.shape)
-    
     sib_num, non_num = sib_field_pairs.shape[0], non_field_pairs.shape[0]
     
     dt = dim
