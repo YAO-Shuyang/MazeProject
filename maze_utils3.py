@@ -1400,21 +1400,21 @@ def EqualPoisson(x:np.int64, l:float):
     x = np.int64(x)
     return (l**(x)) * (np.exp(-l)) / factorial(x)
 
-def EqualPoissonResiduals(l:float, x:np.int64, y:np.float64):
+def EqualPoissonResiduals(l:float, x:np.int64, y:np.float64) -> np.ndarray:
     return y - EqualPoisson(x,l)
 
-def EqualPoissonFit(x, y, l0:float = 5):
+def EqualPoissonFit(x, y, l0:float = 5) -> float:
     para = leastsq(EqualPoissonResiduals, x0 = l0, args = (x, y))
     return para[0][0]
 
 def Exponential(x: np.ndarray, a, b, c) -> np.ndarray:
     return a + (c-a) * np.exp(-x/b)
 
-def ExponentialResiduals(params, x, y):
+def ExponentialResiduals(params, x, y) -> np.ndarray:
     a, b, c = params
     return y - Exponential(x, a, b, c)
 
-def ExponentialFit(x, y, a0: float=1, b0: float=1, c0: float=1):
+def ExponentialFit(x, y, a0: float=1, b0: float=1, c0: float=1) -> tuple[float, float, float]:
     para, _ = leastsq(ExponentialResiduals, [a0, b0, c0], args = (x, y))
     return para[0], para[1], para[2]
 

@@ -4,7 +4,7 @@ from mylib.local_path import *
 from scipy.stats import poisson, norm, nbinom, gamma, kstest, ks_2samp, anderson, anderson_ksamp 
 from scipy.stats import linregress, pearsonr, chisquare, ttest_1samp, ttest_ind
 from scipy.stats import ttest_rel, levene, spearmanr
-from mylib.stats.kstest import poisson_kstest, normal_kstest, nbinom_kstest
+from mylib.stats.kstest import poisson_kstest, normal_discrete_kstest, nbinom_kstest
 from mylib.behavior.correct_rate import lapwise_behavioral_score
 from mylib.stats.indeptest import indept_field_properties, indept_field_properties_mutual_info, indept_field_evolution_CI
 from mylib.stats.kstest import lognorm_kstest
@@ -393,6 +393,7 @@ def PercentageOfPCsf_Interface(trace = {}, spike_threshold = 10, variable_names 
     else:
         return np.array([len(np.where(field_number == 1)[0])/len(np.where(field_number != 0)[0]), len(np.where(field_number2 == 1)[0])/field_number2.shape[0]]), np.array(["AP", "CP"])
 
+#Fig0028 - Place Field Number Distribution
 def FieldDistributionStatistics_TestAll_Interface(
     trace: dict,
     spike_threshold: int = 10,
@@ -403,12 +404,14 @@ def FieldDistributionStatistics_TestAll_Interface(
                                                       'r', 'p', 'nbinom KS Statistics', 'nbinom KS P-Value',
                                                       'mean', 'sigma', 'Normal KS Statistics', 'Normal KS P-Value'])
     
-    idx = np.where(trace['is_placecell'] == 1)[0] if 'LA' not in trace.keys() else np.where(trace['LA']['is_placecell'] == 1)[0]
-    field_number = cp.deepcopy(trace['place_field_num']) if 'LA' not in trace.keys() else cp.deepcopy(trace['LA']['place_field_num'])
-    field_number = field_number[np.where((np.isnan(field_number) == False)&(field_number != 0))[0]]
+    place_field_all = cp.deepcopy(trace['place_field_all_multiday'])
+    field_number = []
+    for i in range(len(place_field_all)):
+        if trace['is_placecell'][i] == 1:
+            field_number.append(len(place_field_all[i].keys()))
     
     #field_number = trace['place_field_num'][idx] if 'LA' not in trace.keys() else trace['LA']['place_field_num'][idx]
-
+    field_number = np.array(field_number)
     if len(field_number) < 100:
         return np.array([]), np.array([]), np.array([]), np.array([]), np.array([]), np.array([]), np.array([]), np.array([]), np.array([]), np.array([]), np.array([])
 
@@ -427,7 +430,7 @@ def FieldDistributionStatistics_TestAll_Interface(
     poisson_ks, poison_pvalue = poisson_kstest(field_number)
     print(poisson_ks, poison_pvalue)
     print(f"Test for Normal Distribution: mean = {mean}, sigma = {sigma}")
-    normal_ks, normal_pvalue = normal_kstest(field_number)
+    normal_ks, normal_pvalue = normal_discrete_kstest(field_number)
     print(normal_ks, normal_pvalue)
     print(f"Test for Negative Binomial Distribution: r = {r}, p = {p}")
     nbinom_ks, nbinom_pvalue = nbinom_kstest(field_number, monte_carlo_times=1000)
@@ -437,7 +440,31 @@ def FieldDistributionStatistics_TestAll_Interface(
     return (np.array([lam]), np.array([poisson_ks]), np.array([poison_pvalue]), 
             np.array([r]), np.array([p]), np.array([nbinom_ks]), np.array([nbinom_pvalue]), 
             np.array([mean]), np.array([sigma]), np.array([normal_ks]), np.array([normal_pvalue]))
+
+#Fig0028 - Place Field Number Distribution
+def FieldNumber_0028_Interface(trace = {}, spike_threshold = 10, variable_names = None, is_placecell = True):
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Field Number'])
     
+    place_field_all = cp.deepcopy(trace['place_field_all_multiday'])
+    num = []
+    for i in range(len(place_field_all)):
+        if trace['is_placecell'][i] == 1:
+            num.append(len(place_field_all[i].keys()))
+            
+    return np.array(num)
+
+#Fig0028 - Place Field Number Distribution for reverse
+def FieldNumber_0028_Reverse_Interface(trace = {}, spike_threshold = 10, variable_names = None, is_placecell = True):
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Field Number', 'Direction'])
+    
+    field_number_cis = cp.deepcopy(trace['cis']['place_field_num'])
+    field_number_cis = field_number_cis[np.where((np.isnan(field_number_cis) == False)&(field_number_cis != 0)&(trace['cis']['is_placecell'] == 1))[0]]
+
+    field_number_trs = cp.deepcopy(trace['trs']['place_field_num'])
+    field_number_trs = field_number_trs[np.where((np.isnan(field_number_trs) == False)&(field_number_trs != 0)&(trace['trs']['is_placecell'] == 1))[0]]
+    
+    return np.concatenate([field_number_cis, field_number_trs]), np.array(['cis'] * len(field_number_cis) + ['trs'] * len(field_number_trs))
+
 # Fig0029 Field Centers to Start (distance, unit: m)
 from mazepy.behav.graph import Graph
 def FieldCentersToStart_Interface(trace = {}, spike_threshold = 30, variable_names = None, is_placecell = True, Gs: None = None):
