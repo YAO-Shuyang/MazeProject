@@ -4,10 +4,10 @@ from mylib.local_path import *
 from scipy.stats import poisson, norm, nbinom, gamma, kstest, ks_2samp, anderson, anderson_ksamp 
 from scipy.stats import linregress, pearsonr, chisquare, ttest_1samp, ttest_ind
 from scipy.stats import ttest_rel, levene, spearmanr
-from mylib.stats.kstest import poisson_kstest, normal_discrete_kstest, nbinom_kstest
+from mylib.stats.ks import poisson_kstest, normal_discrete_kstest, nbinom_kstest
 from mylib.behavior.correct_rate import lapwise_behavioral_score
-from mylib.stats.indeptest import indept_field_properties, indept_field_properties_mutual_info, indept_field_evolution_CI
-from mylib.stats.kstest import lognorm_kstest
+from mylib.stats.indept import indept_field_properties, indept_field_properties_mutual_info, indept_field_evolution_CI
+from mylib.stats.ks import lognorm_kstest
 
 # Fig0007 Cell Number
 def CellNumber_Interface(trace: dict, spike_threshold = 30, variable_names = None, is_placecell = False):
@@ -1440,7 +1440,7 @@ def CrossMazeDecoder_Interface(
     print("Decoding finished.", end='\n\n')
     return decoder
 
-from mylib.stats.indeptest import indeptest
+from mylib.stats.indept import indeptest
 def IndeptTestForPositionAndFieldLength_Interface(
     trace: dict,
     variable_names: list | None = None,

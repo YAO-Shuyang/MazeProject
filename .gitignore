@@ -10,7 +10,7 @@ __pycache__/
 .Python
 dismat/
 decoder/Decoding*
-*test.py
+decoder/*test.py
 
 cellreg/
 build/
