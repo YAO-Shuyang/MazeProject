@@ -744,7 +744,7 @@ def PVCorrelations_Interface(trace: dict, spike_threshold: int | float = 10,
                 np.array([np.nan]), np.array([np.nan]))
 
 
-from mylib.calcium.field_criteria import GetPlaceField
+from mylib.calcium.field_criteria import get_all_fields
 #Fig0048 Place Field Criteria
 def PlaceFieldNumberWithCriteria_Interface(
     trace: dict, 
@@ -768,7 +768,7 @@ def PlaceFieldNumberWithCriteria_Interface(
 
     for i, j in enumerate(x):
         for k, n in enumerate(pc_idx):
-            fields = GetPlaceField(trace['maze_type'], smooth_map=smooth_map_all[n, :], thre_type = 1, parameter=j)
+            fields = get_all_fields(trace['maze_type'], smooth_map=smooth_map_all[n, :], thre_type = 1, parameter=j)
             field_numberA[i, k] = len(fields.keys())
 
     field_numberB = np.zeros((27, pc_idx.shape[0]), dtype=np.int64)
@@ -778,7 +778,7 @@ def PlaceFieldNumberWithCriteria_Interface(
 
     for i, j in enumerate(x):
         for k, n in enumerate(pc_idx):
-            fields = GetPlaceField(trace['maze_type'], smooth_map=smooth_map_all[n, :], thre_type = 2, parameter=j)
+            fields = get_all_fields(trace['maze_type'], smooth_map=smooth_map_all[n, :], thre_type = 2, parameter=j)
             field_numberB[i, k] = len(fields.keys())
 
     return np.concatenate([field_numberA.flatten(), field_numberB.flatten()]), np.concatenate([criteria1, criteria2]), np.concatenate([x1, x2])

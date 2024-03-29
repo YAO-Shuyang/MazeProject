@@ -36,7 +36,7 @@ def get_field_thre(thre_type: int, peak_rate: float, parameter: float = 0.5) -> 
 # generate all subfield. ============================================================================
 # place field analysis, return a dict contatins all field. If you want to know the field number of a certain cell, you only need to get it by use 
 # len(trace['place_field_all'][n].keys())
-def GetPlaceField(
+def get_all_fields(
     trace: dict, 
     n: int, 
     thre_type: int, 
@@ -76,25 +76,28 @@ def GetPlaceField(
     All_field = {}
     
     D = GetDMatrices(trace['maze_type'], nx=nx)
-
-    while len(np.setdiff1d(all_fields, search_set))!=0:
-        diff = np.setdiff1d(all_fields, search_set)
-        diff_idx = np.argmax(smooth_map[diff-1])
-        subfield = _field(diff = diff, diff_idx = diff_idx, maze_type = maze_type, 
+    search_area = cp.deepcopy(all_fields)
+    
+    while search_area.shape[0] != 0:
+        diff_idx = np.argmax(smooth_map[search_area-1])
+        subfields = extract_single_field(diff = search_area, diff_idx = diff_idx, maze_type = maze_type, 
                           nx = nx, thre=thre, split_thre=split_thre, smooth_map = smooth_map)
-        IS_QUALIFIED_FIELD, retain_fields = field_quality_control(trace=trace, n=n, field_bins=subfield, 
-                                                                  events_num_crit = events_num_crit)
+        for k in subfields.keys():
+            IS_QUALIFIED_FIELD, retain_fields = field_quality_control(trace=trace, n=n, field_bins=subfields[k], 
+                                                                      events_num_crit = events_num_crit)
 
-        if IS_QUALIFIED_FIELD:
-            submap = smooth_map[retain_fields-1]
-            peak_idx = np.argmax(submap)
-            peak_loc = retain_fields[peak_idx]
-            peak = np.max(submap)
+            if IS_QUALIFIED_FIELD:
+                submap = smooth_map[retain_fields-1]
+                peak_idx = np.argmax(submap)
+                peak_loc = retain_fields[peak_idx]
+                peak = np.max(submap)
         
-            All_field[peak_loc] = retain_fields
+                All_field[peak_loc] = retain_fields
         
 
-        search_set = np.concatenate([search_set, subfield])
+            search_set = np.concatenate([search_set, subfields[k]])
+            
+        search_area = np.setdiff1d(all_fields, search_set)
     
     # Sort the fields by their distance to the start point
     res = {}
@@ -102,8 +105,97 @@ def GetPlaceField(
         res[key] = All_field[key]
 
     return res
-               
-def _field(
+
+def broad_first_search_from_center(
+    peak_bin: int,
+    graph: dict,
+    search_area: np.ndarray,
+    smooth_map: np.ndarray,
+    thre: float
+):  
+    is_saddle_exist = False
+    saddle_points = []
+    
+    MaxStep = 300
+    step = 0
+    Area = [peak_bin]
+    StepExpand = {0: [peak_bin]}
+    while step <= MaxStep:
+        StepExpand[step+1] = []
+        for k in StepExpand[step]:
+            surr = graph[k]
+            for j in surr:   
+                # If j is not included yet and we do not meet a saddle point during broad first search
+                if j in search_area and j not in Area and (smooth_map[j-1] <= smooth_map[k-1] or smooth_map[j-1] >= thre):
+                    StepExpand[step+1].append(j)
+                    Area.append(j)
+                
+                if smooth_map[j-1] < thre and smooth_map[j-1] > smooth_map[k-1]:
+                    # Meet a saddle point
+                    is_saddle_exist = True
+                    saddle_points.append(j)
+                    
+        # Generate field successfully! 
+        if len(StepExpand[step+1]) == 0:
+            break
+        
+        step += 1
+        
+    return np.array(Area, dtype=np.int64), is_saddle_exist, [saddle_points, [peak_bin] * len(saddle_points)]
+
+
+def broad_first_search_from_saddle(
+    saddle_bin: int,
+    graph: dict,
+    search_area: np.ndarray,
+    smooth_map: np.ndarray,
+    split_thre: float
+): 
+    peak_bin, peak_rate = saddle_bin, smooth_map[saddle_bin-1]
+    
+    # First Step: Find the peak:
+    MaxStep = 300
+    step = 0
+    while step <= MaxStep:
+        surr = graph[peak_bin]
+        if max(peak_rate, np.max(smooth_map[np.array(surr)-1])) > peak_rate:
+            peak_bin = surr[np.argmax(smooth_map[np.array(surr)-1])]
+            peak_rate = smooth_map[peak_bin-1]
+        else:
+            break
+        
+        step += 1
+    
+    is_saddle_exist = False
+    saddle_points = []
+    
+    step = 0
+    Area = [peak_bin]
+    StepExpand = {0: [peak_bin]}
+    while step <= MaxStep:
+        StepExpand[step+1] = []
+        for k in StepExpand[step]:
+            surr = graph[k]
+            for j in surr:   
+                # If j is not included yet and we do not meet a saddle point during broad first search
+                if j in search_area and j not in Area and (smooth_map[j-1] <= smooth_map[k-1] or smooth_map[j-1] >= split_thre*peak_rate):
+                    StepExpand[step+1].append(j)
+                    Area.append(j)
+                
+                if smooth_map[j-1] < split_thre*peak_rate and smooth_map[j-1] > smooth_map[k-1]:
+                    # Meet a saddle point
+                    is_saddle_exist = True
+                    saddle_points.append(j)
+                    
+        # Generate field successfully! 
+        if len(StepExpand[step+1]) == 0:
+            break
+        
+        step += 1
+        
+    return np.array(Area, dtype=np.int64), is_saddle_exist, [saddle_points, [peak_bin] * len(saddle_points)]
+
+def extract_single_field(
     diff: list | np.ndarray, 
     diff_idx: int, 
     maze_type: int, 
@@ -111,33 +203,68 @@ def _field(
     thre: float = 0.5, 
     split_thre: float = 0.2,
     smooth_map: np.ndarray | None = None
-) -> np.ndarray:
+) -> dict:
     # Identify single field from all fields.
     if (maze_type, nx) in maze_graphs.keys():
         graph = maze_graphs[(maze_type, nx)]
     else:
         assert False
     
-    point = diff[diff_idx]
-    peak_rate = smooth_map[point-1]
-    MaxStep = 300
-    step = 0
-    Area = [point]
-    StepExpand = {0: [point]}
-    while step <= MaxStep:
-        StepExpand[step+1] = []
-        for k in StepExpand[step]:
-            surr = graph[k]
-            for j in surr:
-                if j in diff and j not in Area and (smooth_map[j-1] < smooth_map[k-1] or smooth_map[j-1] >= split_thre*peak_rate):
-                    StepExpand[step+1].append(j)
-                    Area.append(j)
-        
-        # Generate field successfully! 
-        if len(StepExpand[step+1]) == 0:
-            break
-        step += 1
-    return np.array(Area, dtype=np.int64)
+    peak_bin = diff[diff_idx]
+    peak_rate = smooth_map[peak_bin-1]
+
+    subfields = {}
+    raw_field, is_saddle_exist, saddle_points = broad_first_search_from_center(
+        peak_bin = peak_bin, 
+        graph = graph, 
+        search_area = diff, 
+        smooth_map = smooth_map, 
+        thre = split_thre*peak_rate
+    )
+    subfields[peak_bin] = raw_field
+    
+    search_area = np.setdiff1d(diff, raw_field)
+    
+    if is_saddle_exist:
+        while len(saddle_points[0]) > 0:
+            # Get a field from saddle point
+            raw_field, is_saddle_exist, sub_saddle_points = broad_first_search_from_saddle(
+                saddle_bin = saddle_points[0][0], 
+                graph = graph, 
+                search_area = search_area, 
+                smooth_map = smooth_map, 
+                split_thre = split_thre
+            )
+            
+            # Identify if the saddle is really lower than split_threshold * both peaks
+            if smooth_map[saddle_points[0][0]-1] > split_thre*smooth_map[raw_field[0]-1]: # This saddle is not a real saddle
+                # Merge two fields
+                if smooth_map[raw_field[0]-1] > smooth_map[saddle_points[1][0]-1]:
+                    # Newly generated field becomes major
+                    merged_field = np.concatenate([raw_field, subfields[saddle_points[1][0]]])
+                    del subfields[saddle_points[1][0]]
+                    subfields[merged_field[0]] = merged_field
+                    
+                    # Update all the prior peaks index
+                    for i, p in enumerate(saddle_points[1]):
+                        if p == saddle_points[1][0]:
+                            saddle_points[1][i] = merged_field[0]
+                else:
+                    subfields[saddle_points[1][0]] = np.concatenate([subfields[saddle_points[1][0]], raw_field])
+                    if is_saddle_exist:
+                        # Update all the prior peaks index
+                        sub_saddle_points[1] = [saddle_points[1][0]] * len(sub_saddle_points[1])
+                        saddle_points = [saddle_points[0] + sub_saddle_points[0], saddle_points[1] + sub_saddle_points[1]]
+            
+            # Add new saddle        
+            search_area = np.setdiff1d(search_area, raw_field)
+            
+            if len(saddle_points[0]) == 1:
+                break
+            else:
+                saddle_points = [saddle_points[0][1:], saddle_points[1][1:]]
+
+    return subfields
 
 from scipy.stats import pearsonr
 def field_quality_control(trace: dict, n: int, field_bins: np.ndarray | list, events_num_crit: int = 10, stability_thre: float = -1) -> bool:
@@ -155,7 +282,7 @@ def field_quality_control(trace: dict, n: int, field_bins: np.ndarray | list, ev
     # Test the number of laps it distributed.
     dt = np.ediff1d(trace['ms_time_behav'][total_indices])
     
-    if len(np.where(dt >= 20000)[0]) < 5:
+    if len(np.where(dt >= 10000)[0]) < 5:
         return False, None
     else:
         return True, field_bins
@@ -166,7 +293,7 @@ def place_field(trace: dict, thre_type: int = 2, parameter: float = 0.4, events_
     smooth_map_all = cp.deepcopy(trace['smooth_map_all'])
     maze_type = trace['maze_type']
     for k in tqdm(range(trace['n_neuron'])):
-        a_field = GetPlaceField(
+        a_field = get_all_fields(
                 trace=trace, 
                 n=k, 
                 thre_type=thre_type, 
@@ -179,22 +306,9 @@ def place_field(trace: dict, thre_type: int = 2, parameter: float = 0.4, events_
     print("    Place field has been generated successfully.")
     return place_field_all
 
-if __name__ == '__main__':
-    import pickle
-    import os
-    from mylib.local_path import f1
-    
-    for i in range(500, len(f1)):
-        if f1['maze_type'][i] == 0:
-            continue
-        
-        print(i, f1['MiceID'][i], f1['date'][i], 'session', f1['session'][i], 'Maze', f1['maze_type'][i])
-        
-        with open(f1['Trace File'][i], 'rb') as handle:
-            trace = pickle.load(handle)
-            
-        trace['place_field_all_multiday'] = place_field(trace, thre_type=2, parameter=0.2, events_num_crit=6, split_thre=0.5)
-        
-        with open(f1['Trace File'][i], 'wb') as handle:
-            pickle.dump(trace, handle)
+def get_field_number(trace: dict, key: str = 'place_field_all'):
+    num = np.zeros(trace['n_neuron'], dtype=np.int64)
+    for i in range(trace['n_neuron']):
+        num[i] = len(trace[key][i].keys())
+    return num
         
