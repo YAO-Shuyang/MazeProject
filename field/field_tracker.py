@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from mylib.stats.indeptest import indept_field_evolution_chi2, indept_field_evolution_mutual_info, indept_field_evolution_CI
+from mylib.stats.indept import indept_field_evolution_chi2, indept_field_evolution_mutual_info, indept_field_evolution_CI
 from mylib.maze_utils3 import GetDMatrices
 import copy as cp
 

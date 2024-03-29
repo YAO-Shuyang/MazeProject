@@ -111,9 +111,9 @@ class Field(object):
             raise ZeroDivisionError(f"There's no active history of this field, indicating somewhere is wrong.")
         
         # Criterion 1: Have 60% or more overlapping with the most recently detected fields
-        return self._is_overlap(self._area[active_idx[-1]], area)
-        
-        """
+        if self._is_overlap(self._area[active_idx[-1]], area) == False:
+            return False
+
         # Criterion 2: It should have overlap with 60% or more the remaining detected fields.
         prev_overlap = 1
         for i in range(len(active_idx)):
@@ -124,7 +124,7 @@ class Field(object):
             return False
         else:  
             return True
-        """
+        
     def register(self, is_detected):
         if self.curr_session != self._total_session-1:
             warnings.warn(
@@ -190,6 +190,7 @@ class Tracker(object):
                 # The neuron is not detected in this sessiion
                 self._isdetected[i] = np.nan
         
+        # Initial Fields
         for i in range(self._total_sesseion):
             if self._place_fields[i] is not None:
                 if len(self._place_fields[i].keys()) != 0:
@@ -208,8 +209,7 @@ class Tracker(object):
             self.is_silent_neuron = True
             return 
         
-        #update
-        
+        # Tracking
         for i in range(start_session + 1, self._total_sesseion):
             match_fields = []
             for pf in self._indept_fields:
