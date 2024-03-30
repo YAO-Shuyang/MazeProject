@@ -75,7 +75,7 @@ def FieldPeakRateStatistic_Interface(trace = {}, spike_threshold = 10, variable_
     peak_rate = []
     for i in range(trace['n_neuron']):
         if trace['is_placecell'][i] == 1:
-            for k in trace['place_field_all'][i].keys():
+            for k in trace['place_field_all_multiday'][i].keys():
                 peak_rate.append(trace['smooth_map_all'][i, k-1])
     
     return np.array(peak_rate, np.float64)
@@ -287,7 +287,7 @@ def FieldDistributionStatistics_DiverseCriteria_Interface(
 # Fig0021
 # Place Field Number Counts.
 def PlaceFieldNumber_Interface(trace, spike_threshold = 10, variable_names = None, is_placecell = True):
-    KeyWordErrorCheck(trace, __file__, ['place_field_all'])
+    KeyWordErrorCheck(trace, __file__, ['place_field_all_multiday'])
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Cell','Field Number'])
 
     field_number = trace['place_field_num']
@@ -333,65 +333,21 @@ def PlaceCellPercentageCP_Interface(trace = {}, spike_threshold = 10, variable_n
 
 # Fig0024 Place Field Number Change
 def PlaceFieldNumberChange_Interface(trace = {}, spike_threshold = 10, variable_names = None, is_placecell = True):
-    KeyWordErrorCheck(trace, __file__, ['place_field_all'])
-    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Field Number', 'Path Type'])
+    KeyWordErrorCheck(trace, __file__, ['place_field_all_multiday'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Field Number'])
 
-    if trace['maze_type'] == 0:
-        idx = np.where(trace['is_placecell'] == 1)[0]
-        place_field_all = trace['place_field_all']
-        
-        idx2 = np.where(trace['is_placecell'] == 1)[0]
-        place_field_all2 = trace['place_field_all']
-    else:
-        idx = np.where(trace['LA']['is_placecell'] == 1)[0]
-        place_field_all = trace['LA']['place_field_all']
-        
-        idx2 = np.where(trace['is_placecell'] == 1)[0]
-        place_field_all2 = trace['place_field_all']
-        
-    field_number = np.zeros(len(idx), dtype = np.int64)
-    field_number2 = np.zeros(len(idx2), dtype = np.int64)
-    for i, k in enumerate(idx):
-        field_number[i] = len(place_field_all[k].keys())
-        
-    for i, k in enumerate(idx2):
-        field_number2[i] = len(place_field_all2[k].keys())
-
-    if trace['maze_type'] == 0:
-        return [np.nanmean(field_number)], ["OP"]
-    else:
-        return [np.nanmean(field_number), np.nanmean(field_number2)], np.array(['AP', 'CP'])
+    idx = np.where(trace['is_placecell'] == 1)[0]
+    return [np.nanmean(trace['place_field_num_multiday'][idx])]
 
 # Fig0025 Percentage of PCsf
 def PercentageOfPCsf_Interface(trace = {}, spike_threshold = 10, variable_names = None, is_placecell = True):
-    KeyWordErrorCheck(trace, __file__, ['place_field_all'])
-    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Percentage', 'Path Type'])
+    KeyWordErrorCheck(trace, __file__, ['place_field_all_multiday'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Percentage'])
 
-    if trace['maze_type'] == 0:
-        idx = np.where(trace['is_placecell'] == 1)[0]
-        place_field_all = trace['place_field_all']
-        
-        idx2 = np.where(trace['is_placecell'] == 1)[0]
-        place_field_all2 = trace['place_field_all']
-    else:
-        idx = np.where(trace['LA']['is_placecell'] == 1)[0]
-        place_field_all = trace['LA']['place_field_all']
-        
-        idx2 = np.where(trace['is_placecell'] == 1)[0]
-        place_field_all2 = trace['place_field_all']
-    
-    field_number = np.zeros(len(idx), dtype = np.int64)
-    field_number2 = np.zeros(len(idx2), dtype = np.int64)
-    for i, k in enumerate(idx):
-        field_number[i] = len(place_field_all[k].keys())
-        
-    for i, k in enumerate(idx2):
-        field_number2[i] = len(place_field_all2[k].keys())
+    idx = np.where(trace['is_placecell'] == 1)[0]
+    field_number = trace['place_field_num_multiday'][idx]
 
-    if trace['maze_type'] == 0:
-        return np.array([len(np.where(field_number == 1)[0])/len(np.where(field_number != 0)[0])]), np.array(['OP'])
-    else:
-        return np.array([len(np.where(field_number == 1)[0])/len(np.where(field_number != 0)[0]), len(np.where(field_number2 == 1)[0])/field_number2.shape[0]]), np.array(["AP", "CP"])
+    return np.array([len(np.where(field_number == 1)[0])/len(np.where(field_number != 0)[0])])
 
 #Fig0028 - Place Field Number Distribution
 def FieldDistributionStatistics_TestAll_Interface(
@@ -478,7 +434,7 @@ def FieldCentersToStart_Interface(trace = {}, spike_threshold = 30, variable_nam
     idx = np.where(trace['is_placecell'] == 1)[0]
     
     for i in tqdm(idx):
-        for k in trace['place_field_all'][i].keys():
+        for k in trace['place_field_all_multiday'][i].keys():
             x, y = ((k - 1)%48 + 0.5)/4, ((k - 1)//48 + 0.5)/4
             
             dis.append(G.shortest_distance((x, y), (0.125, 0.125))*8)
@@ -657,10 +613,10 @@ def InFieldCorrelation_Interface(trace: dict, spike_threshold: int | float = 10,
     for i in range(n):
         if trace['is_placecell'][i] == 0:
             continue
-        ks = trace['place_field_all'][i].keys()
+        ks = trace['place_field_all_multiday'][i].keys()
         for k in ks:
             id.append(k)
-            size.append(len(trace['place_field_all'][i][k]))
+            size.append(len(trace['place_field_all_multiday'][i][k]))
             rate.append(trace['smooth_map_all'][i][k-1])
             OEC.append(trace['in_field_corr'][i][k][0])
             FSC.append(trace['in_field_corr'][i][k][1])
@@ -1106,13 +1062,13 @@ def WithinFieldBasicInfo_Interface(
     FSCList = within_field_half_half_correlation(
         trace['smooth_map_fir'],
         trace['smooth_map_sec'],
-        trace['place_field_all']
+        trace['place_field_all_multiday']
     )
     
     OECList = within_field_odd_even_correlation(
         trace['smooth_map_odd'],
         trace['smooth_map_evn'],
-        trace['place_field_all']
+        trace['place_field_all_multiday']
     )
     
     D = GetDMatrices(trace['maze_type'], 48)
@@ -1127,8 +1083,8 @@ def WithinFieldBasicInfo_Interface(
                     
                 FSC.append(FSCList[i][k])
                 OEC.append(OECList[i][k])
-                SIZE.append(len(trace['place_field_all'][i][k]))
-                LENGTH.append(np.max(D[0, trace['place_field_all'][i][k]-1]) - np.min(D[0, trace['place_field_all'][i][k]-1]))
+                SIZE.append(len(trace['place_field_all_multiday'][i][k]))
+                LENGTH.append(np.max(D[0, trace['place_field_all_multiday'][i][k]-1]) - np.min(D[0, trace['place_field_all_multiday'][i][k]-1]))
                 RATE.append(trace['smooth_map_all'][i, k-1])
                 
     FSC = np.array(FSC, np.float64)
@@ -1160,13 +1116,13 @@ def WithinCellFieldStatistics_Interface(trace: dict,
     FSCList = within_field_half_half_correlation(
         trace['smooth_map_fir'],
         trace['smooth_map_sec'],
-        trace['place_field_all']
+        trace['place_field_all_multiday']
     )
     
     OECList = within_field_odd_even_correlation(
         trace['smooth_map_odd'],
         trace['smooth_map_evn'],
-        trace['place_field_all']
+        trace['place_field_all_multiday']
     )
     
     D = GetDMatrices(trace['maze_type'], 48)
@@ -1182,23 +1138,23 @@ def WithinCellFieldStatistics_Interface(trace: dict,
     mean_interdistance, std_interdistance, median_interdistance, err_interdistance = [], [], [], []
     CellID, FieldNumber = [], []
     
-    for i in range(len(trace['place_field_all'])):
+    for i in range(len(trace['place_field_all_multiday'])):
         if trace['is_placecell'][i] == 1:
             
-            if len(trace['place_field_all'][i].keys()) <= 1:
+            if len(trace['place_field_all_multiday'][i].keys()) <= 1:
                 continue
             
             CellID.append(i)
-            FieldNumber.append(len(trace['place_field_all'][i].keys()))
+            FieldNumber.append(len(trace['place_field_all_multiday'][i].keys()))
             
             FSC, OEC, SIZE, LENGTH, RATE, POSITION = [], [], [], [], [], []
             
-            for j, k in enumerate(trace['place_field_all'][i].keys()):
+            for j, k in enumerate(trace['place_field_all_multiday'][i].keys()):
                 POSITION.append(D[0, k-1])  
                 FSC.append(FSCList[i][k])
                 OEC.append(OECList[i][k])
-                SIZE.append(len(trace['place_field_all'][i][k]))
-                LENGTH.append(np.max(D[0, trace['place_field_all'][i][k]-1]) - np.min(D[0, trace['place_field_all'][i][k]-1]))
+                SIZE.append(len(trace['place_field_all_multiday'][i][k]))
+                LENGTH.append(np.max(D[0, trace['place_field_all_multiday'][i][k]-1]) - np.min(D[0, trace['place_field_all_multiday'][i][k]-1]))
                 RATE.append(trace['smooth_map_all'][i, k-1])
                 POSITION.append(D[0, k-1])
                 
@@ -1371,7 +1327,7 @@ def PlaceFieldCoveredDensity_Interface(
     
     for i in range(trace['field_reg'].shape[0]):
         j, k = trace['field_reg'][i, 0], trace['field_reg'][i, 2]
-        count_map[trace['place_field_all'][j][k]-1] += 1
+        count_map[trace['place_field_all_multiday'][j][k]-1] += 1
 
     return count_map[CP-1], D[CP-1, 0]
         
@@ -1383,7 +1339,7 @@ def FieldCountPerSession_Interface(
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Path Type', 'Threshold', 'Field Count', 'Field Number'])
     
-    place_field_cp10, place_field_cp5 = cp.deepcopy(trace['place_field_all']), cp.deepcopy(trace['place_field_all5'])
+    place_field_cp10, place_field_cp5 = cp.deepcopy(trace['place_field_all_multiday']), cp.deepcopy(trace['place_field_all5'])
     field_numbercp10 = np.array([len(i.keys()) for i in place_field_cp10], np.float64)
     field_numbercp5 = np.array([len(i.keys()) for i in place_field_cp5], np.float64)
     idx = np.where(trace['is_placecell'] == 1)[0]
@@ -1391,7 +1347,7 @@ def FieldCountPerSession_Interface(
     rescp5 = plt.hist(field_numbercp5[idx], range=(0.5, 50.5), bins=50)[0]
     
     if trace['maze_type'] in [1, 2]:
-        place_field_all10, place_field_all5 = cp.deepcopy(trace['LA']['place_field_all']), cp.deepcopy(trace['LA']['place_field_all5'])
+        place_field_all10, place_field_all5 = cp.deepcopy(trace['LA']['place_field_all_multiday']), cp.deepcopy(trace['LA']['place_field_all5'])
         field_numberall10, field_numberall5 = np.array([len(i.keys()) for i in place_field_all10], np.float64), np.array([len(i.keys()) for i in place_field_all5], np.float64)
         idx = np.where(trace['LA']['is_placecell'] == 1)[0]
         resall10 = plt.hist(field_numberall10[idx], range=(0.5, 50.5), bins=50)[0]
@@ -1459,8 +1415,8 @@ def IndeptTestForPositionAndFieldLength_Interface(
     
     for i in range(n_neuron):
         if trace['is_placecell'][i] == 1:
-            for k in trace['place_field_all'][i].keys():
-                LENGTH.append(np.max(D[0, trace['place_field_all'][i][k]-1]) - np.min(D[0, trace['place_field_all'][i][k]-1]))
+            for k in trace['place_field_all_multiday'][i].keys():
+                LENGTH.append(np.max(D[0, trace['place_field_all_multiday'][i][k]-1]) - np.min(D[0, trace['place_field_all_multiday'][i][k]-1]))
                 POSITION.append(D[k-1, 0])
     
     LENGTH = np.array(LENGTH)
@@ -1488,7 +1444,7 @@ def IndeptTestForPositionAndStability_Interface(
     FSCList = within_field_half_half_correlation(
         trace['smooth_map_fir'],
         trace['smooth_map_sec'],
-        trace['place_field_all']
+        trace['place_field_all_multiday']
     )
     
     if trace['maze_type'] == 0:
@@ -1500,7 +1456,7 @@ def IndeptTestForPositionAndStability_Interface(
     
     for i in range(n_neuron):
         if trace['is_placecell'][i] == 1:
-            for k in trace['place_field_all'][i].keys():
+            for k in trace['place_field_all_multiday'][i].keys():
                 FSC.append(FSCList[i][k])
                 POSITION.append(D[k-1, 0])
     
@@ -1538,7 +1494,7 @@ def IndeptTestForPositionAndRate_Interface(
     
     for i in range(n_neuron):
         if trace['is_placecell'][i] == 1:
-            for k in trace['place_field_all'][i].keys():
+            for k in trace['place_field_all_multiday'][i].keys():
                 RATE.append(trace['smooth_map_all'][i, k-1])
                 POSITION.append(D[k-1, 0])
     
@@ -1634,7 +1590,7 @@ def PlaceFieldNum_Reverse_Interface(
 ):
     VariablesInputErrorCheck(input_variable=variable_names,
                              check_variable=['Field Number', 'Direction'])
-    return [np.nanmean(trace['cis']['place_field_num']), np.nanmean(trace['trs']['place_field_num'])], ['Cis', 'Trs']
+    return [np.nanmean(trace['cis']['place_field_num_multiday']), np.nanmean(trace['trs']['place_field_num_multiday'])], ['Cis', 'Trs']
 
 def LapwiseDistance_Reverse_Interface(
     trace: dict,
@@ -1797,12 +1753,12 @@ def FieldSizeTestLogNormal_Reverse_Interface(
     
     for i in range(trace['n_neuron']):
         if trace['cis']['is_placecell'][i] == 1:
-            for k in trace['cis']['place_field_all'][i].keys():
-                field_size_cis.append(len(trace['cis']['place_field_all'][i][k]))
+            for k in trace['cis']['place_field_all_multiday'][i].keys():
+                field_size_cis.append(len(trace['cis']['place_field_all_multiday'][i][k]))
         
         if trace['trs']['is_placecell'][i] == 1:
-            for k in trace['trs']['place_field_all'][i].keys():
-                field_size_trs.append(len(trace['trs']['place_field_all'][i][k]))
+            for k in trace['trs']['place_field_all_multiday'][i].keys():
+                field_size_trs.append(len(trace['trs']['place_field_all_multiday'][i][k]))
     
     field_size_cis = np.array(field_size_cis)
     field_size_trs = np.array(field_size_trs)    
@@ -1874,19 +1830,19 @@ def PlaceFieldOverlap_Reverse_Interface(
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Cis Number', 'Trs Number', 'Overlap', 'Data Type'])
     
-    fields_cis, fields_trs = trace['cis']['place_field_all'], trace['trs']['place_field_all']
+    fields_cis, fields_trs = trace['cis']['place_field_all_multiday'], trace['trs']['place_field_all_multiday']
     n_neuron = trace['cis']['n_neuron']
     maze_type = trace['maze_type']
     
     get_centers_cis, get_centers_trs = [], []
     for i in range(len(trace['cis'])):
         if trace['cis']['is_placecell'][i] == 1:
-            for k in trace['cis']['place_field_all'][i].keys():
+            for k in trace['cis']['place_field_all_multiday'][i].keys():
                 get_centers_cis.append(k)
 
     for i in range(len(trace['trs'])):
         if trace['trs']['is_placecell'][i] == 1:
-            for k in trace['trs']['place_field_all'][i].keys():
+            for k in trace['trs']['place_field_all_multiday'][i].keys():
                 get_centers_trs.append(k)
     
     cis_num, trs_num = 0, 0
@@ -1962,12 +1918,12 @@ def FractionOfPCmf_Reverse_Interface(
     frac_cis, frac_trs = 0, 0
     for i in range(trace['cis']['is_placecell'].shape[0]):
         if trace['cis']['is_placecell'][i] == 1:
-            if len(trace['cis']['place_field_all'][i].keys()) > 1:
+            if len(trace['cis']['place_field_all_multiday'][i].keys()) > 1:
                 frac_cis += 1
             
     for i in range(trace['trs']['is_placecell'].shape[0]):
         if trace['trs']['is_placecell'][i] == 1:
-            if len(trace['trs']['place_field_all'][i].keys()) > 1:
+            if len(trace['trs']['place_field_all_multiday'][i].keys()) > 1:
                 frac_trs += 1
     
     return [frac_cis/np.sum(trace['cis']['is_placecell']), frac_trs/np.sum(trace['trs']['is_placecell'])], ['cis', 'trs']

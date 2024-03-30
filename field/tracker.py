@@ -192,9 +192,13 @@ class Tracker(object):
         
         # Initial Fields
         for i in range(self._total_sesseion):
-            if self._place_fields[i] is not None:
+            if self._place_fields[i] is not None: 
+                # Find the first session that this neuron is not inactive.
                 if len(self._place_fields[i].keys()) != 0:
+                    # The active neuron should have at least 1 field
                     start_session = i
+                    # Input all the field(s) this initial cell has for neuron tracking.
+                    # This field(s) is/are root field(s)
                     for k in self._place_fields[i].keys():
                         self._indept_fields.append(Field(curr_session=i, 
                                                      area=self._place_fields[i][k], 
@@ -204,14 +208,17 @@ class Tracker(object):
                     break
         
         try:
+            # Figure out whether this neuron is forever inactive during training.
+            # If so, the start_session is not assigned, raising related errors and
+            # set the is_silent_neuron to True
             start_session
         except:
             self.is_silent_neuron = True
             return 
         
-        # Tracking
+        # Tracking Fields across the following sessions.
         for i in range(start_session + 1, self._total_sesseion):
-            match_fields = []
+            match_fields = [] # Matched fields in session i
             for pf in self._indept_fields:
                 mat, fields = pf.update(i, self._place_fields[i])
                 if mat:
@@ -220,6 +227,7 @@ class Tracker(object):
             if self._place_fields[i] is None:
                 continue
             
+            # unmatched fields in session i
             nomatch_fields = np.setdiff1d(np.array([k for k in self._place_fields[i].keys()]), np.array(match_fields))
 
             for k in nomatch_fields:
@@ -247,7 +255,6 @@ class Tracker(object):
         if self.is_silent_neuron:
             return field_reg*np.nan, field_info*np.nan
 
-        
         for i, pf in enumerate(self._indept_fields):
             field_reg[:, i] = pf.register(self._isdetected)
             field_info[:, i, 0] = self._id
@@ -502,13 +509,15 @@ if __name__ == "__main__":
     num = np.where(index_map > 0, 1, 0)
     sums = np.sum(num, axis=0)
     print(len(np.where(sums == 26)[0]))
-'''    
-    from mylib.local_path import f_CellReg_day as f
+    
+    from mylib.local_path import f_CellReg_modi as f
     from tqdm import tqdm
 
     for i in tqdm(range(len(f))):
         if f['include'][i] == 0:
             continue
+        
+        
         """
         with open(f['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
@@ -521,8 +530,9 @@ if __name__ == "__main__":
         """
         is_shuffle = f['Type'][i] == 'Shuffle'
         
-        """
+
         if f['paradigm'][i] == 'CrossMaze':
+            continue
             if f['maze_type'][i] == 0:
                 index_map = GetMultidayIndexmap(
                     mouse=f['MiceID'][i],
@@ -537,6 +547,7 @@ if __name__ == "__main__":
             index_map = ReadCellReg(f['cellreg_folder'][i])
         """
 
+        # CellReg
         try:
             index_map = GetMultidayIndexmap(
                     mouse=f['MiceID'][i],
@@ -546,7 +557,7 @@ if __name__ == "__main__":
             )            
         except:
             index_map = ReadCellReg(f['cellreg_folder'][i])
-        
+        """        
         index_map[np.where((index_map < 0)|np.isnan(index_map))] = 0
         mat = np.where(index_map>0, 1, 0)
         num = np.sum(mat, axis = 0)
@@ -564,6 +575,5 @@ if __name__ == "__main__":
             maze_type=f['maze_type'][i],
             behavior_paradigm=f['paradigm'][i],
             is_shuffle=is_shuffle,
-            prefix='trace_mdays',
+            prefix='trace_mdays_conc',
         )
-'''
