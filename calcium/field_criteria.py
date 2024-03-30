@@ -311,4 +311,3 @@ def get_field_number(trace: dict, key: str = 'place_field_all'):
     for i in range(trace['n_neuron']):
         num[i] = len(trace[key][i].keys())
     return num
-        
