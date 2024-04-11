@@ -264,11 +264,11 @@ def indept_field_properties(
     )
     
     joint_p = np.outer(P, P)
-    expected_joint_freq_X = joint_p*len(X_pairs) + 1
-    expected_joint_freq_Y = joint_p*len(Y_pairs) + 1
+    expected_joint_freq_X = joint_p*len(X_pairs) + 0.001
+    expected_joint_freq_Y = joint_p*len(Y_pairs) + 0.001
     
-    observed_joint_freq_X = observed_joint_freq_X + 1
-    observed_joint_freq_Y = observed_joint_freq_Y + 1
+    observed_joint_freq_X = observed_joint_freq_X + 0.001
+    observed_joint_freq_Y = observed_joint_freq_Y + 0.001
 
     return chi2_contingency(observed_joint_freq_X, expected_joint_freq_X)[0], chi2_contingency(observed_joint_freq_Y, expected_joint_freq_Y)[0], len(X_pairs), len(Y_pairs)
 
@@ -295,7 +295,9 @@ def indept_field_properties_mutual_info(
     """
     X_pairs = X_pairs[np.where((np.isnan(X_pairs[:, 0]) == False) & (np.isnan(X_pairs[:, 1]) == False))[0], :]
     Y_pairs = Y_pairs[np.where((np.isnan(Y_pairs[:, 0]) == False) & (np.isnan(Y_pairs[:, 1]) == False))[0], :]
-    _range = [np.min(X_pairs.flatten()), np.max(Y_pairs.flatten())+0.0001]
+    _min = min(np.min(X_pairs), np.min(Y_pairs))
+    _max = max(np.max(X_pairs), np.max(Y_pairs))
+    _range = [_min, _max+0.0001]
 
     _, _, _, binnumber_X = binned_statistic_2d(
             x=X_pairs[:, 0],

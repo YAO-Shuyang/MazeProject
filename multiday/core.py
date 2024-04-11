@@ -212,7 +212,7 @@ class MultiDayCore:
         core: None = None,
         keys: list[str] | None = ['correct_nodes', 'correct_time', 'ms_time_behav', 'Spikes',
                                   'correct_pos', 'smooth_map_all', 'old_map_clear', 'SI_all', 'is_placecell', 
-                                  'DeconvSignal', 'ms_time', 'place_field_all', 'maze_type'],
+                                  'DeconvSignal', 'ms_time', 'place_field_all_multiday', 'maze_type'],
         interv_time: float = 50000
     ):  
         if core is None:

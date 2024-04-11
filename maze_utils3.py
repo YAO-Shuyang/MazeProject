@@ -1463,17 +1463,6 @@ def NegativeBinomialFit(x, y, r0: float=0.5, p0: float=0.2):
     para, _ = leastsq(NegativeBinomialResiduals, [r0, p0], args = (x, y))
     return para[0], para[1]
 
-def Weibull(x: np.ndarray, shape: float, loc: float, scale: float):
-    return weibull_min.cdf(x, shape, loc=loc, scale=scale)
-
-def WeibullResiduals(params, x, y):
-    shape, loc, scale = params
-    return y - Weibull(x, shape, loc, scale)
-
-def WeibullFit(x, y, shape0: float=1, loc: float=10.3, scale0: float=0.73):
-    para, _ = leastsq(WeibullResiduals, [shape0, loc, scale0], args = (x, y))
-    return para[0], para[1], para[2]
-
 from scipy.optimize import curve_fit
 def Sigmoid(x, a, b):
     return 1 / (1 + np.exp(-a * (x - b)))

@@ -220,11 +220,13 @@ def indept_test_for_evolution_events(
                     continue
                 
                 sib_field_pairs.append([i, j])
+                sib_field_pairs.append([j, i])
             else:
-                if len(non_field_pairs) >= 200000000:
+                if len(non_field_pairs) >= 150000000:
                     continue
                 
                 non_field_pairs.append([i, j])
+                non_field_pairs.append([j, i])
                 
     sib_field_pairs = np.array(sib_field_pairs)
     non_field_pairs = np.array(non_field_pairs)
@@ -296,11 +298,13 @@ def coordination_index_for_evolution_events(
                     continue
                 
                 sib_field_pairs.append([i, j])
+                sib_field_pairs.append([j, i])
             else:
-                if len(non_field_pairs) >= 200000000:
+                if len(non_field_pairs) >= 150000000:
                     continue
                 
                 non_field_pairs.append([i, j])
+                non_field_pairs.append([j, i])
                 
     sib_field_pairs = np.array(sib_field_pairs)
     non_field_pairs = np.array(non_field_pairs)
@@ -346,12 +350,15 @@ def compute_joint_probability_matrix(
     N: None|int = None,
     dim: int = 2,
     return_item: str = "sib", 
+    field_centers: None|np.ndarray = None,
+    maze_type: int = 1,
     sib_field_pairs: None|np.ndarray = None,
     non_field_pairs: None|np.ndarray = None
 ):
     if return_item not in ['sib', 'non']:
         raise ValueError(f"return_item must be 'sib' or 'non', rather than {return_item}")
 
+    D = GetDMatrices(maze_type, 48)
     sessions, mat = [], []
     if sib_field_pairs is None or non_field_pairs is None:
         sib_field_pairs, non_field_pairs = [], []
@@ -360,10 +367,14 @@ def compute_joint_probability_matrix(
                 if field_ids[i] == field_ids[j]:
                     if len(sib_field_pairs) >= 3000000:
                         continue
+                    
+                    if D[int(field_centers[i])-1, int(field_centers[j])-1] <= 100:
+                        continue
+                    
                     sib_field_pairs.append([i, j])
                     sib_field_pairs.append([j, i])
                 else:
-                    if len(non_field_pairs) >= 200000000:
+                    if len(non_field_pairs) >= 150000000:
                         continue
                     non_field_pairs.append([i, j])
                     non_field_pairs.append([j, i])

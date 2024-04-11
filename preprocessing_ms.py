@@ -1568,18 +1568,21 @@ def count_field_number(trace: dict) -> dict:
     trace['place_field_num'] = field_number
     return trace
 
-def field_register(trace: dict) -> dict:
+def field_register(trace: dict, key: str = 'place_field_all') -> dict:
     is_pc = cp.deepcopy(trace['is_placecell'])
     
     # Initial maps
     field_reg = []
     for i in range(is_pc.shape[0]):
         if is_pc[i] == 1:
-            for j, k in enumerate(trace['place_field_all'][i].keys()):
-                fcs = trace['FSCList'][i][k] if 'FSCList' in trace.keys() else np.nan
-                oec = trace['OECList'][i][k] if 'OECList' in trace.keys() else np.nan
+            for j, k in enumerate(trace[key][i].keys()):
+                if trace[key][i][k].shape[0] <= 16:
+                    fsc, oec = np.nan, np.nan
+                else:
+                    fsc = pearsonr(trace['smooth_map_fir'][i, trace[key][i][k]-1], trace['smooth_map_sec'][i, trace[key][i][k]-1])[0]
+                    oec = pearsonr(trace['smooth_map_odd'][i, trace[key][i][k]-1], trace['smooth_map_evn'][i, trace[key][i][k]-1])[0]
                 rate = trace['smooth_map_all'][i][k-1] if 'smooth_map_all' in trace.keys() else np.nan
-                field_reg.append([i, j, k, len(trace['place_field_all'][i][k]), rate, fcs, oec])
+                field_reg.append([i, j, k, len(trace[key][i][k]), rate, fsc, oec])
     
     trace['field_reg'] = np.array(field_reg, np.float64)
     return trace
