@@ -35,6 +35,7 @@ class Field(object):
         self._area = [None for i in range(curr_session)] + [area]
         self._center = [None for i in range(curr_session)] + [center]
         self._curr_session = curr_session
+        self._curr_ref_field = curr_session # A reference field that are used for measuring overlaps.
         self._total_session = total_sesseion
         self._thre = overlap_thre
         
@@ -53,7 +54,8 @@ class Field(object):
     @property
     def is_active(self):
         return self._is_active
-        
+    
+    """    
     def update(self, curr_session: int, place_field: dict | None) -> bool:
         self._curr_session += 1
         
@@ -76,6 +78,61 @@ class Field(object):
         self._area.append(None)
         self._center.append(np.nan)  
         return False, []
+    """
+    
+    def identify_putative_samefield(self, place_field: dict | None) -> tuple[bool, list[int], list[float]]:
+        """
+        Identify putative same fields that is overlap with the previous one.
+        
+        Returns
+        -------
+        bool: Is there any field be identifyed as the same field.
+        int or None: return the center of place field which is the most likely to be the same one
+        as (highest overlap)
+        np.ndarray or None: return field area
+        """
+        # If the neuron is not detected, the field is natually no detected subsequently.
+        if place_field is None:
+            return False, np.nan, np.nan
+        
+        match_fields = []
+        match_extent = []
+        match_area = []
+        # Run for all field candidates to identify if they were the same one as this field.
+        for k in place_field.keys():
+            is_same, overlap_frac = self._is_samefield(place_field[k])
+            if is_same:
+                match_fields.append(k)
+                match_extent.append(overlap_frac)
+                match_area.append(place_field[k])
+        
+        if len(match_fields) == 0:
+            return False, np.nan, np.nan
+        else:
+            maximum_idx = np.argmax(match_extent)
+            return True, match_fields[maximum_idx], match_area[maximum_idx]
+    
+    def update(
+        self, 
+        curr_session: int, 
+        field_center: int | float | None, 
+        field_area: np.ndarray | None,
+        is_matched_to_merged_fields: bool = False
+    ) -> None:
+        self._curr_session += 1
+        
+        if field_center is None or np.isnan(field_center):
+            self._area.append(None)
+            self._center.append(np.nan)
+        else:
+            self._area.append(field_area)
+            self._center.append(field_center)
+            self._is_active[curr_session] = 1
+            
+            if is_matched_to_merged_fields == False:
+                # Means the newly integrated field is not a merged field.
+                self._curr_ref_field = curr_session
+            
         
     def _is_overlap(
         self, 
@@ -83,9 +140,17 @@ class Field(object):
         input_area: np.ndarray
     ) -> bool:
         overlap = np.intersect1d(field_area, input_area)
-        return len(overlap)/len(field_area) >= self._thre or len(overlap)/len(input_area) >= self._thre
+        return len(overlap)/len(field_area) > self._thre or len(overlap)/len(input_area) > self._thre
     
-    def _is_samefield(self, area: np.ndarray) -> bool:
+    def _get_overlap(
+        self, 
+        field_area:np.ndarray, 
+        input_area: np.ndarray
+    ) -> float:
+        overlap = np.intersect1d(field_area, input_area)
+        return len(overlap)/len(field_area)
+    
+    def _is_samefield(self, area: np.ndarray) -> tuple[bool, float]:
         """_is_samefield: function to identify if the inputed field is the 
         same one of this field.
 
@@ -98,6 +163,8 @@ class Field(object):
         -------
         bool
             Whether the inputed field is the same one of this field
+        float
+            The extent of overlap.
 
         Raises
         ------
@@ -105,15 +172,25 @@ class Field(object):
             If there's no active history of this field, indicating somewhere
             is wrong.
         """
-        active_idx = np.where(self._is_active == 1)[0]
+        active_idx = np.flip(np.where(self._is_active == 1)[0])
         
         if active_idx.shape[0] == 0:
             raise ZeroDivisionError(f"There's no active history of this field, indicating somewhere is wrong.")
         
+        for i in active_idx:
+            if i > self._curr_ref_field:
+                continue
+            
+            if self._is_overlap(self._area[i], area):
+                return True, self._get_overlap(self._area[i], area)
+        
+        return False, self._get_overlap(self._area[self._curr_ref_field], area)
+    
         # Criterion 1: Have 60% or more overlapping with the most recently detected fields
+        return self._is_overlap(self._area[self._curr_ref_field], area), self._get_overlap(self._area[self._curr_ref_field], area)
         if self._is_overlap(self._area[active_idx[-1]], area) == False:
             return False
-
+        """
         # Criterion 2: It should have overlap with 60% or more the remaining detected fields.
         prev_overlap = 1
         for i in range(len(active_idx)):
@@ -124,6 +201,7 @@ class Field(object):
             return False
         else:  
             return True
+        """
         
     def register(self, is_detected):
         if self.curr_session != self._total_session-1:
@@ -152,7 +230,8 @@ class Tracker(object):
         place_fields: list[dict], 
         is_placecell: np.ndarray,
         total_sesseion: int = 26,
-        overlap_thre: float = 0.6
+        maze_type: int = 1,
+        overlap_thre: float = 0.5
     ) -> None:
         """__init__: Initialize Tracker
 
@@ -179,6 +258,7 @@ class Tracker(object):
         self._place_fields = place_fields
         self._is_placecell = is_placecell
         self._thre = overlap_thre
+        self.maze_type = maze_type
         self._generate_fields()
         
     def _generate_fields(self):
@@ -219,16 +299,30 @@ class Tracker(object):
         # Tracking Fields across the following sessions.
         for i in range(start_session + 1, self._total_sesseion):
             match_fields = [] # Matched fields in session i
+            match_area = []
             for pf in self._indept_fields:
-                mat, fields = pf.update(i, self._place_fields[i])
-                if mat:
-                    match_fields = match_fields + fields
-                    
+                mat, field_center, field_area = pf.identify_putative_samefield(self._place_fields[i])
+
+                match_fields.append(field_center)
+                match_area.append(field_area)
+            
+            # Update previous fields
+
+            for n, pf in enumerate(self._indept_fields):
+                if np.isnan(match_fields[n]):
+                    pf.update(i, match_fields[n], match_area[n])
+                else:
+                    pf.update(i, match_fields[n], match_area[n], 
+                              match_fields.count(match_fields[n]) > 1)
+            
+            # unmatched fields in session i
+            match_fields = np.array(match_fields)
+            match_fields = match_fields[np.where(np.isnan(match_fields) == False)[0]]
+            
             if self._place_fields[i] is None:
                 continue
             
-            # unmatched fields in session i
-            nomatch_fields = np.setdiff1d(np.array([k for k in self._place_fields[i].keys()]), np.array(match_fields))
+            nomatch_fields = np.setdiff1d(np.array([k for k in self._place_fields[i].keys()]), match_fields)
 
             for k in nomatch_fields:
                 self._indept_fields.append(Field(
@@ -248,28 +342,119 @@ class Tracker(object):
             Return two matrix, representing the field_reg and field_info, respectively.
         """
         field_reg = np.zeros((self._total_sesseion, len(self._indept_fields)), dtype=np.float64)
-        field_info = np.zeros((self._total_sesseion, len(self._indept_fields), 4), dtype=np.float64)
-        # The five dimensions contain information: cell_id, is place cell, field center, field size,.
+        field_info = np.zeros((self._total_sesseion, len(self._indept_fields), 5), dtype=np.float64)
+        # The five dimensions contain information: cell_id, is place cell, field center, field size, and distance to the entry.
         # If no detected, all will be nan. If no field, only field center, and field size will be nan.
         
         if self.is_silent_neuron:
             return field_reg*np.nan, field_info*np.nan
-
+        
+        D = GetDMatrices(maze_type=self.maze_type, nx = 48)
+        field_info[:, :, 4] = np.nan
+        
         for i, pf in enumerate(self._indept_fields):
             field_reg[:, i] = pf.register(self._isdetected)
             field_info[:, i, 0] = self._id
             field_info[:, i, 1] = self._is_placecell
             field_info[:, i, 2] = pf.get_fieldcenter()
             field_info[:, i, 3] = pf.get_fieldsize()
-            
+            field_info[np.where(np.isnan(field_info[:, i, 2]) == False)[0], i, 4] = D[0, field_info[np.where(np.isnan(field_info[:, i, 2]) == False)[0], i, 2].astype(int)-1]
+
+        
+        mean_distance = np.nanmean(field_info[:, :, 4], axis=0)
+        median_distance = np.nanmedian(field_info[:, :, 4], axis=0)
+        sort_indices = np.argsort(mean_distance)
+        field_reg = field_reg[:, sort_indices]
+        field_info = field_info[:, sort_indices, :]
         return field_reg, field_info
-    
+
+    def _merge_columns(self, matrix):
+        return np.apply_along_axis(lambda row: row[~np.isnan(row)][0] if np.any(~np.isnan(row)) else np.nan, 1, matrix)
+
+    def _merge_fields(
+        self,
+        field_reg: np.ndarray,
+        field_info: np.ndarray,
+        smooth_map_all: np.ndarray
+    ):
+        """
+        Two fields that have been detected to merge for once were merged together.
+        
+        The merge matrix denote the relationship between each identified raw field
+        >>> # It is a block matrix:
+        >>> merge_matrix = np.array([[1, 1, 1, 0, 0, 0],
+                                     [1, 1, 1, 0, 0, 0],
+                                     [1, 1, 1, 0, 0, 0],
+                                     [0, 0, 0, 1, 1, 0],
+                                     [0, 0, 0, 1, 1, 0],
+                                     [0, 0, 0, 0, 0, 1]])
+        """
+        merge_matrix = np.zeros((field_reg.shape[1], field_reg.shape[1]))
+        for i in range(field_reg.shape[1]-1):
+            for j in range(i+1, field_reg.shape[1]):
+                if np.where(field_info[:, i, 2] - field_info[:, j, 2] == 0)[0].shape[0] >= 1: # Merged for two times field
+                    merge_matrix[i, j] = merge_matrix[j, i] = 1
+                    merge_matrix[i, i] = merge_matrix[j, j] = 1
+                    merge_matrix[j, :] += merge_matrix[i, :]
+                    merge_matrix[i, :] = merge_matrix[j, :]
+                    merge_matrix[:, j] += merge_matrix[:, i]   
+                    merge_matrix[:, i] = merge_matrix[:, j]
+                         
+        merge_matrix[merge_matrix > 1] = 1
+        continue_border = merge_matrix.shape[0]
+        for i in range(merge_matrix.shape[0]-1, -1, -1):
+            if i >= continue_border:
+                continue
+            
+            transition = np.ediff1d(np.concatenate([[0], merge_matrix[i, :], [0]]))
+            if np.where(transition != 0)[0].shape[0] == 0:
+                continue # No need to merge
+            else:
+                start_idx = np.where(transition == 1)[0][0]
+                end_idx = np.where(transition == -1)[0][-1]
+                continue_border = start_idx
+
+                # Merge fields between start_idx and end_idx
+                merged_reg = np.sum(field_reg[:, start_idx:end_idx], axis=1)
+                merged_reg[merged_reg > 1] = 1
+                field_reg = np.delete(field_reg, np.arange(start_idx+1, end_idx), axis=1)
+                                       
+                field_reg[:, start_idx] = merged_reg
+                
+                # Update place field all and update field info
+                field_centers = field_info[:, start_idx:end_idx, 2]
+                for j in range(field_centers.shape[0]):
+                    idx = np.where(np.isnan(field_centers[j, :]) == False)[0]
+                    present_centers = np.unique(field_centers[j, np.where(np.isnan(field_centers[j, :]) == False)[0]].astype(int))
+                    if len(present_centers) == 1:
+                        field_info[j, start_idx, 2] = present_centers[0]
+                        field_info[j, start_idx, 3] = field_info[j, start_idx + idx[0], 3]
+                        field_info[j, start_idx, 4] = field_info[j, start_idx + idx[0], 4]
+                        
+                    elif len(present_centers) > 1:
+                        field_area = np.concatenate([self._place_fields[j][k] for k in present_centers])
+                        for k in present_centers:
+                            del self._place_fields[j][k]
+                        
+                        arg_max = np.argmax(smooth_map_all[j, present_centers-1])
+                        
+                        self._place_fields[j][present_centers[arg_max]] = field_area
+                        field_info[j, start_idx, 2] = present_centers[arg_max]
+                        field_info[j, start_idx, 3] = len(field_area)
+                        field_info[j, start_idx, 4] = field_info[j, start_idx + idx[arg_max], 4]
+                
+                field_info = np.delete(field_info, np.arange(start_idx+1, end_idx), axis=1)
+
+        return field_reg, field_info, self._place_fields
+
     @staticmethod
     def field_register(
         index_map: np.ndarray,
         place_field_all: list[list[dict]],
         is_placecell: np.ndarray,
-        overlap_thre: float = 0.6
+        smooth_map_all: np.ndarray,
+        overlap_thre: float = 0.6,
+        maze_type: int = 1
     ) -> tuple[np.ndarray, np.ndarray]:
         """field_register: Register all place fields from the registered neuron
 
@@ -291,7 +476,7 @@ class Tracker(object):
         assert len(place_field_all) == is_placecell.shape[1]
         
         field_reg = np.zeros((is_placecell.shape[0], 1), np.float64)
-        field_info = np.zeros((is_placecell.shape[0], 1, 4), np.float64)
+        field_info = np.zeros((is_placecell.shape[0], 1, 5), np.float64)
         
         index_map = index_map.astype(np.int64)
         
@@ -301,9 +486,13 @@ class Tracker(object):
                 place_fields=place_field_all[i],
                 is_placecell=is_placecell[:, i],
                 total_sesseion=index_map.shape[0],
-                overlap_thre=overlap_thre
+                overlap_thre=overlap_thre,
+                maze_type=maze_type
             )
             reg, info = neuron.register()
+            reg, info, place_field_all[i] = neuron._merge_fields(
+                reg, info,
+                smooth_map_all=smooth_map_all[:, i, :])
             field_reg = np.concatenate([field_reg, reg], axis=1)
             field_info = np.concatenate([field_info, info], axis=1)
         
@@ -313,7 +502,7 @@ class Tracker(object):
         
         print(field_reg.shape, field_info.shape)
 
-        return field_reg[:, idx], field_info[:, idx, :]
+        return field_reg[:, idx], field_info[:, idx, :], place_field_all
 
 def get_field_ids(field_info: np.ndarray) -> np.ndarray:
     column_dict = {}
@@ -388,7 +577,8 @@ def main(
         fdata = f4
     else:
         raise ValueError(f"Paradigm {behavior_paradigm} is not supported.")
-        
+    
+    index_map = index_map[1:, :]
         
     # Initial basic elements
     n_neurons = index_map.shape[1]
@@ -396,7 +586,7 @@ def main(
 
     # Get information from daily trace.pkl
     core = MultiDayCore(
-        keys = ['is_placecell', 'place_field_all_multiday'],
+        keys = ['is_placecell', 'place_field_all_multiday', 'smooth_map_all'],
         paradigm=behavior_paradigm,
         direction=direction
     )
@@ -410,16 +600,19 @@ def main(
         
     if stage == 'Stage 1' and mouse in [10212] and session == 2:
         file_indices = np.where((fdata['MiceID'] == mouse) & (fdata['session'] == session) & (fdata['Stage'] == 'Stage 1') & (fdata['date'] != 20230506))[0]
-        
+    
+    file_indices = file_indices[1:]  
     print(file_indices, mouse, stage, session)
-    res = core.get_trace_set(f=fdata, file_indices=file_indices, keys=['is_placecell', 'place_field_all_multiday'])
+    res = core.get_trace_set(f=fdata, file_indices=file_indices, keys=['is_placecell', 'place_field_all_multiday', 'smooth_map_all'])
     
     is_placecell = np.full((n_sessions, n_neurons), np.nan)
+    smooth_map_all = np.full((n_sessions, n_neurons, 2304), np.nan)
     place_field_all = [[] for _ in range(n_neurons)]
     for j in range(n_neurons):
         for i in range(n_sessions):
             if index_map[i, j] > 0:
                 is_placecell[i, j] = res['is_placecell'][i][int(index_map[i, j])-1]
+                smooth_map_all[i, j, :] = res['smooth_map_all'][i][int(index_map[i, j])-1, :]
                 
                 if is_shuffle == False:
                     place_field_all[j].append(res['place_field_all_multiday'][i][int(index_map[i, j])-1])
@@ -428,11 +621,13 @@ def main(
             else:
                 place_field_all[j].append(None)
     print("Field Register...")            
-    field_reg, field_info = Tracker.field_register(
+    field_reg, field_info, place_field_all = Tracker.field_register(
         index_map=index_map,
         place_field_all=place_field_all,
         is_placecell=is_placecell,
-        overlap_thre=overlap_thre
+        overlap_thre=overlap_thre,
+        maze_type=maze_type,
+        smooth_map_all=smooth_map_all
     )
     field_ids = get_field_ids(field_info)
     shuffle_type = 'Shuffle' if is_shuffle else 'Real'
@@ -466,19 +661,22 @@ def main(
 
     # Get information from daily trace.pkl
     core = MultiDayCore(
-        keys = ['is_placecell', 'place_field_all_multiday'],
+        keys = ['is_placecell', 'place_field_all_multiday', 'smooth_map_all'],
         paradigm=behavior_paradigm,
         direction='trs'
     )
         
-    res = core.get_trace_set(f=fdata, file_indices=file_indices, keys=['is_placecell', 'place_field_all_multiday'])
+    res = core.get_trace_set(f=fdata, file_indices=file_indices, keys=['is_placecell', 'place_field_all_multiday', 'smooth_map_all'])
     
     is_placecell = np.full((n_sessions, n_neurons), np.nan)
     place_field_all = [[] for _ in range(n_neurons)]
+    smooth_map_all = np.full((n_sessions, n_neurons, 2304), np.nan)
+    
     for j in range(n_neurons):
         for i in range(n_sessions):
             if index_map[i, j] > 0:
                 is_placecell[i, j] = res['is_placecell'][i][int(index_map[i, j])-1]
+                smooth_map_all[i, j, :] = res['smooth_map_all'][i][int(index_map[i, j])-1, :]
                 if is_shuffle == False:
                     place_field_all[j].append(res['place_field_all_multiday'][i][int(index_map[i, j])-1])
                 else:
@@ -486,11 +684,13 @@ def main(
             else:
                 place_field_all[j].append(None)
     print("Field Register...")            
-    field_reg, field_info = Tracker.field_register(
+    field_reg, field_info, place_field_all = Tracker.field_register(
         index_map=index_map,
         place_field_all=place_field_all,
         is_placecell=is_placecell,
-        overlap_thre=overlap_thre
+        overlap_thre=overlap_thre,
+        maze_type=maze_type,
+        smooth_map_all=smooth_map_all
     )
     field_ids = get_field_ids(field_info)
     
@@ -503,13 +703,6 @@ def main(
 
 if __name__ == "__main__":  
     import pickle
-    with open(r"E:\Data\maze_learning\PlotFigures\STAT_CellReg\10227\Maze1-footprint\neuromatch_res.pkl", 'rb') as handle:
-        index_map = pickle.load(handle)
-    
-    num = np.where(index_map > 0, 1, 0)
-    sums = np.sum(num, axis=0)
-    print(len(np.where(sums == 26)[0]))
-    
     from mylib.local_path import f_CellReg_modi as f
     from tqdm import tqdm
 
@@ -517,6 +710,8 @@ if __name__ == "__main__":
         if f['include'][i] == 0:
             continue
         
+        if i != 23:
+            continue
         
         """
         with open(f['Trace File'][i], 'rb') as handle:
@@ -532,7 +727,6 @@ if __name__ == "__main__":
         
 
         if f['paradigm'][i] == 'CrossMaze':
-            continue
             if f['maze_type'][i] == 0:
                 index_map = GetMultidayIndexmap(
                     mouse=f['MiceID'][i],

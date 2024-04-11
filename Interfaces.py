@@ -75,7 +75,7 @@ def FieldPeakRateStatistic_Interface(trace = {}, spike_threshold = 10, variable_
     peak_rate = []
     for i in range(trace['n_neuron']):
         if trace['is_placecell'][i] == 1:
-            for k in trace['place_field_all_multiday'][i].keys():
+            for k in trace['place_field_all'][i].keys():
                 peak_rate.append(trace['smooth_map_all'][i, k-1])
     
     return np.array(peak_rate, np.float64)
@@ -287,7 +287,7 @@ def FieldDistributionStatistics_DiverseCriteria_Interface(
 # Fig0021
 # Place Field Number Counts.
 def PlaceFieldNumber_Interface(trace, spike_threshold = 10, variable_names = None, is_placecell = True):
-    KeyWordErrorCheck(trace, __file__, ['place_field_all_multiday'])
+    KeyWordErrorCheck(trace, __file__, ['place_field_all'])
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Cell','Field Number'])
 
     field_number = trace['place_field_num']
@@ -342,12 +342,14 @@ def PlaceFieldNumberChange_Interface(trace = {}, spike_threshold = 10, variable_
 # Fig0025 Percentage of PCsf
 def PercentageOfPCsf_Interface(trace = {}, spike_threshold = 10, variable_names = None, is_placecell = True):
     KeyWordErrorCheck(trace, __file__, ['place_field_all_multiday'])
-    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Percentage'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Percentage', 'Criteria'])
 
     idx = np.where(trace['is_placecell'] == 1)[0]
     field_number = trace['place_field_num_multiday'][idx]
+    field_number2 = trace['place_field_num'][idx]
 
-    return np.array([len(np.where(field_number == 1)[0])/len(np.where(field_number != 0)[0])])
+    return (np.array([len(np.where(field_number2 == 1)[0])/len(np.where(field_number2 != 0)[0]), len(np.where(field_number == 1)[0])/len(np.where(field_number != 0)[0])]),
+            np.array(['loose', 'rigorous']))
 
 #Fig0028 - Place Field Number Distribution
 def FieldDistributionStatistics_TestAll_Interface(
@@ -360,11 +362,7 @@ def FieldDistributionStatistics_TestAll_Interface(
                                                       'r', 'p', 'nbinom KS Statistics', 'nbinom KS P-Value',
                                                       'mean', 'sigma', 'Normal KS Statistics', 'Normal KS P-Value'])
     
-    place_field_all = cp.deepcopy(trace['place_field_all_multiday'])
-    field_number = []
-    for i in range(len(place_field_all)):
-        if trace['is_placecell'][i] == 1:
-            field_number.append(len(place_field_all[i].keys()))
+    field_number = trace['place_field_num'][np.where(trace['is_placecell'] == 1)[0]]
     
     #field_number = trace['place_field_num'][idx] if 'LA' not in trace.keys() else trace['LA']['place_field_num'][idx]
     field_number = np.array(field_number)
@@ -400,23 +398,17 @@ def FieldDistributionStatistics_TestAll_Interface(
 #Fig0028 - Place Field Number Distribution
 def FieldNumber_0028_Interface(trace = {}, spike_threshold = 10, variable_names = None, is_placecell = True):
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Field Number'])
-    
-    place_field_all = cp.deepcopy(trace['place_field_all_multiday'])
-    num = []
-    for i in range(len(place_field_all)):
-        if trace['is_placecell'][i] == 1:
-            num.append(len(place_field_all[i].keys()))
             
-    return np.array(num)
+    return trace['place_field_num_multiday'][np.where(trace['is_placecell'] == 1)[0]]
 
 #Fig0028 - Place Field Number Distribution for reverse
 def FieldNumber_0028_Reverse_Interface(trace = {}, spike_threshold = 10, variable_names = None, is_placecell = True):
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Field Number', 'Direction'])
     
-    field_number_cis = cp.deepcopy(trace['cis']['place_field_num'])
+    field_number_cis = cp.deepcopy(trace['cis']['place_field_num_multiday'])
     field_number_cis = field_number_cis[np.where((np.isnan(field_number_cis) == False)&(field_number_cis != 0)&(trace['cis']['is_placecell'] == 1))[0]]
 
-    field_number_trs = cp.deepcopy(trace['trs']['place_field_num'])
+    field_number_trs = cp.deepcopy(trace['trs']['place_field_num_multiday'])
     field_number_trs = field_number_trs[np.where((np.isnan(field_number_trs) == False)&(field_number_trs != 0)&(trace['trs']['is_placecell'] == 1))[0]]
     
     return np.concatenate([field_number_cis, field_number_trs]), np.array(['cis'] * len(field_number_cis) + ['trs'] * len(field_number_trs))
@@ -434,7 +426,7 @@ def FieldCentersToStart_Interface(trace = {}, spike_threshold = 30, variable_nam
     idx = np.where(trace['is_placecell'] == 1)[0]
     
     for i in tqdm(idx):
-        for k in trace['place_field_all_multiday'][i].keys():
+        for k in trace['place_field_all'][i].keys():
             x, y = ((k - 1)%48 + 0.5)/4, ((k - 1)//48 + 0.5)/4
             
             dis.append(G.shortest_distance((x, y), (0.125, 0.125))*8)
@@ -613,10 +605,10 @@ def InFieldCorrelation_Interface(trace: dict, spike_threshold: int | float = 10,
     for i in range(n):
         if trace['is_placecell'][i] == 0:
             continue
-        ks = trace['place_field_all_multiday'][i].keys()
+        ks = trace['place_field_all'][i].keys()
         for k in ks:
             id.append(k)
-            size.append(len(trace['place_field_all_multiday'][i][k]))
+            size.append(len(trace['place_field_all'][i][k]))
             rate.append(trace['smooth_map_all'][i][k-1])
             OEC.append(trace['in_field_corr'][i][k][0])
             FSC.append(trace['in_field_corr'][i][k][1])
@@ -700,7 +692,7 @@ def PVCorrelations_Interface(trace: dict, spike_threshold: int | float = 10,
                 np.array([np.nan]), np.array([np.nan]))
 
 
-from mylib.calcium.field_criteria import get_all_fields
+from mylib.calcium.field_criteria import GetPlaceField
 #Fig0048 Place Field Criteria
 def PlaceFieldNumberWithCriteria_Interface(
     trace: dict, 
@@ -724,7 +716,7 @@ def PlaceFieldNumberWithCriteria_Interface(
 
     for i, j in enumerate(x):
         for k, n in enumerate(pc_idx):
-            fields = get_all_fields(trace['maze_type'], smooth_map=smooth_map_all[n, :], thre_type = 1, parameter=j)
+            fields = GetPlaceField(trace['maze_type'], smooth_map=smooth_map_all[n, :], thre_type = 1, parameter=j)
             field_numberA[i, k] = len(fields.keys())
 
     field_numberB = np.zeros((27, pc_idx.shape[0]), dtype=np.int64)
@@ -1327,7 +1319,7 @@ def PlaceFieldCoveredDensity_Interface(
     
     for i in range(trace['field_reg'].shape[0]):
         j, k = trace['field_reg'][i, 0], trace['field_reg'][i, 2]
-        count_map[trace['place_field_all_multiday'][j][k]-1] += 1
+        count_map[trace['place_field_all'][j][k]-1] += 1
 
     return count_map[CP-1], D[CP-1, 0]
         
@@ -1339,7 +1331,7 @@ def FieldCountPerSession_Interface(
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Path Type', 'Threshold', 'Field Count', 'Field Number'])
     
-    place_field_cp10, place_field_cp5 = cp.deepcopy(trace['place_field_all_multiday']), cp.deepcopy(trace['place_field_all5'])
+    place_field_cp10, place_field_cp5 = cp.deepcopy(trace['place_field_all']), cp.deepcopy(trace['place_field_all5'])
     field_numbercp10 = np.array([len(i.keys()) for i in place_field_cp10], np.float64)
     field_numbercp5 = np.array([len(i.keys()) for i in place_field_cp5], np.float64)
     idx = np.where(trace['is_placecell'] == 1)[0]
@@ -1347,7 +1339,7 @@ def FieldCountPerSession_Interface(
     rescp5 = plt.hist(field_numbercp5[idx], range=(0.5, 50.5), bins=50)[0]
     
     if trace['maze_type'] in [1, 2]:
-        place_field_all10, place_field_all5 = cp.deepcopy(trace['LA']['place_field_all_multiday']), cp.deepcopy(trace['LA']['place_field_all5'])
+        place_field_all10, place_field_all5 = cp.deepcopy(trace['LA']['place_field_all']), cp.deepcopy(trace['LA']['place_field_all5'])
         field_numberall10, field_numberall5 = np.array([len(i.keys()) for i in place_field_all10], np.float64), np.array([len(i.keys()) for i in place_field_all5], np.float64)
         idx = np.where(trace['LA']['is_placecell'] == 1)[0]
         resall10 = plt.hist(field_numberall10[idx], range=(0.5, 50.5), bins=50)[0]
@@ -1415,8 +1407,8 @@ def IndeptTestForPositionAndFieldLength_Interface(
     
     for i in range(n_neuron):
         if trace['is_placecell'][i] == 1:
-            for k in trace['place_field_all_multiday'][i].keys():
-                LENGTH.append(np.max(D[0, trace['place_field_all_multiday'][i][k]-1]) - np.min(D[0, trace['place_field_all_multiday'][i][k]-1]))
+            for k in trace['place_field_all'][i].keys():
+                LENGTH.append(np.max(D[0, trace['place_field_all'][i][k]-1]) - np.min(D[0, trace['place_field_all'][i][k]-1]))
                 POSITION.append(D[k-1, 0])
     
     LENGTH = np.array(LENGTH)
@@ -1444,7 +1436,7 @@ def IndeptTestForPositionAndStability_Interface(
     FSCList = within_field_half_half_correlation(
         trace['smooth_map_fir'],
         trace['smooth_map_sec'],
-        trace['place_field_all_multiday']
+        trace['place_field_all']
     )
     
     if trace['maze_type'] == 0:
@@ -1456,7 +1448,7 @@ def IndeptTestForPositionAndStability_Interface(
     
     for i in range(n_neuron):
         if trace['is_placecell'][i] == 1:
-            for k in trace['place_field_all_multiday'][i].keys():
+            for k in trace['place_field_all'][i].keys():
                 FSC.append(FSCList[i][k])
                 POSITION.append(D[k-1, 0])
     
@@ -1494,7 +1486,7 @@ def IndeptTestForPositionAndRate_Interface(
     
     for i in range(n_neuron):
         if trace['is_placecell'][i] == 1:
-            for k in trace['place_field_all_multiday'][i].keys():
+            for k in trace['place_field_all'][i].keys():
                 RATE.append(trace['smooth_map_all'][i, k-1])
                 POSITION.append(D[k-1, 0])
     
@@ -1551,25 +1543,25 @@ def FieldPropertyIndependence_Chi2_MI_DoubleCheck_Interface(
         real_distribution=field_reg[:, 5],
         X_pairs=stab_sib,
         Y_pairs=stab_non,
-        n_bin=40
+        n_bin=20
     )
-    mi_stab_sib, mi_stab_non, _, _ = indept_field_properties_mutual_info(stab_sib, stab_non)
+    mi_stab_sib, mi_stab_non, _, _ = indept_field_properties_mutual_info(stab_sib, stab_non, n_bin=20)
     
     stat_size_sib, stat_size_non, len_size_sib, len_size_non = indept_field_properties(
         real_distribution=field_reg[:, 3],
         X_pairs=size_sib,
         Y_pairs=size_non,
-        n_bin=40
+        n_bin=20
     )
-    mi_size_sib, mi_size_non, _, _ = indept_field_properties_mutual_info(size_sib, size_non)
+    mi_size_sib, mi_size_non, _, _ = indept_field_properties_mutual_info(size_sib, size_non, n_bin=20)
     
     stat_rate_sib, stat_rate_non, len_rate_sib, len_rate_non = indept_field_properties(
         real_distribution=field_reg[:, 4],
         X_pairs=rate_sib,
         Y_pairs=rate_non,
-        n_bin=40
+        n_bin=20
     )
-    mi_rate_sib, mi_rate_non, _, _ = indept_field_properties_mutual_info(rate_sib, rate_non)
+    mi_rate_sib, mi_rate_non, _, _ = indept_field_properties_mutual_info(rate_sib, rate_non, n_bin=20)
     
     print("  Stabilty: ", stat_stab_sib, stat_stab_non, "   MI: ", mi_stab_sib, mi_stab_non)
     print("  Size: ", stat_size_sib, stat_size_non, "   MI: ", mi_size_sib, mi_size_non)
@@ -1590,7 +1582,8 @@ def PlaceFieldNum_Reverse_Interface(
 ):
     VariablesInputErrorCheck(input_variable=variable_names,
                              check_variable=['Field Number', 'Direction'])
-    return [np.nanmean(trace['cis']['place_field_num_multiday']), np.nanmean(trace['trs']['place_field_num_multiday'])], ['Cis', 'Trs']
+    return ([np.nanmean(trace['cis']['place_field_num_multiday'][np.where(trace['cis']['is_placecell'] == 1)]), 
+             np.nanmean(trace['trs']['place_field_num_multiday'][np.where(trace['trs']['is_placecell'] == 1)])], ['Cis', 'Trs'])
 
 def LapwiseDistance_Reverse_Interface(
     trace: dict,
@@ -1655,11 +1648,11 @@ def PlaceFieldNumberPerDirection_Reverse_Interface(
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Field Number', 'Direction'])
     
-    cis_num, trs_num = trace['cis']['place_field_num'], trace['trs']['place_field_num']
+    cis_num, trs_num = trace['cis']['place_field_num_multiday'], trace['trs']['place_field_num_multiday']
     idx = np.where((cis_num>0)&(trs_num>0))[0]
     cis_num, trs_num = cis_num[idx], trs_num[idx]
     
-    return np.concatenate([cis_num, trs_num]), np.array(['Cis']*len(cis_num) + ['Trs']*len(trs_num))
+    return np.concatenate([cis_num, trs_num]), np.array(['cis']*len(cis_num) + ['trs']*len(trs_num))
 
 # Fig0067
 def PlaceFieldNumberPerDirectionCorr_Reverse_Interface(
@@ -1669,14 +1662,14 @@ def PlaceFieldNumberPerDirectionCorr_Reverse_Interface(
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Corr', 'Shuffle'])
 
-    cis_num, trs_num = trace['cis']['place_field_num'], trace['trs']['place_field_num']
+    cis_num, trs_num = trace['cis']['place_field_num_multiday'], trace['trs']['place_field_num_multiday']
     idx = np.where((np.isnan(cis_num)==False)&(np.isnan(trs_num)==False)&(cis_num!=0)&(trs_num!=0))[0]
     cis_num, trs_num = cis_num[idx], trs_num[idx]
     
-    corr, _ = spearmanr(cis_num, trs_num)
+    corr, _ = pearsonr(cis_num, trs_num)
     np.random.shuffle(cis_num)
     np.random.shuffle(trs_num)
-    shuffle, _ = spearmanr(cis_num, trs_num)
+    shuffle, _ = pearsonr(cis_num, trs_num)
     
     return [corr], [shuffle]
 
@@ -1753,12 +1746,12 @@ def FieldSizeTestLogNormal_Reverse_Interface(
     
     for i in range(trace['n_neuron']):
         if trace['cis']['is_placecell'][i] == 1:
-            for k in trace['cis']['place_field_all_multiday'][i].keys():
-                field_size_cis.append(len(trace['cis']['place_field_all_multiday'][i][k]))
+            for k in trace['cis']['place_field_all'][i].keys():
+                field_size_cis.append(len(trace['cis']['place_field_all'][i][k]))
         
         if trace['trs']['is_placecell'][i] == 1:
-            for k in trace['trs']['place_field_all_multiday'][i].keys():
-                field_size_trs.append(len(trace['trs']['place_field_all_multiday'][i][k]))
+            for k in trace['trs']['place_field_all'][i].keys():
+                field_size_trs.append(len(trace['trs']['place_field_all'][i][k]))
     
     field_size_cis = np.array(field_size_cis)
     field_size_trs = np.array(field_size_trs)    
@@ -1767,7 +1760,42 @@ def FieldSizeTestLogNormal_Reverse_Interface(
     stat_trs, p_trs = lognorm_kstest(field_size_trs, resample_size=1629)
     
     return [p_cis, p_trs], [stat_cis, stat_trs], ['cis', 'trs']
+
+def FieldSizeAll_Reverse_Interface(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Field Size', 'Direction'])
+    
+    field_size_cis, field_size_trs = [], []
+    
+    for i in range(trace['n_neuron']):
+        if trace['cis']['is_placecell'][i] == 1:
+            for k in trace['cis']['place_field_all_multiday'][i].keys():
+                field_size_cis.append(len(trace['cis']['place_field_all_multiday'][i][k]))
         
+        if trace['trs']['is_placecell'][i] == 1:
+            for k in trace['trs']['place_field_all_multiday'][i].keys():
+                field_size_trs.append(len(trace['trs']['place_field_all_multiday'][i][k]))
+    
+    field_size_cis = np.array(field_size_cis)
+    field_size_trs = np.array(field_size_trs)
+    
+    return np.concatenate([field_size_cis, field_size_trs]), np.concatenate([np.repeat('cis', len(field_size_cis)), np.repeat('trs', len(field_size_trs))])
+
+def FieldNumberAll_Reverse_Interface(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Field Number', 'Direction'])
+    idx_cis = np.where(trace['cis']['is_placecell'] == 1)[0]
+    idx_trs = np.where(trace['trs']['is_placecell'] == 1)[0]
+    return (
+        np.concatenate([trace['cis']['place_field_num_multiday'][idx_cis], trace['trs']['place_field_num_multiday'][idx_trs]]),
+        np.concatenate([np.repeat('cis', idx_cis.shape[0]), np.repeat('trs', idx_trs.shape[0])])
+    )
 
 # Fig0068
 def PoissonTest_Reverse_Interface(
@@ -1913,20 +1941,23 @@ def FractionOfPCmf_Reverse_Interface(
     variable_names: list | None = None,
     spike_threshold: int | float = 10
 ):
-    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Fraction', 'Direction'])
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Fraction', 'Direction', 'Criteria'])
     
-    frac_cis, frac_trs = 0, 0
-    for i in range(trace['cis']['is_placecell'].shape[0]):
-        if trace['cis']['is_placecell'][i] == 1:
-            if len(trace['cis']['place_field_all_multiday'][i].keys()) > 1:
-                frac_cis += 1
-            
-    for i in range(trace['trs']['is_placecell'].shape[0]):
-        if trace['trs']['is_placecell'][i] == 1:
-            if len(trace['trs']['place_field_all_multiday'][i].keys()) > 1:
-                frac_trs += 1
+    field_num_cis_loose = trace['cis']['place_field_num']
+    field_num_cis_rigorous = trace['cis']['place_field_num_multiday']
+    field_num_trs_loose = trace['trs']['place_field_num']
+    field_num_trs_rigorous = trace['trs']['place_field_num_multiday']
     
-    return [frac_cis/np.sum(trace['cis']['is_placecell']), frac_trs/np.sum(trace['trs']['is_placecell'])], ['cis', 'trs']
+    return (
+        np.array([
+            np.where(field_num_cis_loose == 1)[0].shape[0] / np.where(field_num_cis_loose >= 1)[0].shape[0],
+            np.where(field_num_cis_rigorous == 1)[0].shape[0] / np.where(field_num_cis_rigorous >= 1)[0].shape[0],
+            np.where(field_num_trs_loose == 1)[0].shape[0] / np.where(field_num_trs_loose >= 1)[0].shape[0],
+            np.where(field_num_trs_rigorous == 1)[0].shape[0] / np.where(field_num_trs_rigorous >= 1)[0].shape[0]
+        ]),
+        np.array(['cis', 'cis', 'trs', 'trs']),
+        np.array(['loose', 'rigorous', 'loose', 'rigorous']),
+    )
 
 # Fig0069 - Place cell percentage - Reverse&Hairpin
 def AverageFieldNumber_Reverse_Interface(
@@ -1934,11 +1965,23 @@ def AverageFieldNumber_Reverse_Interface(
     variable_names: list | None = None,
     spike_threshold: int | float = 10
 ):
-    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Field Number', 'Direction'])
-
-    return ([np.mean(trace['cis']['place_field_num'][np.where(trace['cis']['is_placecell'] == 1)[0]]), 
-             np.mean(trace['trs']['place_field_num'][np.where(trace['trs']['is_placecell'] == 1)[0]])], 
-            ['cis', 'trs'])
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Field Number', 'Direction', 'Criteria'])
+    
+    field_num_cis_loose = trace['cis']['place_field_num']
+    field_num_cis_rigorous = trace['cis']['place_field_num_multiday']
+    field_num_trs_loose = trace['trs']['place_field_num']
+    field_num_trs_rigorous = trace['trs']['place_field_num_multiday']
+    
+    return (
+        np.array([
+            np.nanmean(field_num_cis_loose[np.where(trace['cis']['is_placecell'] == 1)[0]]),
+            np.nanmean(field_num_cis_rigorous[np.where(trace['cis']['is_placecell'] == 1)[0]]),
+            np.nanmean(field_num_trs_loose[np.where(trace['trs']['is_placecell'] == 1)[0]]),
+            np.nanmean(field_num_trs_rigorous[np.where(trace['trs']['is_placecell'] == 1)[0]])
+        ]),
+        np.array(['cis', 'cis', 'trs', 'trs']),
+        np.array(['loose', 'rigorous', 'loose', 'rigorous']),
+    )
 
 # Fig0070
 def CellNum_Reverse_Interface(
@@ -2292,7 +2335,8 @@ def CoordinatedDrift_Interface(
     trace: dict,
     variable_names: list | None = None,
     spike_threshold: int | float = 10,
-    return_item: str = "sib"
+    return_item: str = "sib",
+    dis_thre: float = 1
 ):
     VariablesInputErrorCheck(
         input_variable=variable_names,
@@ -2307,6 +2351,8 @@ def CoordinatedDrift_Interface(
     pair_types = np.array([])
     direction = np.array([])
     
+    D = GetDMatrices(trace['maze_type'], 48)
+    thre = dis_thre if trace['maze_type'] != 0 else 0.4
     if trace['paradigm'] == 'CrossMaze':
         sib_field_pairs, non_field_pairs = [], []
         for i in range(len(trace['field_ids'])-1):
@@ -2314,6 +2360,10 @@ def CoordinatedDrift_Interface(
                 if trace['field_ids'][i] == trace['field_ids'][j]:
                     if len(sib_field_pairs) >= 3000000:
                         continue
+                    
+                    if D[int(trace['field_centers'][i])-1, int(trace['field_centers'][j])-1] <= thre * 100:
+                        continue
+                    
                     sib_field_pairs.append([i, j])
                     sib_field_pairs.append([j, i])
                 else:
@@ -2408,6 +2458,10 @@ def CoordinatedDrift_Interface(
                     if trace[k]['field_ids'][i] == trace[k]['field_ids'][j]:
                         if len(sib_field_pairs) >= 3000000:
                             continue
+                        
+                        if D[int(trace[k]['field_centers'][i])-1, int(trace[k]['field_centers'][j])-1] <= thre * 100:
+                            continue
+                        
                         sib_field_pairs.append([i, j])
                         sib_field_pairs.append([j, i])
                     else:
