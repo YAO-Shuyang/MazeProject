@@ -43,7 +43,7 @@ def calc_rate_map_properties(
     # total occupation time
     t_total = np.nansum(occu_time)/1000
     # time fraction at each spatial bin
-    t_nodes_frac = occu_time / 1000 / (t_total+ 1E-6)
+    t_nodes_frac = occu_time / 1000 / (t_total)
 
     # Save all variables in a dict
     trace_ms = {'Spikes':Spikes, 'spike_nodes':spike_nodes, 'ms_time_behav':ms_time_behav, 'ms_speed_behav':ms_speed_behav, 'n_neuron':n_neuron, 

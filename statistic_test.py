@@ -117,7 +117,7 @@ def DataFrameEstablish(variable_names: list = [], f:pd.DataFrame = f1, function 
                        file_name:str = 'default', behavior_paradigm:str = 'CrossMaze', 
                        legal_maze_type:list = [0,1,2,3], f_member: list|None = None, 
                        file_idx:np.ndarray|list = None, func_kwgs:dict = {}, 
-                       is_behav: bool = False):
+                       is_behav: bool = False, figdata: str = figdata):
     '''
     Author: YAO Shuyang
     Date: Jan 25th, 2023 (Modified)
@@ -371,8 +371,6 @@ def GetMultidayIndexmap(
         else:
             index_map = ReadCellReg(f['cellreg_folder'][i])
             
-        print(f['cellreg_folder'])
-
         cellnum = np.where(index_map == 0, 0, 1)
         idx = np.where(np.nansum(cellnum, axis=0) >= occu_num)[0]
         return index_map[:, idx]

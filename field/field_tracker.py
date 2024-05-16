@@ -12,9 +12,9 @@ class RegisteredField(object):
                 
     def report(self, thre: int = 4):
         field_reg = self._content
-        duration = np.arange(field_reg.shape[0])  # Retained duration, silent duration, not detected duration
-        on_next_prob = np.zeros((field_reg.shape[0], 2), dtype=np.int64) # State ON with duration t -> State ON/OFF/NOT DETECTED on the next sessions
-        off_next_prob = np.zeros((field_reg.shape[0], 2), dtype=np.int64) # State OFF on Session t -> State ON DETECTED on Session t+1
+        duration = np.arange(field_reg.shape[0]+1)  # Retained duration, silent duration, not detected duration
+        on_next_prob = np.zeros((field_reg.shape[0]+1, 2), dtype=np.int64) # State ON with duration t -> State ON/OFF/NOT DETECTED on the next sessions
+        off_next_prob = np.zeros((field_reg.shape[0]+1, 2), dtype=np.int64) # State OFF on Session t -> State ON DETECTED on Session t+1
         silent_num = 0
 
         for i in range(field_reg.shape[0]-1):
@@ -60,15 +60,45 @@ class RegisteredField(object):
         conditional_recover_prob = off_next_prob[:, 0] / np.sum(off_next_prob, axis=1)
     
         retained_prob[np.where(np.sum(on_next_prob, axis=1) <= thre)[0]] = np.nan
-        global_recover_prob[np.where(off_next_prob[:, 0] <= thre)[0]] = np.nan
+        global_recover_prob[0] = np.nan
         conditional_recover_prob[np.where(np.sum(off_next_prob, axis=1) <= thre)[0]] = np.nan
+        on_next_prob[-1, 0] = on_next_prob[-2, 0]
 
         return duration, retained_prob, conditional_recover_prob, global_recover_prob, np.sum(on_next_prob, axis=1), np.sum(off_next_prob, axis=1)
+    
+    def count_lifespan(self):
+        field_reg = self._content
+        life_span = np.zeros(field_reg.shape[0], dtype=np.int64) # State ON with duration t -> State ON/OFF/NOT DETECTED on the next sessions
+
+        for i in range(field_reg.shape[0]-1):
+            for j in range(i, field_reg.shape[0]):
+                if i == 0:
+                    active_num = np.where(np.sum(field_reg[i:j+1, :], axis=0)==j-i+1)[0]
+                    life_span[j-i] += active_num.shape[0]
+                    
+                elif i == 1:
+                    active_num = np.where((np.sum(field_reg[i:j+1, :], axis=0)==j-i+1)&(field_reg[i-1, :] != 1))[0]
+                    life_span[j-i] += active_num.shape[0]
+                
+                else:
+                    active_num = np.where((np.sum(field_reg[i:j+1, :], axis=0)==j-i+1)&
+                                          ((field_reg[i-1, :] == 0)|((np.isnan(field_reg[i-1, :]))&
+                                                                     (field_reg[i-2, :] != 1))))[0]
+                    life_span[j-i] += active_num.shape[0]
+
+
+        return np.arange(1, field_reg.shape[0]+1), life_span
     
     @staticmethod
     def conditional_prob(field_reg, thre: int = 4):
         Reg = RegisteredField(field_reg)
         return Reg.report(thre=thre)
+    
+    @staticmethod
+    def get_field_lifespans(field_reg: np.ndarray):
+        Reg = RegisteredField(field_reg)
+        return Reg.count_lifespan()
+
         
 '''    
 def conditional_prob(trace: dict = None, field_reg: np.ndarray = None, thre: int = 5):
@@ -419,9 +449,8 @@ def compute_joint_probability_matrix(
             
     return np.array(sessions), np.stack(mat)
 
-
-
 if __name__ == '__main__':
+    pass
     """
     import pickle
     import pandas as pd

@@ -10,6 +10,12 @@ import os
 import pickle
 import gc
 
+OVERLAP_THRE = 0.75
+REITERATE_TIMES = 3
+MERGED_FIELD_SUPREME = 10
+MERGED_IDENTIFY_THRE = 1
+MERGED_OVERLAP_THRE = 0.5
+
 class Field(object):
     def __init__(
         self, 
@@ -17,7 +23,7 @@ class Field(object):
         area: np.ndarray, 
         center: np.ndarray,
         total_sesseion: int = 26,
-        overlap_thre: float = 0.6
+        overlap_thre: float = OVERLAP_THRE
     ) -> None:
         """__init__
 
@@ -178,7 +184,7 @@ class Field(object):
             raise ZeroDivisionError(f"There's no active history of this field, indicating somewhere is wrong.")
         
         for i in active_idx:
-            if i > self._curr_ref_field:
+            if i > self._curr_ref_field or i <= self._curr_ref_field - REITERATE_TIMES:
                 continue
             
             if self._is_overlap(self._area[i], area):
@@ -197,7 +203,7 @@ class Field(object):
             if np.intersect1d(self._area[active_idx[i]], area).shape[0] > 0:
                 prev_overlap += 1
         
-        if prev_overlap/active_idx.shape[0] < 0.6:
+        if prev_overlap/active_idx.shape[0] < OVERLAP_THRE:
             return False
         else:  
             return True
@@ -231,7 +237,7 @@ class Tracker(object):
         is_placecell: np.ndarray,
         total_sesseion: int = 26,
         maze_type: int = 1,
-        overlap_thre: float = 0.5
+        overlap_thre: float = OVERLAP_THRE
     ) -> None:
         """__init__: Initialize Tracker
 
@@ -360,16 +366,42 @@ class Tracker(object):
             field_info[:, i, 3] = pf.get_fieldsize()
             field_info[np.where(np.isnan(field_info[:, i, 2]) == False)[0], i, 4] = D[0, field_info[np.where(np.isnan(field_info[:, i, 2]) == False)[0], i, 2].astype(int)-1]
 
+        if self.maze_type == 0:
+            return field_reg, field_info
         
+        # Sort with distances to the start points.
         mean_distance = np.nanmean(field_info[:, :, 4], axis=0)
-        median_distance = np.nanmedian(field_info[:, :, 4], axis=0)
         sort_indices = np.argsort(mean_distance)
         field_reg = field_reg[:, sort_indices]
-        field_info = field_info[:, sort_indices, :]
+        field_info = field_info[:, sort_indices, :] 
         return field_reg, field_info
 
     def _merge_columns(self, matrix):
         return np.apply_along_axis(lambda row: row[~np.isnan(row)][0] if np.any(~np.isnan(row)) else np.nan, 1, matrix)
+
+    def _get_cumulative_rate_map(
+        self,
+        field_reg: np.ndarray,
+        field_info: np.ndarray,
+        smooth_map_all: np.ndarray
+    ) -> np.ndarray:
+        
+        cumulative_map = np.zeros((field_reg.shape[1], smooth_map_all.shape[1]))
+        for i in range(field_reg.shape[1]):
+            for j in range(field_reg.shape[0]):
+                if field_reg[j, i] == 1 and np.where(field_info[j, :, 2] == field_info[j, i, 2])[0].shape[0] == 1:
+                    cumulative_map[i, self._place_fields[j][int(field_info[j, i, 2])]-1] += smooth_map_all[j, self._place_fields[j][int(field_info[j, i, 2])]-1]
+
+        cumulative_map = cumulative_map.T / np.max(cumulative_map, axis=1)
+        cumulative_map = cumulative_map.T
+        
+        #import matplotlib.pyplot as plt
+        #for i in range(cumulative_map.shape[0]):
+        #    im = plt.imshow(np.reshape(cumulative_map[i, :], (48, 48)))
+        #    plt.colorbar(im)
+        #    plt.show()
+        return np.where(cumulative_map >= MERGED_OVERLAP_THRE, 1, 0), cumulative_map
+        
 
     def _merge_fields(
         self,
@@ -389,63 +421,118 @@ class Tracker(object):
                                      [0, 0, 0, 1, 1, 0],
                                      [0, 0, 0, 0, 0, 1]])
         """
+        
+        cumulative_map, cumulative_rate_map = self._get_cumulative_rate_map(field_reg, field_info, smooth_map_all)
         merge_matrix = np.zeros((field_reg.shape[1], field_reg.shape[1]))
-        for i in range(field_reg.shape[1]-1):
-            for j in range(i+1, field_reg.shape[1]):
-                if np.where(field_info[:, i, 2] - field_info[:, j, 2] == 0)[0].shape[0] >= 1: # Merged for two times field
+        for i in range(field_reg.shape[1]):
+            for j in range(field_reg.shape[1]):
+                if i == j:
+                    merge_matrix[i, j] = 1
+                    continue
+                
+                # New method to generate merge_matrix
+                if np.where((cumulative_map[i, :] == 1)&(cumulative_map[j, :] == 1))[0].shape[0] >= 1:
+                    # The two fields share an overlap greater than MERGED_OVERLAP_THRE
                     merge_matrix[i, j] = merge_matrix[j, i] = 1
-                    merge_matrix[i, i] = merge_matrix[j, j] = 1
-                    merge_matrix[j, :] += merge_matrix[i, :]
-                    merge_matrix[i, :] = merge_matrix[j, :]
-                    merge_matrix[:, j] += merge_matrix[:, i]   
-                    merge_matrix[:, i] = merge_matrix[:, j]
-                         
+                #if np.where(field_info[:, i, 2] - field_info[:, j, 2] == 0)[0].shape[0] >= MERGED_IDENTIFY_THRE: # Merged for two times field
+                #    merge_matrix[i, j] = merge_matrix[j, i] = 1
+
+        # Fill the blocks
+        for i in range(merge_matrix.shape[0]):
+            transition = np.ediff1d(np.concatenate([[0], merge_matrix[i, :], [0]]))
+            start_idx = np.where(transition == 1)[0][0]
+            end_idx = np.where(transition == -1)[0][-1]
+            merge_matrix[start_idx:end_idx, start_idx:end_idx] = 1
+                    
         merge_matrix[merge_matrix > 1] = 1
         continue_border = merge_matrix.shape[0]
+        merged_place_field = [{} for i in range(field_reg.shape[0])]
+        
         for i in range(merge_matrix.shape[0]-1, -1, -1):
             if i >= continue_border:
                 continue
             
             transition = np.ediff1d(np.concatenate([[0], merge_matrix[i, :], [0]]))
             if np.where(transition != 0)[0].shape[0] == 0:
+                assert False
                 continue # No need to merge
             else:
                 start_idx = np.where(transition == 1)[0][0]
                 end_idx = np.where(transition == -1)[0][-1]
                 continue_border = start_idx
+                if start_idx == end_idx-1:
+                    # No overlaping with other fields
+                    for d in range(len(merged_place_field)):
+                        if np.isnan(field_info[d, start_idx, 2]) == False:
+                            arg_max = np.argmax(cumulative_rate_map[start_idx, :]) + 1
+                            field_info[d, start_idx, 2] = arg_max
+                            field_info[d, start_idx, 3] = len(cumulative_rate_map[start_idx, :])
+                            merged_place_field[d][arg_max] = np.where(cumulative_map[start_idx, :] > 0)[0] + 1
+                            # merged_place_field[d][int(field_info[d, start_idx, 2])] = self._place_fields[d][int(field_info[d, start_idx, 2])]
+                    continue
 
+                # If there're more than 3 fields merged, remove them to control the quality of data.
+                """
+                if end_idx-start_idx >= MERGED_FIELD_SUPREME:
+                    field_centers = field_info[:, start_idx:end_idx, 2]
+                    
+                    for j in range(field_centers.shape[0]): 
+                        present_centers = np.unique(field_centers[j, np.where(np.isnan(field_centers[j, :]) == False)[0]].astype(int))
+
+                        #for k in present_centers:
+                        #    if np.where(field_info[j, :, 2] == k)[0].shape[0] == np.where(field_centers[j, :] == k)[0].shape[0]:
+                        #        del self._place_fields[j][k]
+                            
+                    field_reg = np.delete(field_reg, np.arange(start_idx, end_idx), axis=1)
+                    field_info = np.delete(field_info, np.arange(start_idx, end_idx), axis=1)
+                    continue
+                """                    
                 # Merge fields between start_idx and end_idx
                 merged_reg = np.sum(field_reg[:, start_idx:end_idx], axis=1)
                 merged_reg[merged_reg > 1] = 1
                 field_reg = np.delete(field_reg, np.arange(start_idx+1, end_idx), axis=1)
                                        
                 field_reg[:, start_idx] = merged_reg
-                
+               
                 # Update place field all and update field info
                 field_centers = field_info[:, start_idx:end_idx, 2]
+                
+                field_area = np.sum(cumulative_map[start_idx:end_idx, :], axis=0)
+                field_area = np.where(field_area > 0)[0] + 1
+                arg_max = np.argmax(np.sum(cumulative_rate_map[start_idx:end_idx, :], axis=0)) + 1
                 for j in range(field_centers.shape[0]):
+
                     idx = np.where(np.isnan(field_centers[j, :]) == False)[0]
                     present_centers = np.unique(field_centers[j, np.where(np.isnan(field_centers[j, :]) == False)[0]].astype(int))
-                    if len(present_centers) == 1:
-                        field_info[j, start_idx, 2] = present_centers[0]
-                        field_info[j, start_idx, 3] = field_info[j, start_idx + idx[0], 3]
-                        field_info[j, start_idx, 4] = field_info[j, start_idx + idx[0], 4]
-                        
+                    if len(present_centers) >= 1:
+                        field_info[j, start_idx, 2] = arg_max# present_centers[0]
+                        field_info[j, start_idx, 3] = len(field_area) # field_info[j, start_idx + idx[0], 3]
+                        field_info[j, start_idx, 4] = np.nan# field_info[j, start_idx + idx[0], 4]
+                        merged_place_field[j][arg_max] = field_area #self._place_fields[j][present_centers[0]]
+                    """ 
                     elif len(present_centers) > 1:
-                        field_area = np.concatenate([self._place_fields[j][k] for k in present_centers])
-                        for k in present_centers:
-                            del self._place_fields[j][k]
-                        
-                        arg_max = np.argmax(smooth_map_all[j, present_centers-1])
-                        
-                        self._place_fields[j][present_centers[arg_max]] = field_area
+                        #field_area = np.concatenate([self._place_fields[j][k] for k in present_centers])
+
+                        #for k in present_centers:
+                        #    if np.where(field_info[j, :, 2] == k)[0].shape[0] == np.where(field_centers[j, :] == k)[0].shape[0]:
+                        #        del self._place_fields[j][k]
+                            
+                        # arg_max = np.argmax(smooth_map_all[j, present_centers-1])+1
+                        #self._place_fields[j][present_centers[arg_max]] = field_area
                         field_info[j, start_idx, 2] = present_centers[arg_max]
                         field_info[j, start_idx, 3] = len(field_area)
                         field_info[j, start_idx, 4] = field_info[j, start_idx + idx[arg_max], 4]
+                    
+                        merged_place_field[j][present_centers[arg_max]] = field_area
+                    """      
                 
                 field_info = np.delete(field_info, np.arange(start_idx+1, end_idx), axis=1)
-
-        return field_reg, field_info, self._place_fields
+        
+        for d in range(len(merged_place_field)):
+            if self._place_fields[d] is None:
+                merged_place_field[d] = None
+        
+        return field_reg, field_info, merged_place_field # self._place_fields
 
     @staticmethod
     def field_register(
@@ -453,8 +540,9 @@ class Tracker(object):
         place_field_all: list[list[dict]],
         is_placecell: np.ndarray,
         smooth_map_all: np.ndarray,
-        overlap_thre: float = 0.6,
-        maze_type: int = 1
+        overlap_thre: float = OVERLAP_THRE,
+        maze_type: int = 1,
+        is_shuffle: bool = False
     ) -> tuple[np.ndarray, np.ndarray]:
         """field_register: Register all place fields from the registered neuron
 
@@ -490,9 +578,16 @@ class Tracker(object):
                 maze_type=maze_type
             )
             reg, info = neuron.register()
-            reg, info, place_field_all[i] = neuron._merge_fields(
-                reg, info,
-                smooth_map_all=smooth_map_all[:, i, :])
+            
+            if reg.shape[1] == 0:
+                continue
+            
+            if maze_type != 0 and is_shuffle == False:
+                reg, info, place_field_all[i] = neuron._merge_fields(
+                    field_reg=reg, 
+                    field_info=info,
+                    smooth_map_all=smooth_map_all[:, i, :]
+                )
             field_reg = np.concatenate([field_reg, reg], axis=1)
             field_info = np.concatenate([field_info, info], axis=1)
         
@@ -527,7 +622,7 @@ def get_field_centers(field_info: np.ndarray, maze_type: int) -> np.ndarray:
 def main(
     i: int,
     f: pd.DataFrame = f_CellReg_day,
-    overlap_thre: float = 0.6,
+    overlap_thre: float = OVERLAP_THRE,
     index_map: np.ndarray | None = None,
     cellreg_dir: str | None = None,
     mouse: int | None = None,
@@ -538,8 +633,6 @@ def main(
     is_shuffle: bool = False,
     prefix: str = 'trace_mdays_conc'
 ):
-
-    
     if index_map is None:
         if f['maze_type'][i] == 0:
             return f
@@ -577,8 +670,6 @@ def main(
         fdata = f4
     else:
         raise ValueError(f"Paradigm {behavior_paradigm} is not supported.")
-    
-    index_map = index_map[1:, :]
         
     # Initial basic elements
     n_neurons = index_map.shape[1]
@@ -601,7 +692,6 @@ def main(
     if stage == 'Stage 1' and mouse in [10212] and session == 2:
         file_indices = np.where((fdata['MiceID'] == mouse) & (fdata['session'] == session) & (fdata['Stage'] == 'Stage 1') & (fdata['date'] != 20230506))[0]
     
-    file_indices = file_indices[1:]  
     print(file_indices, mouse, stage, session)
     res = core.get_trace_set(f=fdata, file_indices=file_indices, keys=['is_placecell', 'place_field_all_multiday', 'smooth_map_all'])
     
@@ -620,14 +710,15 @@ def main(
                     place_field_all[j].append(field_reallocate(res['place_field_all_multiday'][i][int(index_map[i, j])-1], maze_type=maze_type))
             else:
                 place_field_all[j].append(None)
-    print("Field Register...")            
+    print("Field Register...")
     field_reg, field_info, place_field_all = Tracker.field_register(
         index_map=index_map,
         place_field_all=place_field_all,
         is_placecell=is_placecell,
         overlap_thre=overlap_thre,
         maze_type=maze_type,
-        smooth_map_all=smooth_map_all
+        smooth_map_all=smooth_map_all,
+        is_shuffle = is_shuffle
     )
     field_ids = get_field_ids(field_info)
     shuffle_type = 'Shuffle' if is_shuffle else 'Real'
@@ -690,7 +781,8 @@ def main(
         is_placecell=is_placecell,
         overlap_thre=overlap_thre,
         maze_type=maze_type,
-        smooth_map_all=smooth_map_all
+        smooth_map_all=smooth_map_all,
+        is_shuffle = is_shuffle
     )
     field_ids = get_field_ids(field_info)
     
@@ -705,14 +797,26 @@ if __name__ == "__main__":
     import pickle
     from mylib.local_path import f_CellReg_modi as f
     from tqdm import tqdm
+    from mylib.maze_utils3 import mkdir
+    import shutil
 
-    for i in tqdm(range(len(f))):
+
+    work_folder = r"F:\trace_multiday_0.75_ovelapdecide"
+    mkdir(work_folder)
+    for i in range(len(f)):
         if f['include'][i] == 0:
             continue
         
-        if i != 23:
+        p = os.path.join(work_folder, str(i)+'.pkl')
+        print(p)
+        shutil.copy(f['Trace File'][i], p)
+
+    for i in tqdm(range(8, len(f))):
+        if f['include'][i] == 0:
             continue
         
+        if f['maze_type'][i] == 0:
+            continue
         """
         with open(f['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
@@ -724,7 +828,6 @@ if __name__ == "__main__":
 
         """
         is_shuffle = f['Type'][i] == 'Shuffle'
-        
 
         if f['paradigm'][i] == 'CrossMaze':
             if f['maze_type'][i] == 0:
@@ -740,7 +843,6 @@ if __name__ == "__main__":
         else:
             index_map = ReadCellReg(f['cellreg_folder'][i])
         """
-
         # CellReg
         try:
             index_map = GetMultidayIndexmap(
@@ -755,19 +857,25 @@ if __name__ == "__main__":
         index_map[np.where((index_map < 0)|np.isnan(index_map))] = 0
         mat = np.where(index_map>0, 1, 0)
         num = np.sum(mat, axis = 0)
-        index_map = index_map[:, np.where(num >= 2)[0]]  
+        index_map = index_map[:, np.where(num >= 2)[0]]
         print(index_map.shape)
         main(
             i=i,
             f=f,
             index_map=index_map,
-            overlap_thre=0.6,
+            overlap_thre=OVERLAP_THRE, 
             cellreg_dir=f['cellreg_folder'][i],
-            mouse=f['MiceID'][i],
-            stage=f['Stage'][i],
-            session=f['session'][i],
-            maze_type=f['maze_type'][i],
-            behavior_paradigm=f['paradigm'][i],
-            is_shuffle=is_shuffle,
-            prefix='trace_mdays_conc',
+            mouse=f['MiceID'][i], 
+            stage=f['Stage'][i], 
+            session=f['session'][i], 
+            maze_type=f['maze_type'][i], 
+            behavior_paradigm=f['paradigm'][i], 
+            is_shuffle=is_shuffle, 
+            prefix='trace_mdays_conc'
         )
+
+print("Overlap thre: ", OVERLAP_THRE)
+print("Reiterate times: ", REITERATE_TIMES)
+print("Merged field supreme: ", MERGED_FIELD_SUPREME)
+print("Merged Identify Threshold: ", MERGED_IDENTIFY_THRE)
+print("Merged Overlap Threshold: ", MERGED_OVERLAP_THRE)

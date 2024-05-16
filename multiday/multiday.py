@@ -201,6 +201,7 @@ class MultiDayLayout:
         smooth_map_kwargs: dict = {},
         trace_map_kwargs: dict = {},
         loctimecurve_kwargs: dict = {},
+        is_reverse: bool = False,
         **kwargs
     ) -> None:
         yticks, ylabels = [], []
@@ -215,28 +216,32 @@ class MultiDayLayout:
                 **smooth_map_kwargs
             )
             
-            self._add_trace_map(
-                ax=self.trace_map_axes[self.core.num - i-1],
-                behav_time=cp.deepcopy(self.core.behav_times_list[i]),
-                behav_pos=cp.deepcopy(self.core.behav_positions_list[i]),
-                spikes=cp.deepcopy(self.core.spikes_list[i]),
-                spike_time=cp.deepcopy(self.core.ms_time_behav_list[i]),
-                place_field_all=cp.deepcopy(self.core.place_fields_list[i]),
-                title="Cell "+str(int(self.core.cell_indices[i])),
-                **trace_map_kwargs
-            )
+            if not is_reverse:
+                self._add_trace_map(
+                    ax=self.trace_map_axes[self.core.num - i-1],
+                    behav_time=cp.deepcopy(self.core.behav_times_list[i]),
+                    behav_pos=cp.deepcopy(self.core.behav_positions_list[i]),
+                    spikes=cp.deepcopy(self.core.spikes_list[i]),
+                    spike_time=cp.deepcopy(self.core.ms_time_behav_list[i]),
+                    place_field_all=cp.deepcopy(self.core.place_fields_list[i]),
+                    title="Cell "+str(int(self.core.cell_indices[i])),
+                    **trace_map_kwargs
+                )
             
             self._add_loc_time_curve(
                 ax=self.ax,
-                behav_time=cp.deepcopy(self.core.behav_times_list[i]),
-                behav_nodes=cp.deepcopy(self.core.behav_nodes_list[i]),
+                behav_time=cp.deepcopy(self.core.ms_time_behav_list[i]),
+                behav_nodes=cp.deepcopy(self.core.spike_nodes_list[i]),
+                #behav_time=cp.deepcopy(self.core.behav_times_list[i]),
+                #behav_nodes=cp.deepcopy(self.core.behav_nodes_list[i]),
                 spikes=cp.deepcopy(self.core.spikes_list[i]),
                 spike_time=cp.deepcopy(self.core.ms_time_behav_list[i]),
                 place_field_all=cp.deepcopy(self.core.place_fields_list[i]),
                 **loctimecurve_kwargs
             )
             self.ax.set_ylim([0, self.core.t_max])
-            ymin, ymax = np.min(self.core.behav_times_list[i]), np.max(self.core.behav_times_list[i])
+            #ymin, ymax = np.min(self.core.behav_times_list[i]), np.max(self.core.behav_times_list[i])
+            ymin, ymax = np.min(self.core.ms_time_behav_list[i]), np.max(self.core.ms_time_behav_list[i])
             yticks = yticks + [ymin/1000, ymax/1000]
             ylabels = ylabels + [0, int((ymax-ymin)/1000)+1]
             
@@ -283,6 +288,8 @@ class MultiDayLayout:
         field: np.ndarray | None = None,
         shuffle_name: str | None = None,
         interv_time: float = 80000,
+        paradigm: str = 'CrossMaze',
+        direction: str | None = None,
         **kwargs
     ):  
         try:
@@ -296,18 +303,39 @@ class MultiDayLayout:
         if file_indices.shape[0] == 0:
             raise ValueError(f"No file was found for {mouse} session {session} {maze_type} {dates}!")    
         
+        if direction is None:
+            appendfix = ''
+        else:
+            appendfix = f'_{direction}'
+            
+        assert (paradigm != 'CrossMaze' and direction in ['cis', 'trs']) or (paradigm == 'CrossMaze' and direction is None)
+        
         if core is None:
-            core = MultiDayCore(keys=['correct_nodes', 'correct_time', 'ms_time_behav', 'Spikes',
-                                  'correct_pos', 'smooth_map_all', 'SI_all', 'is_placecell', 
-                                  'DeconvSignal', 'ms_time', 'place_field_all_multiday', 'maze_type', 
+            if paradigm == 'CrossMaze':
+                core = MultiDayCore(keys=['correct_nodes', 'correct_time', 'ms_time_behav', 'Spikes',
+                                  'correct_pos', 'smooth_map_all', 'SI_all', 'is_placecell', 'spike_nodes',
+                                  'place_field_all_multiday', 'maze_type', 
                                   'old_map_clear'], 
+                                paradigm=paradigm,
+                                direction=direction,
                                 interv_time=interv_time)
-            core.get_trace_set(f, file_indices, 
-                               keys=['correct_nodes', 'correct_time', 'ms_time_behav', 'Spikes',
-                                     'correct_pos', 'smooth_map_all', 'SI_all', 'is_placecell', 
-                                     'DeconvSignal', 'ms_time', 'place_field_all_multiday', 'maze_type', 
+                core.get_trace_set(f, file_indices, 
+                               keys=['correct_nodes', 'correct_time', 'ms_time_behav', 'Spikes', 
+                                     'correct_pos', 'smooth_map_all', 'SI_all', 'is_placecell', 'spike_nodes',
+                                     'place_field_all_multiday', 'maze_type', 
                                      'old_map_clear'])
-             
+            else:
+                core = MultiDayCore(keys=['ms_time_behav', 'Spikes','smooth_map_all', 'SI_all', 'is_placecell', 
+                                  'place_field_all_multiday', 'maze_type', 'spike_nodes',
+                                  'old_map_clear'], 
+                                paradigm=paradigm,
+                                direction=direction,
+                                interv_time=interv_time)
+                core.get_trace_set(f, file_indices, 
+                               keys=['ms_time_behav', 'Spikes','smooth_map_all', 'SI_all', 'is_placecell', 
+                                     'place_field_all_multiday', 'maze_type', 'spike_nodes',
+                                     'old_map_clear'])
+                
         for n, i in enumerate(cell_pairs):
             cell_indices = index_map[:, i]
             print("Cell Indices: ", cell_indices)
@@ -316,11 +344,12 @@ class MultiDayLayout:
             Visualizer = MultiDayLayout(f, file_indices, cell_indices, core=core2, **layout_kw)   
             Visualizer.visualize(
                 save_loc=save_loc, 
-                file_name="Line "+str(i+1), 
+                file_name="Line "+str(i+1) + appendfix, 
                 shuffle_name=shuffle_name, 
                 is_fit=is_fit, 
                 field=field, 
                 is_show=is_show, 
+                is_reverse=paradigm != 'CrossMaze',
                 **kwargs
             )
         
@@ -549,6 +578,7 @@ class MultiDayLayout2:
         layout_kw: dict = {},
         is_show: bool = False,
         interv_time: float = 80000,
+        direction: str | None = None,
         **kwargs
     ):  
         try:
@@ -565,13 +595,13 @@ class MultiDayLayout2:
         if core is None:
             core = MultiDayCore(keys=['correct_nodes', 'correct_time', 'ms_time_behav', 'Spikes',
                                   'correct_pos', 'smooth_map_all', 'SI_all', 'is_placecell', 
-                                  'DeconvSignal', 'ms_time', 'place_field_all_multiday', 
-                                  'maze_type', 'old_map_clear'], 
+                                  'place_field_all_multiday', 
+                                  'maze_type', 'old_map_clear'], direction=direction,
                                 interv_time=interv_time)
             core.get_trace_set(f, file_indices, 
                                keys=['correct_nodes', 'correct_time', 'ms_time_behav', 'Spikes',
                                      'correct_pos', 'smooth_map_all', 'SI_all', 'is_placecell', 
-                                     'DeconvSignal', 'ms_time', 'place_field_all_multiday', 
+                                     'place_field_all_multiday', 
                                      'maze_type', 'old_map_clear'])
              
         for n, i in enumerate(cell_pairs):

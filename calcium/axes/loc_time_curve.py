@@ -28,9 +28,12 @@ def LocTimeCurveAxes(
         linearized_x = np.zeros_like(behav_nodes, np.float64)
         graph = NRG[int(maze_type)]
 
-        for i in range(behav_nodes.shape[0]):
-            linearized_x[i] = graph[int(behav_nodes[i])]
-    
+        try:
+            for i in range(behav_nodes.shape[0]):
+                linearized_x[i] = graph[int(behav_nodes[i])]
+        except:
+            print(behav_nodes.shape)
+            
         linearized_x = linearized_x + np.random.rand(behav_nodes.shape[0]) - 0.5
     else:
         linearized_x = given_x
@@ -66,7 +69,7 @@ def LocTimeCurveAxes(
         a = ax.plot(linearized_x, behav_time/1000, 'o', **line_kwargs)
     else:
         dx = np.ediff1d(linearized_x)
-        idx = np.where(dx < -50)[0]
+        idx = np.where(dx < -10)[0]
         linearized_x = np.insert(linearized_x, idx+1, np.nan)
         behav_time = np.insert(behav_time.astype(float), idx+1, np.nan)
         a = ax.plot(linearized_x, behav_time/1000, **line_kwargs)

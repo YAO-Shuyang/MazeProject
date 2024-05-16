@@ -54,7 +54,7 @@ def update_counters(fields: list[Counter], index_line):
         field.update(index_line[i])
     return fields
 
-def calculate_superstable_fraction(field_reg: np.ndarray, thres: np.ndarray = np.arange(3, 26, 2)) -> np.ndarray:
+def calculate_superstable_fraction(field_reg: np.ndarray, thres: np.ndarray = np.arange(2, 26, 2)) -> np.ndarray:
     
     superstable_frac = np.zeros((thres.shape[0], field_reg.shape[0]))
     fields = [Counter(i) for i in field_reg[0, :]]

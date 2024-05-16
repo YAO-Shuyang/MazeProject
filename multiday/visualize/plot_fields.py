@@ -127,8 +127,8 @@ class MultiDayFields:
             
             self._add_loc_time_curve(
                 ax=self.ax,
-                behav_time=cp.deepcopy(self.core.behav_times_list[i]),
-                behav_nodes=cp.deepcopy(self.core.behav_nodes_list[i]),
+                behav_time=cp.deepcopy(self.core.ms_time_behav_list[i]),
+                behav_nodes=cp.deepcopy(self.core.spike_nodes_list[i]),
                 spikes=cp.deepcopy(self.core.spikes_list[i]),
                 spike_time=cp.deepcopy(self.core.ms_time_behav_list[i]),
                 **loctimecurve_kwargs
@@ -137,12 +137,13 @@ class MultiDayFields:
         self._add_field_range(
             ax=self.ax,
             place_field_all=cp.deepcopy(self.place_field_all),
-            behav_time=cp.deepcopy(self.core.behav_times_list),
+            behav_time=cp.deepcopy(self.core.ms_time_behav_list),
         )
         self.ax.set_ylim([0, self.core.t_max])
-        ymin, ymax = np.min(self.core.behav_times_list[i]), np.max(self.core.behav_times_list[i])
-        yticks = yticks + [ymin/1000, ymax/1000]
-        ylabels = ylabels + [0, int((ymax-ymin)/1000)+1]
+        ymin, ymax = np.min(self.core.ms_time_behav_list[i]), np.max(self.core.ms_time_behav_list[i])
+        if ymin is not None and ymax is not None:
+            yticks = yticks + [ymin/1000, ymax/1000]
+            ylabels = ylabels + [0, int((ymax-ymin)/1000)+1]
             
         self.ax.set_yticks(yticks, ylabels)
         
@@ -177,6 +178,8 @@ class MultiDayFields:
         shuffle_name: str | None = None,
         interv_time: float = 80000,
         place_field_all: list[list[dict]] | None = None,
+        direction: str | None = None,
+        paradigm: str = 'CrossMaze',
         **kwargs
     ):  
         try:
@@ -184,24 +187,45 @@ class MultiDayFields:
         except:
             raise ValueError(f'Please set dates! It needs more than one date but {dates} was given.')
         
+        assert
+        
         file_indices = np.array([np.where((f['MiceID'] == mouse)&(f['date'] == d)&(f['session'] == session)&(f['maze_type'] == maze_type))[0][0] for d in dates], dtype=np.int64)
         print("    File Indices: ", file_indices)
      
         if file_indices.shape[0] == 0:
             raise ValueError(f"No file was found for {mouse} session {session} {maze_type} {dates}!")    
         
+        if direction is None:
+            appendfix = ''
+        else:
+            appendfix = f'_{direction}'
+            
+        assert (paradigm != 'CrossMaze' and direction in ['cis', 'trs']) or (paradigm == 'CrossMaze' and direction is None)
+        
         
         if core is None:
-            core = MultiDayCore(keys=['correct_nodes', 'correct_time', 'ms_time_behav', 'Spikes',
-                                  'correct_pos', 'smooth_map_all', 'SI_all', 'is_placecell', 
+            if paradigm == 'CrossMaze':
+                core = MultiDayCore(keys=['correct_nodes', 'correct_time', 'ms_time_behav', 'Spikes',
+                                  'correct_pos', 'smooth_map_all', 'SI_all', 'is_placecell', 'spike_nodes',
                                   'DeconvSignal', 'ms_time', 'maze_type', 'place_field_all_multiday',
                                   'old_map_clear'], 
+                                    paradigm=paradigm,
+                                    direction=direction,
                                 interv_time=interv_time)
-            core.get_trace_set(f, file_indices, 
+                core.get_trace_set(f, file_indices, 
                                keys=['correct_nodes', 'correct_time', 'ms_time_behav', 'Spikes',
-                                     'correct_pos', 'smooth_map_all', 'SI_all', 'is_placecell', 
+                                     'correct_pos', 'smooth_map_all', 'SI_all', 'is_placecell', 'spike_nodes',
                                      'DeconvSignal', 'ms_time', 'maze_type', 'place_field_all_multiday',
                                      'old_map_clear'])
+            else:
+                core = MultiDayCore(keys=['ms_time_behav', 'Spikes','smooth_map_all', 'SI_all', 'is_placecell', 'spike_nodes',
+                                  'maze_type', 'old_map_clear'], 
+                                    paradigm=paradigm,
+                                    direction=direction,
+                                interv_time=interv_time)
+                core.get_trace_set(f, file_indices, 
+                               keys=['ms_time_behav', 'Spikes','smooth_map_all', 'SI_all', 'is_placecell', 'spike_nodes',
+                                     'maze_type', 'old_map_clear'])
         
         for n, i in enumerate(cell_pairs):
             existed_cell = np.where(index_map[:, i] > 0)[0][0]
@@ -217,7 +241,7 @@ class MultiDayFields:
                                         **layout_kw)   
             Visualizer.visualize(
                 save_loc=save_loc, 
-                file_name="Line "+str(i+1), 
+                file_name="Line "+str(i+1)+appendfix, 
                 shuffle_name=shuffle_name, 
                 is_fit=is_fit, 
                 field=field, 

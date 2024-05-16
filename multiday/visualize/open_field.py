@@ -173,6 +173,7 @@ class MultiDayLayoutOpenField:
         field: np.ndarray | None = None,
         shuffle_name: str | None = None,
         interv_time: float = 80000,
+        direction: str | None = None,
         **kwargs
     ):  
         try:
@@ -190,13 +191,13 @@ class MultiDayLayoutOpenField:
         if core is None:
             core = MultiDayCore(keys=['correct_nodes', 'correct_time', 'ms_time_behav', 'Spikes',
                                   'correct_pos', 'smooth_map_all', 'SI_all', 'is_placecell', 
-                                  'DeconvSignal', 'ms_time', 'place_field_all_multiday', 'maze_type', 
-                                  'old_map_clear'], 
+                                  'place_field_all_multiday', 'maze_type', 
+                                  'old_map_clear'], direction=direction,
                                 interv_time=interv_time)
             core.get_trace_set(f, file_indices, 
                                keys=['correct_nodes', 'correct_time', 'ms_time_behav', 'Spikes',
                                      'correct_pos', 'smooth_map_all', 'SI_all', 'is_placecell', 
-                                     'DeconvSignal', 'ms_time', 'place_field_all_multiday', 'maze_type', 
+                                     'place_field_all_multiday', 'maze_type', 
                                      'old_map_clear'])
              
         for n, i in enumerate(cell_pairs):
