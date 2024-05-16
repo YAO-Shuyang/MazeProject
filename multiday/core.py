@@ -25,6 +25,7 @@ class MultiDayCore:
                 (paradigm == 'ReverseMaze' and direction in ['cis', 'trs']) or 
                 (paradigm == 'HairpinMaze' and direction in ['cis', 'trs']))
         self.dirction = direction
+        self.paradigm = paradigm
         
         self._num = 0
         self._res = {}
@@ -139,6 +140,7 @@ class MultiDayCore:
         behav_positions = []
         spikes = []
         ms_time_behav = []
+        spike_nodes = []
         
         behav_nodes_all = np.array([], dtype=np.int32)
         behav_times_all = np.array([], dtype=np.int32)
@@ -153,13 +155,17 @@ class MultiDayCore:
         
         for i in range(session_num):
             if self.cell_indices[i] != 0:
-                behav_nodes.append(S2F[cp.deepcopy(self._res['correct_nodes'][i].astype(np.int32))-1])
-                behav_times.append(cp.deepcopy(self._res['correct_time'][i]))
-                behav_positions.append(cp.deepcopy(self._res['correct_pos'][i]))
+                if self.paradigm == 'CrossMaze':
+                    behav_nodes.append(S2F[cp.deepcopy(self._res['correct_nodes'][i].astype(np.int32))-1])
+                    behav_times.append(cp.deepcopy(self._res['correct_time'][i]))
+                    behav_positions.append(cp.deepcopy(self._res['correct_pos'][i]))
                 
-                behav_nodes_all = np.concatenate([behav_nodes_all, S2F[cp.deepcopy(self._res['correct_nodes'][i].astype(np.int32))-1]])
-                behav_times_all = np.concatenate([behav_times_all, cp.deepcopy(self._res['correct_time'][i])])
+                    behav_nodes_all = np.concatenate([behav_nodes_all, S2F[cp.deepcopy(self._res['correct_nodes'][i].astype(np.int32))-1]])
+                    behav_times_all = np.concatenate([behav_times_all, cp.deepcopy(self._res['correct_time'][i])])
+                    
                 spikes.append(self._res['Spikes'][i][int(self.cell_indices[i])-1, :])
+                spike_nodes.append(S2F[cp.deepcopy(self._res['spike_nodes'][i].astype(np.int32))-1])
+
                 ms_time_behav.append(cp.deepcopy(self._res['ms_time_behav'][i]))
                 
                 spikes_all = np.concatenate([spikes_all, self._res['Spikes'][i][int(self.cell_indices[i])-1, :]])
@@ -169,8 +175,8 @@ class MultiDayCore:
                 smooth_maps_info[i, 0] = self._res['SI_all'][i][int(self.cell_indices[i])-1]
                 smooth_maps_info[i, 1] = np.nanmax(smooth_maps[i, :])
                 smooth_maps_info[i, 2] = self._res['is_placecell'][i][int(self.cell_indices[i])-1]
-                DeconvSignal = np.concatenate([DeconvSignal, self._res['DeconvSignal'][i][int(self.cell_indices[i])-1, :]])
-                ms_time_original = np.concatenate([ms_time_original, self._res['ms_time'][i]])
+                #DeconvSignal = np.concatenate([DeconvSignal, self._res['DeconvSignal'][i][int(self.cell_indices[i])-1, :]])
+                #ms_time_original = np.concatenate([ms_time_original, self._res['ms_time'][i]])
                 place_fields.append(self._res['place_field_all_multiday'][i][int(self.cell_indices[i])-1])
             else:
                 behav_nodes.append(None)
@@ -179,12 +185,18 @@ class MultiDayCore:
                 spikes.append(None)
                 ms_time_behav.append(None)
                 place_fields.append(None)
+                spike_nodes.append(None)
         
-            
-        self.behav_nodes_list = cp.deepcopy(behav_nodes)
-        self.behav_times_list = cp.deepcopy(behav_times)
-        self.behav_positions_list = cp.deepcopy(behav_positions)
+        
+        if self.paradigm == 'CrossMaze': 
+            self.behav_nodes_list = cp.deepcopy(behav_nodes)
+            self.behav_times_list = cp.deepcopy(behav_times)
+            self.behav_positions_list = cp.deepcopy(behav_positions)
+            self.behav_nodes_all = behav_nodes_all
+            self.behav_times_all = behav_times_all            
+        
         self.spikes_list = cp.deepcopy(spikes)
+        self.spike_nodes_list = cp.deepcopy(spike_nodes)
         self.ms_time_behav_list = cp.deepcopy(ms_time_behav)
         self.place_fields_list = cp.deepcopy(place_fields)
         
@@ -193,10 +205,9 @@ class MultiDayCore:
         self.smooth_maps_info = smooth_maps_info
         self.maze_type = self._res['maze_type'][0]
         
-        self.behav_nodes_all = behav_nodes_all
-        self.behav_times_all = behav_times_all
-        self.ms_time_original_all = ms_time_original
-        self.deconv_signal_all = DeconvSignal
+
+        #self.ms_time_original_all = ms_time_original
+        #self.deconv_signal_all = DeconvSignal
         self.ms_time_behav_all = ms_time_behav_all
         self.spikes_all = spikes_all
     

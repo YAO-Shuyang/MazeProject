@@ -1660,18 +1660,18 @@ def PlaceFieldNumberPerDirectionCorr_Reverse_Interface(
     variable_names: list | None = None,
     spike_threshold: int | float = 10,
 ):
-    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Corr', 'Shuffle'])
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Corr', 'Shuffle', 'P-values'])
 
     cis_num, trs_num = trace['cis']['place_field_num_multiday'], trace['trs']['place_field_num_multiday']
     idx = np.where((np.isnan(cis_num)==False)&(np.isnan(trs_num)==False)&(cis_num!=0)&(trs_num!=0))[0]
     cis_num, trs_num = cis_num[idx], trs_num[idx]
     
-    corr, _ = pearsonr(cis_num, trs_num)
+    corr, p = pearsonr(cis_num, trs_num)
     np.random.shuffle(cis_num)
     np.random.shuffle(trs_num)
     shuffle, _ = pearsonr(cis_num, trs_num)
     
-    return [corr], [shuffle]
+    return [corr], [shuffle], [p]
 
 # Fig0069 - model
 from mylib.stats.gamma_poisson import gamma_poisson_pdf
@@ -2096,12 +2096,12 @@ def Superstable_Fraction_Interface(
 ):
     VariablesInputErrorCheck(input_variable=variable_names, check_variable=[
         'Duration', 'Superstable Frac.', 'Threshold'])
-    superstable_thre = np.arange(3, 51)
+    superstable_thre = np.arange(2, 27)
     
     dur = np.concatenate([trace['days'] for i in range(superstable_thre.shape[0])])
-    superstable_frac = calculate_superstable_fraction(trace['field_reg'].T, thres=np.arange(3, 51)).flatten()
+    superstable_frac = calculate_superstable_fraction(trace['field_reg'].T, thres=np.arange(2, 27)).flatten()
     #superstable_frac = np.concatenate([trace['Superstable Num'][i, :] for i in range(superstable_thre.shape[0])])
-    thre = np.repeat(np.arange(3, 51), trace['days'].shape[0])
+    thre = np.repeat(np.arange(2, 27), trace['days'].shape[0])
     
     return dur, superstable_frac, thre
 
@@ -2118,7 +2118,7 @@ def Superstable_Fraction_Data_Interface(
         num = np.where(np.isnan(field_reg), 0, 1)
         count = np.sum(num, axis=0)
         field_reg = field_reg[:, np.where(count == field_reg.shape[0])[0]]
-        superstable_thre = np.arange(3, field_reg.shape[0]+1)
+        superstable_thre = np.arange(2, field_reg.shape[0]+1)
     
         dur = np.concatenate([np.arange(1, field_reg.shape[0]+1) for i in range(superstable_thre.shape[0])])
         superstable_frac = calculate_superstable_fraction(field_reg, thres=superstable_thre).flatten()
@@ -2131,7 +2131,7 @@ def Superstable_Fraction_Data_Interface(
         num = np.where(np.isnan(field_reg), 0, 1)
         count = np.sum(num, axis=0)
         field_reg = field_reg[:, np.where(count == field_reg.shape[0])[0]]
-        superstable_thre = np.arange(3, field_reg.shape[0]+1)
+        superstable_thre = np.arange(2, field_reg.shape[0]+1)
         
         dur = np.concatenate([np.arange(1, field_reg.shape[0]+1) for i in range(superstable_thre.shape[0])])
         superstable_frac_cis = calculate_superstable_fraction(trace['cis']['field_reg'], thres=superstable_thre).flatten()
@@ -2560,7 +2560,7 @@ def CoordinateIndex_Interface(
     spike_threshold: int | float = 10,
     N = None,
     if_consider_distance: bool = False,
-    dis_thre: float = 1
+    dis_thre: float = 0.5
 ):
     VariablesInputErrorCheck(
         input_variable=variable_names,
@@ -2638,3 +2638,34 @@ def CoordinateIndex_Interface(
                 np.concatenate([np.repeat(trace['paradigm']+' cis', start_session_cis.shape[0]), 
                                 np.repeat(trace['paradigm']+' trs', start_session_trs.shape[0])])
                 )
+        
+        
+         
+# Fig0327 Field Lifespan
+def FieldLifespan_Interface(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10
+):
+    VariablesInputErrorCheck(
+        input_variable=variable_names,
+        check_variable=['Lifespan', 'Count', 'Paradigm'])
+    
+    if trace['paradigm'] == 'CrossMaze':
+        duration, lifespan = RegisteredField.get_field_lifespans(
+            field_reg=trace['field_reg']
+        )
+    
+        return duration, lifespan, np.repeat(trace['paradigm'], lifespan.shape[0])
+    else:
+        duration_cis, lifespan_cis = RegisteredField.get_field_lifespans(
+            field_reg=trace['cis']['field_reg']
+        )
+        duration_trs, lifespan_trs = RegisteredField.get_field_lifespans(
+            field_reg=trace['trs']['field_reg']
+        )
+    
+        return (np.concatenate([duration_cis, duration_trs]), 
+                np.concatenate([lifespan_cis, lifespan_trs]), 
+                np.concatenate([np.repeat(trace['paradigm']+' cis', lifespan_cis.shape[0]), 
+                                np.repeat(trace['paradigm']+' trs', lifespan_trs.shape[0])]))
