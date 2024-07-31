@@ -1,0 +1,153 @@
+Date : 2024-07-24 13:24:30
+Directory : e:\Anaconda\envs\maze\Lib\site-packages\mylib
+Total : 109 files,  22951 codes, 1246 comments, 5063 blanks, all 29260 lines
+
+Languages
++----------+------------+------------+------------+------------+------------+
+| language | files      | code       | comment    | blank      | total      |
++----------+------------+------------+------------+------------+------------+
+| Python   |        108 |     22,949 |      1,246 |      5,062 |     29,257 |
+| Markdown |          1 |          2 |          0 |          1 |          3 |
++----------+------------+------------+------------+------------+------------+
+
+Directories
++------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                                       | files      | code       | comment    | blank      | total      |
++------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                                          |        109 |     22,951 |      1,246 |      5,063 |     29,260 |
+| . (Files)                                                                                                  |         16 |      7,919 |        553 |      1,807 |     10,279 |
+| behavior                                                                                                   |          6 |        537 |         42 |        145 |        724 |
+| calcium                                                                                                    |         21 |      2,971 |         76 |        615 |      3,662 |
+| calcium (Files)                                                                                            |          8 |      2,152 |         69 |        429 |      2,650 |
+| calcium\axes                                                                                               |         10 |        741 |          6 |        164 |        911 |
+| calcium\smooth                                                                                             |          3 |         78 |          1 |         22 |        101 |
+| decoder                                                                                                    |         21 |      3,371 |        255 |        850 |      4,476 |
+| decoder (Files)                                                                                            |         11 |      1,976 |        112 |        504 |      2,592 |
+| decoder\versions_control                                                                                   |         10 |      1,395 |        143 |        346 |      1,884 |
+| dim_red                                                                                                    |          1 |         45 |          2 |         15 |         62 |
+| divide_laps                                                                                                |          5 |        163 |         14 |         46 |        223 |
+| field                                                                                                      |         15 |      2,941 |        170 |        636 |      3,747 |
+| multiday                                                                                                   |         12 |      3,189 |         46 |        545 |      3,780 |
+| multiday (Files)                                                                                           |          8 |      2,014 |         34 |        399 |      2,447 |
+| multiday\visualize                                                                                         |          4 |      1,175 |         12 |        146 |      1,333 |
+| other                                                                                                      |          2 |        273 |          3 |         54 |        330 |
+| simulator                                                                                                  |          5 |        622 |         51 |        155 |        828 |
+| stats                                                                                                      |          4 |        705 |         17 |        147 |        869 |
+| tda                                                                                                        |          1 |        215 |         17 |         48 |        280 |
++------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++------------------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| filename                                                                                                   | language | code       | comment    | blank      | total      |
++------------------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\AssertError.py                                               | Python   |         29 |          3 |          4 |         36 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\Interfaces.py                                                | Python   |      2,139 |         82 |        490 |      2,711 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\Interfaces_Hairpin.py                                        | Python   |        203 |         21 |         46 |        270 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\README.md                                                    | Markdown |          2 |          0 |          1 |          3 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\__init__.py                                                  | Python   |          7 |          0 |          1 |          8 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\behavior\__init__.py                                         | Python   |          1 |          0 |          0 |          1 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\behavior\behavevents.py                                      | Python   |         90 |          2 |         23 |        115 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\behavior\correct_rate.py                                     | Python   |         88 |          0 |         36 |        124 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\behavior\dlc.py                                              | Python   |         31 |          0 |          7 |         38 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\behavior\dsp_behav.py                                        | Python   |        254 |         33 |         57 |        344 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\behavior\velocity.py                                         | Python   |         73 |          7 |         22 |        102 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\__init__.py                                          | Python   |          0 |          0 |          1 |          1 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\axes\LapwiseCalciumTraceAxes.py                      | Python   |         44 |          0 |         14 |         58 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\axes\__init__.py                                     | Python   |          0 |          0 |          1 |          1 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\axes\complex_loc_time_curve.py                       | Python   |         49 |          0 |         14 |         63 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\axes\instant_rate_curve.py                           | Python   |        108 |          4 |         23 |        135 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\axes\linearized_rate_curve.py                        | Python   |         74 |          1 |         17 |         92 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\axes\loc_time_curve.py                               | Python   |        119 |          0 |         30 |        149 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\axes\peak_curve.py                                   | Python   |         96 |          0 |         26 |        122 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\axes\rate_map.py                                     | Python   |         65 |          0 |         10 |         75 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\axes\sample_cell.py                                  | Python   |        104 |          1 |         11 |        116 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\axes\trace_map.py                                    | Python   |         82 |          0 |         18 |        100 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\behavevents.py                                       | Python   |         40 |          0 |          8 |         48 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\dsp_ms.py                                            | Python   |        851 |         14 |        166 |      1,031 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\field_criteria.py                                    | Python   |        161 |         18 |         28 |        207 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\field_criteria_parallel.py                           | Python   |         26 |          0 |          6 |         32 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\firing_rate.py                                       | Python   |         48 |          8 |         11 |         67 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\reverse.py                                           | Python   |        825 |         27 |        173 |      1,025 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\single_trial.py                                      | Python   |        201 |          2 |         36 |        239 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\smooth\__init__.py                                   | Python   |          0 |          0 |          1 |          1 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\smooth\gaussian.py                                   | Python   |         53 |          0 |         13 |         66 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\smooth\interpolation.py                              | Python   |         25 |          1 |          8 |         34 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\NaiveBayesianDecoder.py                              | Python   |        272 |         19 |         67 |        358 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\NaiveBayesianDecoderHD.py                            | Python   |        237 |         17 |         59 |        313 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\NaiveBayesianDecoderPoison.py                        | Python   |        233 |         17 |         65 |        315 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\NaiveBayesianDecoderPoison_cuda.py                   | Python   |        231 |         18 |         63 |        312 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\PiecewiseConstantSigmoidRegression.py                | Python   |        478 |          7 |        112 |        597 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\SklearnGNB.py                                        | Python   |        224 |          4 |         58 |        286 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\__init__.py                                          | Python   |          0 |          0 |          1 |          1 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\decoding_utils.py                                    | Python   |        116 |         30 |         37 |        183 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\main.py                                              | Python   |        109 |          0 |         19 |        128 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\main_shuffle.py                                      | Python   |          8 |          0 |          1 |          9 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\preprocess.py                                        | Python   |         68 |          0 |         22 |         90 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\versions_control\NaiveBayesianDecoder-v-1.0.py       | Python   |        183 |         17 |         40 |        240 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\versions_control\NaiveBayesianDecoder-v-1.1.py       | Python   |        176 |         17 |         40 |        233 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\versions_control\NaiveBayesianDecoder-v-1.2.py       | Python   |        204 |         18 |         49 |        271 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\versions_control\NaiveBayesianDecoderPoison-v-2.0.py | Python   |        185 |         18 |         48 |        251 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\versions_control\PolyFieldsPCSimulation-v-2.0.py     | Python   |         97 |         14 |         23 |        134 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\versions_control\PolyFieldsPCSimulation-v-2.1.py     | Python   |        162 |         18 |         36 |        216 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\versions_control\StandardPCSimulation-v-1.0.py       | Python   |         69 |          9 |         14 |         92 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\versions_control\StandardPCSimulation-v-1.1.py       | Python   |         92 |         10 |         30 |        132 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\versions_control\StandardPCSimulation-v-1.2.py       | Python   |         99 |         11 |         30 |        140 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder\versions_control\StandardPCSimulation-v-1.3.py       | Python   |        128 |         11 |         36 |        175 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\diff_start_point.py                                          | Python   |         59 |          4 |         14 |         77 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\dim_red\neural_trajectory.py                                 | Python   |         45 |          2 |         15 |         62 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\divide_laps\__init__.py                                      | Python   |          0 |          0 |          1 |          1 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\divide_laps\crossmazelap.py                                  | Python   |         81 |         10 |         22 |        113 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\divide_laps\dspmazelap.py                                    | Python   |         12 |          0 |          8 |         20 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\divide_laps\lap_split.py                                     | Python   |         13 |          0 |          1 |         14 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\divide_laps\reverselap.py                                    | Python   |         57 |          4 |         14 |         75 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\dlc_behav.py                                                 | Python   |        262 |         34 |         62 |        358 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\dlc_ms.py                                                    | Python   |        210 |         27 |         45 |        282 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\dp_analysis.py                                               | Python   |        896 |         46 |        189 |      1,131 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\__init__.py                                            | Python   |          0 |          0 |          1 |          1 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\basic.py                                               | Python   |         30 |          1 |         10 |         41 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\cluster.py                                             | Python   |         41 |          4 |         11 |         56 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\counter.py                                             | Python   |         93 |         12 |         21 |        126 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\field_tracker.py                                       | Python   |        434 |          4 |        100 |        538 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\in_field.py                                            | Python   |        549 |         22 |        114 |        685 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\main.py                                                | Python   |        392 |         57 |         83 |        532 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\multiday_in_field.py                                   | Python   |        388 |          8 |         66 |        462 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\shift.py                                               | Python   |         97 |          0 |         25 |        122 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\sigmoid.py                                             | Python   |         89 |          5 |         30 |        124 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\size.py                                                | Python   |          2 |          0 |          2 |          4 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\sparse.py                                              | Python   |         72 |          5 |         22 |         99 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\test.py                                                | Python   |          7 |          0 |          2 |          9 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\tracker.py                                             | Python   |        700 |         50 |        131 |        881 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\within_field.py                                        | Python   |         47 |          2 |         18 |         67 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\local_path.py                                                | Python   |         28 |          0 |         11 |         39 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\maze_graph.py                                                | Python   |        493 |         27 |         79 |        599 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\maze_utils3.py                                               | Python   |      1,342 |         95 |        329 |      1,766 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\multiday\SingleTrialClass.py                                 | Python   |        433 |          5 |        118 |        556 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\multiday\__init__.py                                         | Python   |          0 |          0 |          1 |          1 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\multiday\core.py                                             | Python   |        204 |          5 |         40 |        249 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\multiday\entirepc.py                                         | Python   |        199 |          5 |         56 |        260 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\multiday\imputation.py                                       | Python   |        169 |          5 |         34 |        208 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\multiday\multiday.py                                         | Python   |        785 |         14 |         95 |        894 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\multiday\pvc.py                                              | Python   |        150 |          0 |         36 |        186 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\multiday\ratemap.py                                          | Python   |         74 |          0 |         19 |         93 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\multiday\visualize\__init__.py                               | Python   |          0 |          0 |          1 |          1 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\multiday\visualize\mazes.py                                  | Python   |        760 |         11 |         93 |        864 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\multiday\visualize\open_field.py                             | Python   |        196 |          1 |         21 |        218 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\multiday\visualize\plot_fields.py                            | Python   |        219 |          0 |         31 |        250 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\naive.py                                                     | Python   |         26 |          0 |          6 |         32 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\other\CellRegManuallyCheck.py                                | Python   |        244 |          2 |         47 |        293 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\other\check_utils.py                                         | Python   |         29 |          1 |          7 |         37 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\preprocessing_behav.py                                       | Python   |        526 |        112 |        127 |        765 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\preprocessing_ms.py                                          | Python   |      1,387 |         79 |        328 |      1,794 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\simulator\PolyFieldsPCSimulation.py                          | Python   |        177 |         25 |         41 |        243 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\simulator\StandardPCSimulation.py                            | Python   |        128 |         11 |         36 |        175 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\simulator\__init__.py                                        | Python   |          0 |          0 |          1 |          1 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\simulator\permenant_field_analysis.py                        | Python   |        305 |         15 |         73 |        393 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\simulator\poisson_norm.py                                    | Python   |         12 |          0 |          4 |         16 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\statistic_test.py                                            | Python   |        310 |         23 |         75 |        408 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\stats\__init__.py                                            | Python   |          0 |          0 |          1 |          1 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\stats\gamma_poisson.py                                       | Python   |         49 |          0 |         10 |         59 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\stats\indept.py                                              | Python   |        418 |         13 |         90 |        521 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\stats\ks.py                                                  | Python   |        238 |          4 |         46 |        288 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\tda\betti_curves.py                                          | Python   |        215 |         17 |         48 |        280 |
+| Total                                                                                                      |          |     22,951 |      1,246 |      5,063 |     29,260 |
++------------------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+

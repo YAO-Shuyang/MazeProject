@@ -280,3 +280,6 @@ if __name__ == '__main__':
     trace['p'] = r"E:\Data\Cross_maze\10224\20230930\session 2"
     LocTimeCurve(trace)
     RateMap(trace)
+    
+    
+class A()
