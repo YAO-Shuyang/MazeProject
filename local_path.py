@@ -20,6 +20,7 @@ f_pure_old = pd.read_excel(os.path.join(CM_path,'behavior_only.xlsx'), sheet_nam
 
 f2 = pd.read_excel(os.path.join(DSP_path,'dsp_maze_paradigm.xlsx'), sheet_name = 'calcium')
 f2_behav = pd.read_excel(os.path.join(DSP_path,'dsp_maze_paradigm.xlsx'), sheet_name = 'behavior')
+f2_ori = pd.read_excel(os.path.join(DSP_path,'dsp_maze_paradigm.xlsx'), sheet_name = 'calcium_separate')
 
 f3 = pd.read_excel(os.path.join(RM_path,'Reverse_maze_paradigm.xlsx'), sheet_name = 'calcium')
 f3_behav = pd.read_excel(os.path.join(RM_path,'Reverse_maze_paradigm.xlsx'), sheet_name = 'behavior')

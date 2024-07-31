@@ -297,7 +297,6 @@ def main(MiceID: int, days: int = 100, simu_fields: int = 10000, drift_model: st
             
     return trace
 
-    
 if __name__ == '__main__':
     import pickle
     import os
@@ -305,13 +304,14 @@ if __name__ == '__main__':
     dir_name = r"E:\Data\FigData\PermenantFieldAnalysis"
         
     # Convergent Drift Model: 50 simulated Mice
-    for mouse in range(1, 51):
+    for mouse in range(1000, 1001):
         print(mouse, " Convergent Drift Model ---------------------------------------------------------")
-        trace = main(mouse, 50, 10000, drift_model='converged')
+        trace = main(mouse, 100, 10, drift_model='converged')
         with open(os.path.join(dir_name, f'mouse_{mouse}_converged_10000fields_50days.pkl'), 'wb') as handle:
             pickle.dump(trace, handle)
         print(end='\n\n\n')
-      
+    
+    """
     # Equal Rate Drift Model: 50 simulated Mice
     FIXED_RATE = [0.5, 0.6, 0.7, 0.8, 0.9]
     for mouse in range(51, 101):
@@ -325,7 +325,8 @@ if __name__ == '__main__':
         trace = main(mouse, 50, 10000, drift_model='converged', converge_function='poly')
         with open(os.path.join(dir_name, f'mouse_{mouse}_converged_10000fields_50days_poly.pkl'), 'wb') as handle:
             pickle.dump(trace, handle)
-        print(end='\n\n\n')       
+        print(end='\n\n\n')
+    """      
     """
     loc = os.path.join(figdata, "PermenantFieldAnalysis")
     if os.path.exists(loc)==False:

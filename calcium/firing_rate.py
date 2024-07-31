@@ -17,7 +17,9 @@ def calc_rate_map_properties(
     Ms: np.ndarray,
     save_loc: str,
     behavior_paradigm: str,
-    kwargs: dict = {}
+    kwargs: dict = {},
+    spike_num_thre = 10,
+    placefield_kwargs: dict = {"thre_type": 2, "parameter": 0.2}
 ):
     n_neuron = Spikes.shape[0]
     _nbins = 2304
@@ -31,7 +33,6 @@ def calc_rate_map_properties(
             range=_coords_range)
 
     # Generate silent neuron
-    spike_num_thre = 10
     SilentNeuron = Generate_SilentNeuron(Spikes = Spikes, threshold = spike_num_thre)
     print(f'       These neurons have spikes less than {spike_num_thre}:', SilentNeuron)
     # Calculating firing rate
@@ -57,10 +58,12 @@ def calc_rate_map_properties(
     # Generate place field
     trace_ms['place_field_all'] = place_field(
         trace=trace_ms,
-        thre_type=2,
-        parameter=0.2,
+        **placefield_kwargs
     )
     
     trace_ms = count_field_number(trace_ms)
-    trace_ms = field_register(trace_ms)
+    try:
+        trace_ms = field_register(trace_ms)
+    except:
+        pass
     return trace_ms

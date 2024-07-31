@@ -329,8 +329,51 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
     
     print("    ",os.path.join(p,"trace_behav.pkl")," has been saved successfully!")
 
+def concat_trace_behav(oripath1: str, oripath2: str, save_dir: None = None):
+    if save_dir is None:
+        save_dir = os.path.dirname(os.path.dirname(oripath1))
+    
+    with open(oripath1, 'rb') as handle:
+        trace1 = pickle.load(handle)
+
+    with open(oripath2, 'rb') as handle:
+        trace2 = pickle.load(handle)
+
+    add_time = trace1['behav_time_original'][-1] + 100000
+
+    trace = {
+        'date': trace1['date'],
+        'MiceID': trace1['MiceID'],
+        'paradigm': trace1['paradigm'],
+        'session_path': save_dir, 'p': save_dir,
+        'former_path': [trace1['session_path'], trace2['session_path']],
+        'maze_type': 1,
+        'nx': 48, 'ny': 48,
+        'body_parts': trace1['body_parts'],
+        'behav_position_original': np.concatenate([trace1['behav_position_original'], trace2['behav_position_original']], axis=0),
+        'behav_time_original': np.concatenate([trace1['behav_time_original'], trace2['behav_time_original'] + add_time]),
+        'lap beg time': np.concatenate([trace1['lap beg time'], trace2['lap beg time'] + add_time]),
+        'lap end time': np.concatenate([trace1['lap end time'], trace2['lap end time'] + add_time]),
+        'processed_pos': np.concatenate([trace1['processed_pos'], trace2['processed_pos']], axis=0),
+        'processed_pos_new': np.concatenate([trace1['processed_pos_new'], trace2['processed_pos_new']], axis=0),
+        'behav_time': np.concatenate([trace1['behav_time'], trace2['behav_time'] + add_time]),
+        'behav_nodes': np.concatenate([trace1['behav_nodes'], trace2['behav_nodes']]),
+        'correct_pos': np.concatenate([trace1['correct_pos'], trace2['correct_pos']], axis=0),
+        'correct_nodes': np.concatenate([trace1['correct_nodes'], trace2['correct_nodes']]),
+        'correct_time': np.concatenate([trace1['correct_time'], trace2['correct_time'] + add_time]),
+        'occu_time': trace1['occu_time'] + trace2['occu_time'],
+        'correct_speed': np.concatenate([trace1['correct_speed'], trace2['correct_speed']]),
+        'smooth_speed': np.concatenate([trace1['smooth_speed'], trace2['smooth_speed']])
+    }
+    
+    with open(os.path.join(save_dir, 'trace_behav.pkl'), 'wb') as handle:
+        pickle.dump(trace, handle)
+    
+    print("    ",os.path.join(save_dir, 'trace_behav.pkl')," has been saved successfully!")
 
 if __name__ == '__main__':
+    from mylib.local_path import f2_ori
+    """
     f = pd.read_excel(r"G:\YSY\Dsp_maze\dsp_maze_paradigm.xlsx", sheet_name='behavior')
     work_flow = "G:\YSY\Dsp_maze"
     for i in range(18, len(f)):
@@ -342,3 +385,10 @@ if __name__ == '__main__':
                      'header':[1,2]}, cam_degree=int(f['cam_degree'][i]))
     
         print("Done.", end='\n\n\n')
+    """
+    
+    for i in range(int(len(f2_ori) / 2)):
+        oripath1 = f2_ori['Trace Behav File'][i*2]
+        oripath2 = f2_ori['Trace Behav File'][i*2+1]
+
+        concat_trace_behav(oripath1, oripath2)

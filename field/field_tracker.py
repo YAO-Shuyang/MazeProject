@@ -66,6 +66,58 @@ class RegisteredField(object):
 
         return duration, retained_prob, conditional_recover_prob, global_recover_prob, np.sum(on_next_prob, axis=1), np.sum(off_next_prob, axis=1)
     
+    def report_with_initial_session(self, thre: int = 4, max_init_n: int = 10):
+        assert max_init_n < self._content.shape[0]
+        field_reg = self._content
+        duration = np.repeat(np.arange(field_reg.shape[0]+1), max_init_n) # Retained duration, silent duration, not detected duration
+        start_sessions = np.reshape(
+            np.repeat(np.arange(max_init_n)+1, field_reg.shape[0]+1),
+            [max_init_n, field_reg.shape[0]+1]
+        ).T
+        on_next_prob = np.zeros((field_reg.shape[0]+1, 2, max_init_n), dtype=np.int64) # State ON with duration t -> State ON/OFF/NOT DETECTED on the next sessions
+        off_next_prob = np.zeros((field_reg.shape[0]+1, 2, max_init_n), dtype=np.int64) # State OFF on Session t -> State ON DETECTED on Session t+1
+
+        for i in range(max_init_n):
+            for j in range(i+1, field_reg.shape[0]):
+                if i == 0:
+                    base_num = np.where((np.sum(field_reg[i:j, :], axis=0)==j-i)&(field_reg[j, :] == 0))[0]
+                    active_num = np.where(np.sum(field_reg[i:j+1, :], axis=0)==j-i+1)[0]
+                    on_next_prob[j-i, 0, i] += active_num.shape[0]
+                    on_next_prob[j-i, 1, i] += base_num.shape[0]
+                    
+                elif i == 1:
+                    base_num = np.where((np.sum(field_reg[i:j, :], axis=0)==j-i)&(field_reg[j, :] == 0)&(field_reg[i-1, :] != 1))[0]
+                    active_num = np.where((np.sum(field_reg[i:j+1, :], axis=0)==j-i+1)&(field_reg[i-1, :] != 1))[0]
+                    on_next_prob[j-i, 0, i] += active_num.shape[0]
+                    on_next_prob[j-i, 1, i] += base_num.shape[0]
+                
+                else:
+                    base_num = np.where((np.sum(field_reg[i:j, :], axis=0)==j-i)&(field_reg[j, :] == 0)&
+                                        ((field_reg[i-1, :] == 0)|((np.isnan(field_reg[i-1, :]))&
+                                                                     (field_reg[i-2, :] != 1))))[0]
+                    active_num = np.where((np.sum(field_reg[i:j+1, :], axis=0)==j-i+1)&
+                                          ((field_reg[i-1, :] == 0)|((np.isnan(field_reg[i-1, :]))&
+                                                                     (field_reg[i-2, :] != 1))))[0]
+                    on_next_prob[j-i, 0, i] += active_num.shape[0]
+                    on_next_prob[j-i, 1, i] += base_num.shape[0]
+                
+                if j == i + 1:
+                    continue
+                     
+                recover_num = np.where((np.sum(field_reg[i+1:j, :], axis=0)==0)&(field_reg[i, :] == 1)&(field_reg[j, :] == 1))[0]
+                non_recover_num = np.where((np.nansum(field_reg[i+1:j, :], axis=0)==0)&(field_reg[i, :] == 1)&(field_reg[j, :] == 0))[0]
+                off_next_prob[j-i-1, 0, i] += recover_num.shape[0]
+                off_next_prob[j-i-1, 1, i] += non_recover_num.shape[0]
+
+        retained_prob = on_next_prob[:, 0, :] / np.sum(on_next_prob, axis=1)
+        conditional_recover_prob = off_next_prob[:, 0, :] / np.sum(off_next_prob, axis=1)
+    
+        retained_prob[np.where(np.sum(on_next_prob, axis=1) <= thre)] = np.nan
+        conditional_recover_prob[np.where(np.sum(off_next_prob, axis=1) <= thre)] = np.nan
+        on_next_prob[-1, 0] = on_next_prob[-2, 0]
+
+        return duration, start_sessions.flatten(), retained_prob.flatten(), conditional_recover_prob.flatten(), np.sum(on_next_prob, axis=1).flatten(), np.sum(off_next_prob, axis=1).flatten()
+    
     def count_lifespan(self):
         field_reg = self._content
         life_span = np.zeros(field_reg.shape[0], dtype=np.int64) # State ON with duration t -> State ON/OFF/NOT DETECTED on the next sessions
@@ -90,16 +142,19 @@ class RegisteredField(object):
         return np.arange(1, field_reg.shape[0]+1), life_span
     
     @staticmethod
-    def conditional_prob(field_reg, thre: int = 4):
+    def conditional_prob(field_reg, thre: int = 4, is_overal: bool = True):
         Reg = RegisteredField(field_reg)
-        return Reg.report(thre=thre)
+        
+        if is_overal:
+            return Reg.report(thre=thre)
+        else:
+            return Reg.report_with_initial_session(thre=thre, max_init_n=field_reg.shape[0] - 2)
     
     @staticmethod
     def get_field_lifespans(field_reg: np.ndarray):
         Reg = RegisteredField(field_reg)
         return Reg.count_lifespan()
 
-        
 '''    
 def conditional_prob(trace: dict = None, field_reg: np.ndarray = None, thre: int = 5):
     """

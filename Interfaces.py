@@ -134,7 +134,35 @@ def LearningCurve_Reverse_Interface(trace: dict, spike_threshold = 10, variable_
         
     return laps_id, direction, navigating_time
 
-from mylib.behavior.correct_rate import calc_behavioral_score
+from mylib.calcium.dsp_ms import classify_lap
+# Generate learning curve for cross maze paradigm. Fig0020
+def LearningCurve_DSP_Interface(trace: dict, spike_threshold = 30, variable_names = None):
+    KeyWordErrorCheck(trace, __file__, ['correct_time', 'paradigm'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Lap ID', 'Route', 'Lap-wise time cost'])
+
+    if trace['maze_type'] == 0:
+        return np.array([]), np.array([])
+    
+    behav_time = trace['correct_time']
+    beg_idx, end_idx = LapSplit(trace, trace['paradigm'])
+    navigating_time = (behav_time[end_idx] - behav_time[beg_idx])/1000
+    
+    routes = classify_lap(spike_nodes_transform(trace['correct_nodes'], 12), beg_idx, trace['start_from'])
+    routes[routes == 4] = 0
+    
+    if trace['start_from'] == 'correct':
+        routes_id = np.array(["Route "+str(i+1) for i in routes])
+        routes_used = routes
+    else:
+        routes[np.where(routes != 0)[0]] += 3
+        routes_id = np.array(["Route "+str(i+1) for i in routes])
+        routes_used = routes
+        routes_used[routes_used != 0] = routes_used[routes_used != 0] + 3
+    
+    laps_id = np.array([i for i in range(1, beg_idx.shape[0] + 1)])
+    return laps_id, routes_id, navigating_time
+
+from mylib.behavior.correct_rate import calc_behavioral_score, calc_behavioral_score_dsp
 def LearningCurveBehavioralScore_Interface(trace: dict, variable_names: list):
     KeyWordErrorCheck(trace, __file__, ['correct_time', 'correct_nodes', 'maze_type'])
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Correct Rate', 'Pass Number', 'Error Number', 'Pure Guess Correct Rate'])
@@ -142,6 +170,42 @@ def LearningCurveBehavioralScore_Interface(trace: dict, variable_names: list):
     err_num, pass_num, std_err = calc_behavioral_score(trace)
     
     return np.array([1-err_num/pass_num], np.float64), np.array([pass_num], np.float64), np.array([err_num], np.float64), np.array([1-std_err], np.float64)
+
+def LearningCurveBehavioralScore_DSP_Interface(trace: dict, variable_names: list):
+    KeyWordErrorCheck(trace, __file__, ['correct_time', 'correct_nodes', 'maze_type'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Route', 'Correct Rate', 'Pass Number', 'Error Number', 'Pure Guess Correct Rate'])
+    
+    behav_nodes = spike_nodes_transform(trace['correct_nodes'], 12)
+    behav_time = cp.deepcopy(trace['correct_time'])
+    beg_idx, end_idx = LapSplit(trace, trace['paradigm'])
+    routes = classify_lap(spike_nodes_transform(trace['correct_nodes'], 12), beg_idx, trace['start_from'])
+    routes[routes == 4] = 0
+    
+    if trace['start_from'] == 'correct':
+        routes_id = np.array(["Route "+str(i+1) for i in routes])
+        routes_used = routes
+    else:
+        routes[np.where(routes != 0)[0]] += 3
+        routes_id = np.array(["Route "+str(i+1) for i in routes])
+        routes_used = routes
+    
+    correct_rates, pass_nums, err_nums, pureguess = [], [], [], []
+    
+    for i in np.unique(routes_used):
+        idx = np.where(routes_used == i)[0]
+        
+        err_num, pass_num, std_err = calc_behavioral_score_dsp(
+            route=i,
+            behav_nodes=np.concatenate([behav_nodes[beg_idx[j]:end_idx[j]+1] for j in idx]),
+            behav_time=np.concatenate([behav_time[beg_idx[j]:end_idx[j]+1] for j in idx])
+        )
+        
+        correct_rates.append(1-err_num/pass_num)
+        err_nums.append(err_num)
+        pass_nums.append(pass_num)
+        pureguess.append(1-std_err)
+    
+    return np.unique(routes_id), np.array(correct_rates, np.float64), np.array(pass_nums, np.int64), np.array(err_nums, np.int64), np.array(pureguess, np.float64)
 
 def model_test(data, compared_data, a, y):
     # Kolmogorov-Smirnov Test for Poisson Distribution
@@ -2087,6 +2151,47 @@ def ConditionalProb_Interface(
                 np.concatenate([off_next_num_cis, off_next_num_trs]))
 
 
+# Fig0313
+def ConditionalProb_Interface_NovelFalimiar(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=[
+        'Duration', 'Init Session', 'Conditional Prob.', 'Conditional Recover Prob.',
+        'Paradigm', 'On-Next Num', 'Off-Next Num'])
+
+    
+    if trace['paradigm'] == 'CrossMaze':
+        retained_dur, start_session, prob, recover_prob, on_next_num, off_next_num = RegisteredField.conditional_prob(
+            field_reg=trace['field_reg'],
+            thre=4,
+            is_overal=False
+        )
+    
+        return (retained_dur, start_session, prob*100, recover_prob*100, 
+                np.repeat(trace['paradigm'], prob.shape[0]), 
+                on_next_num, off_next_num)
+    else:
+        retained_dur_cis, start_session_cis, prob_cis, recover_prob_cis, on_next_num_cis, off_next_num_cis = RegisteredField.conditional_prob(
+            field_reg=trace['cis']['field_reg'],
+            thre=4,
+            is_overal=False
+        )
+        retained_dur_trs, start_session_trs, prob_trs, recover_prob_trs, on_next_num_trs, off_next_num_trs = RegisteredField.conditional_prob(
+            field_reg=trace['trs']['field_reg'],
+            thre=4,
+            is_overal=False
+        )
+    
+        return (np.concatenate([retained_dur_cis, retained_dur_trs]), 
+                np.concatenate([start_session_cis, start_session_trs]),
+                np.concatenate([prob_cis*100, prob_trs*100]), 
+                np.concatenate([recover_prob_cis*100, recover_prob_trs*100]), 
+                np.concatenate([np.repeat(trace['paradigm'] + ' cis', prob_cis.shape[0]), np.repeat(trace['paradigm'] + ' trs', prob_trs.shape[0])]),
+                np.concatenate([on_next_num_cis, on_next_num_trs]),
+                np.concatenate([off_next_num_cis, off_next_num_trs]))
+
 # Fig0321
 from mylib.field.counter import calculate_superstable_fraction, calculate_survival_fraction
 def Superstable_Fraction_Interface(
@@ -2147,7 +2252,6 @@ def Superstable_Fraction_Data_Interface(
         )
         
         
-
 # Fig0322
 def SurvivalField_Fraction_Interface(
     trace: dict,
