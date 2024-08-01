@@ -348,7 +348,23 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
         ((d_type == 0) & (lap_type[:-1] == 0) & (lap_intervals > 99000))
     )[0]
     if idx.shape[0] != 9:
-        raise ValueError(f"The number of interlaps is not 9 but {idx.shape[0]}") # 9 breakpoints to separate 10 routes. (including 4 Route 1)
+        warnings.warn(
+            f"Breakpoints should be 9 but {idx.shape[0]} were found! "
+            f"Automatedly set the second value as the division of route 1b and 1c."
+            f"Note that this would potentially result in erroneous division of route categories."
+        )
+        idx = np.where(d_type != 0)[0] # Between routes
+        # Between route 1b and 1c
+        idx_0 = np.where((d_type == 0) & (lap_type[:-1] == 0) & (lap_intervals > 99000))[0]
+        # There should be 9 breakpoints to separate all the laps into 10 groups.
+        # 这里主要是两个异常值的处理，仅限于截止至2024年8月1日的10224/27 2023-10-11 session 1
+        # (correct session) 中route 1b存在两个lap之间时间超过了99s，从而使得我们上述的判别
+        # route 1b 1c之间的breakpoints无法辨别具体的位置。考虑到这两处异常均位于session 1，我们
+        # 直接去除所找到的第一个值，保留第二个值作为1b1c的gap。
+        # 因此对于任何新的数据，如果两个lap之间的时间间隔超过了99s，并且位于session 2，此处仍会
+        # 报错并错误的分类，需注意！
+        idx = np.insert(idx, 4, idx_0[1])
+        
     seg_beg, seg_end = np.concatenate([[0], idx+1]), np.concatenate([idx, [d_type.shape[0]-1]])
     trace['n_neuron'] = n_neuron
     for n in range(10):
@@ -380,6 +396,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
 
     trace_ms = {'Spikes_original':Spikes_original, 'route_labels': lap_type,
                 'spike_nodes_original':spike_nodes_original, 
+                'ms_time_behav':ms_time_behav, 'ms_speed_behav':ms_speed_behav,
                 'Spikes':Spikes, 'spike_nodes':spike_nodes,
                 'ms_speed_original': ms_speed, 'RawTraces':RawTraces,
                 'DeconvSignal':DeconvSignal,
