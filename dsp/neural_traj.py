@@ -6,6 +6,7 @@ import copy as cp
 # Perform PCA
 from sklearn.decomposition import PCA
 from sklearn.decomposition import FactorAnalysis as FA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 import matplotlib.pyplot as plt
 import pandas as pd
 from mylib.maze_utils3 import spike_nodes_transform, mkdir
@@ -16,7 +17,7 @@ import os
 
 DSPPalette = ['#A9CCE3', '#A8DADC', '#9C8FBC', '#D9A6A9', '#F2E2C5', '#647D91', '#C06C84']
 
-def get_neural_trajectory(trace: dict):
+def get_neural_trajectory(trace: dict, is_normalize: bool = True):
     time_beg, time_end = trace['lap beg time'], trace['lap end time']
     
     neuro_trajs = []
@@ -80,47 +81,50 @@ def get_neural_trajectory(trace: dict):
     
     return trace
 
-def umap_dim_reduction(trace: dict, n_components=20):
-    if 'neural_traj' not in trace.keys():
-        get_neural_trajectory(trace)
-        
-    neural_traj = trace['neural_traj']
-            
-    pca = umap.UMAP(n_components=n_components)  # Reduce to 2 dimensions for visualization
+def umap_dim_reduction(neural_traj: np.ndarray, n_components:int=20, **parakwargs):
+    # Normalize neuro_trajs
+    mean = np.mean(neural_traj, axis=1, keepdims=True)
+    std = np.std(neural_traj, axis=1, keepdims=True)
+    neural_traj = (neural_traj - mean) / std
+    
+    pca = umap.UMAP(n_components=n_components, **parakwargs)  # Reduce to 2 dimensions for visualization
     #reduced_data = pca.fit_transform(neural_traj[:, idx].T)
     reduced_data = pca.fit_transform(neural_traj.T)
     
-    trace['reduced_data'] = reduced_data
-    trace['UMAPn'] = n_components
-    return trace
+    return reduced_data
 
-def pca_dim_reduction(trace: dict, n_components=20):
-    if 'neural_traj' not in trace.keys():
-        get_neural_trajectory(trace)
-        
-    neural_traj = trace['neural_traj']
-        
-    pca = PCA(n_components=n_components)  # Reduce to 2 dimensions for visualization
+def pca_dim_reduction(neural_traj: np.ndarray, n_components=20, **parakwargs):
+    # Normalize neuro_trajs
+    mean = np.mean(neural_traj, axis=1, keepdims=True)
+    std = np.std(neural_traj, axis=1, keepdims=True)
+    neural_traj = (neural_traj - mean) / std
+    
+    pca = PCA(n_components=n_components, **parakwargs)  # Reduce to 2 dimensions for visualization
     #reduced_data = pca.fit_transform(neural_traj[:, idx].T)
     reduced_data = pca.fit_transform(neural_traj.T)
-    
-    trace['reduced_data_pca'] = reduced_data
-    trace['PCAn'] = n_components
-    return trace
+    return reduced_data
 
-def fa_dim_reduction(trace: dict, n_components=20):
-    if 'neural_traj' not in trace.keys():
-        get_neural_trajectory(trace)
-        
-    neural_traj = trace['neural_traj']
-        
-    fa = FA(n_components=n_components)  # Reduce to 2 dimensions for visualization
+def fa_dim_reduction(neural_traj: np.ndarray, n_components=20, **parakwargs):
+    fa = FA(n_components=n_components, **parakwargs)  # Reduce to 2 dimensions for visualization
     #reduced_data = pca.fit_transform(neural_traj[:, idx].T)
     reduced_data = fa.fit_transform(neural_traj.T)
-    
-    trace['reduced_data_fa'] = reduced_data
-    trace['FAn'] = n_components
-    return trace
+    return reduced_data
+
+def lda_dim_reduction(
+    neural_traj: np.ndarray, 
+    traj_labels: np.ndarray, 
+    n_components=20, 
+    **parakwargs
+):
+    lda = LDA(n_components=n_components, **parakwargs)  # Reduce to 2 dimensions for visualization
+    reduced_data = lda.fit_transform(neural_traj.T, traj_labels)
+    return reduced_data
+
+def lds_dim_reduction(neural_traj: np.ndarray, n_components=20, **parakwargs):
+    lds = LDS(n_components=n_components, **parakwargs)  # Reduce to 2 dimensions for visualization
+    #reduced_data = pca.fit_transform(neural_traj[:, idx].T)
+    reduced_data = lds.fit_transform(neural_traj.T)
+    return reduced_data
 
 def visualize_neurotraj(
     trace: dict,
@@ -129,35 +133,25 @@ def visualize_neurotraj(
     component_j: int = 1,
     method: str = "UMAP",
     is_show: bool = False,
-    palette: str = 'default'
+    palette: str = 'default',
+    **parakwargs
 ):
-    if method not in ["UMAP", "PCA", "FA"]:
-        raise ValueError("method should be one of ['UMAP', 'PCA', 'FA']")
+    if method not in ["UMAP", "PCA", "FA", "LDA"]:
+        raise ValueError("method should be one of ['UMAP', 'PCA', 'FA', 'LDA']")
     
     print(f"Dimensional reduction with {method} - {n_components} components.")
     
-    if method == "UMAP":
-        trace = umap_dim_reduction(trace, n_components)
-        reduced_data = trace['reduced_data']
-        n_components = trace['UMAPn']
-    elif method == "PCA":
-        trace = pca_dim_reduction(trace, n_components)
-        reduced_data = trace['reduced_data_pca']
-        n_components = trace['PCAn']
-    elif method == "FA":
-        trace = fa_dim_reduction(trace, n_components)
-        reduced_data = trace['reduced_data_fa']
-        n_components = trace['FAn']
-            
-    lap_ids = trace['traj_lap_ids']
-    route_ids = trace['traj_route_ids']
-    pos_traj = trace['pos_traj']
-              
-    print(
-        f"Visualizing neural trajectory - component {component_i}"
-        f" and {component_j}.", 
-        end='\n\n'
-    )
+    try:
+        neural_traj = trace['neural_traj']
+        pos_traj = trace['pos_traj']
+        lap_ids = trace['traj_lap_ids']
+        route_ids = trace['traj_route_ids']
+    except:
+        trace = get_neural_trajectory(trace)
+        neural_traj = trace['neural_traj']
+        pos_traj = trace['pos_traj']
+        lap_ids = trace['traj_lap_ids']
+        route_ids = trace['traj_route_ids']
     
     # Convert to major bin
     pos_traj = spike_nodes_transform(pos_traj, 12).astype(np.float64)
@@ -166,19 +160,44 @@ def visualize_neurotraj(
     for i in range(pos_traj.shape[0]):
         if pos_traj[i] not in CP_DSP[route_ids[i]]:
             pos_traj[i] = np.nan
-    
+            
     # Delete NAN 
     idx = np.where(np.isnan(pos_traj) == False)[0]
     pos_traj = pos_traj[idx].astype(np.int64)
     lap_ids = lap_ids[idx]
     route_ids = route_ids[idx]
-    reduced_data = reduced_data[idx, :]
+    neural_traj = neural_traj[:, idx]
+    
+    # Extract Place cells for analysis only
+    pc_idx = np.unique(
+        np.concatenate(
+            [np.where(trace[f'node {i}']['is_placecell'] == 1)[0] for i in range(10)]
+        )
+    )
+    neural_traj = neural_traj[pc_idx, :]
     
     # Convert to graph
     G = NRG[1]
     pos_traj_reord = np.zeros_like(pos_traj)
     for i in range(pos_traj.shape[0]):
-        pos_traj_reord[i] = G[pos_traj[i]]
+        pos_traj_reord[i] = G[pos_traj[i]]    
+        
+    if method == "UMAP":
+        reduced_data = umap_dim_reduction(neural_traj, n_components, **parakwargs)
+    elif method == "PCA":
+        reduced_data = pca_dim_reduction(neural_traj, n_components, **parakwargs)
+    elif method == "FA":
+        reduced_data = fa_dim_reduction(neural_traj, n_components, **parakwargs)
+    elif method == "LDA":
+        reduced_data = lda_dim_reduction(neural_traj, pos_traj_reord, n_components, **parakwargs)
+        
+    print(
+        f"Visualizing neural trajectory - component {component_i}"
+        f" and {component_j}.", 
+        end='\n\n'
+    )
+    
+
         
     fig, axes = plt.subplots(ncols=2, nrows=1, figsize=(6*2, 4))
     reduced_data_temp = reduced_data[:, [component_i, component_j]]
@@ -223,9 +242,9 @@ def visualize_neurotraj(
     if is_show:
         plt.show()
     else:
-        mkdir(os.path.join(trace['p'], 'neural_traj', f"UMAP_DIM{n_components}"))
+        mkdir(os.path.join(trace['p'], 'neural_traj', f"{method}_DIM{n_components}"))
         plt.savefig(os.path.join(
-            trace['p'], 'neural_traj', f"UMAP_DIM{n_components}", 'UMAP'+str(component_i+1)+str(component_j+1)+'.png'
+            trace['p'], 'neural_traj', f"{method}_DIM{n_components}", f'{method}{component_i}&{component_j}.png'
         ))
     
         axes[0].clear()
@@ -236,9 +255,10 @@ def visualize_neurotraj(
 if __name__ == '__main__':
     import pickle
     from mylib.maze_utils3 import spike_nodes_transform
-    with open(r"E:\Data\Dsp_maze\10224\20231012\trace.pkl", 'rb') as handle:
+    loc = r"E:\Data\Dsp_maze\10224\20231012\trace.pkl"
+    with open(loc, 'rb') as handle:
         trace = pickle.load(handle)
-    
+
     """
     for dim in np.arange(2, 26):
         for i in range(dim-1):
@@ -247,12 +267,29 @@ if __name__ == '__main__':
                 pca_dim_reduction(trace, n_components=dim, UMAPi=i, component_j=j)
                 
     """
+    """
+    for ndim in np.arange(2, 26):
+        for i in range(ndim-1):
+            for j in range(i+1, ndim):
+                print(ndim, i, j)
+                visualize_neurotraj(
+                    trace, 
+                    n_components=ndim, 
+                    component_i=i,
+                    component_j=j,
+                    is_show=False,
+                    palette='rainbow',
+                    method="UMAP",
+                    n_neighbors = 12, # 27: 12; 12: 12
+                    min_dist = 0.05
+                )
+    """                
     visualize_neurotraj(
         trace, 
-        n_components=15,
+        n_components=20, 
         component_i=0,
         component_j=1,
-        method="UMAP",
         is_show=True,
-        palette='rainbow'
+        palette='rainbow',
+        method="UMAP"
     )
