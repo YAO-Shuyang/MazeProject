@@ -82,31 +82,18 @@ def get_neural_trajectory(trace: dict, is_normalize: bool = True):
     return trace
 
 def umap_dim_reduction(neural_traj: np.ndarray, n_components:int=20, **parakwargs):
-    # Normalize neuro_trajs
-    mean = np.mean(neural_traj, axis=1, keepdims=True)
-    std = np.std(neural_traj, axis=1, keepdims=True)
-    neural_traj = (neural_traj - mean) / std
-    
-    pca = umap.UMAP(n_components=n_components, **parakwargs)  # Reduce to 2 dimensions for visualization
-    #reduced_data = pca.fit_transform(neural_traj[:, idx].T)
-    reduced_data = pca.fit_transform(neural_traj.T)
+    umap_model = umap.UMAP(n_components=n_components, **parakwargs)  
+    reduced_data = umap_model.fit_transform(neural_traj.T)
     
     return reduced_data
 
 def pca_dim_reduction(neural_traj: np.ndarray, n_components=20, **parakwargs):
-    # Normalize neuro_trajs
-    mean = np.mean(neural_traj, axis=1, keepdims=True)
-    std = np.std(neural_traj, axis=1, keepdims=True)
-    neural_traj = (neural_traj - mean) / std
-    
-    pca = PCA(n_components=n_components, **parakwargs)  # Reduce to 2 dimensions for visualization
-    #reduced_data = pca.fit_transform(neural_traj[:, idx].T)
+    pca = PCA(n_components=n_components, **parakwargs)  
     reduced_data = pca.fit_transform(neural_traj.T)
     return reduced_data
 
 def fa_dim_reduction(neural_traj: np.ndarray, n_components=20, **parakwargs):
-    fa = FA(n_components=n_components, **parakwargs)  # Reduce to 2 dimensions for visualization
-    #reduced_data = pca.fit_transform(neural_traj[:, idx].T)
+    fa = FA(n_components=n_components, **parakwargs)  
     reduced_data = fa.fit_transform(neural_traj.T)
     return reduced_data
 
@@ -118,12 +105,6 @@ def lda_dim_reduction(
 ):
     lda = LDA(n_components=n_components, **parakwargs)  # Reduce to 2 dimensions for visualization
     reduced_data = lda.fit_transform(neural_traj.T, traj_labels)
-    return reduced_data
-
-def lds_dim_reduction(neural_traj: np.ndarray, n_components=20, **parakwargs):
-    lds = LDS(n_components=n_components, **parakwargs)  # Reduce to 2 dimensions for visualization
-    #reduced_data = pca.fit_transform(neural_traj[:, idx].T)
-    reduced_data = lds.fit_transform(neural_traj.T)
     return reduced_data
 
 def visualize_neurotraj(

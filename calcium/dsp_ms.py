@@ -187,15 +187,24 @@ def calc_pvc(ratemap1, ratemap2, bins):
     return np.nanmean(corr)
 
 def MazeSegmentsPVCorrelation(trace: dict):
-    seg1 = get_son_area(np.array([1,13,14,26,27,15,3,4,5]))-1
-    seg2 = get_son_area(np.array([6,18,17,29,30,31,19,20,21,9,10,11,12,24]))-1
-    seg3 = get_son_area(np.array([23,22,34,33,32,44,45,46,47,48,60,59,58,57,56,68,69,70,71,72,84,83,95]))-1
-    seg4 = get_son_area(np.array([94,82,81,80,92,104,103,91,90,78,79,67,55,54]))-1
-    seg5 = get_son_area(np.array([66,65,64,63,75,74,62,50,51,39,38,37,49,61,73,85,97]))-1
-    seg6 = get_son_area(np.array([109,110,122,123,111,112,100]))-1
-    seg7 = get_son_area(np.array([99,87,88,76,77,89,101,102,114,113,125,124,136,137,138,126,127,115,116,117,129,141,142,130,131,132,144]))-1
+    seg1 = np.array([1,13,14,26,27,15,3,4,5])
+    seg2 = np.array([6,18,17,29,30,31,19,20,21,9,10,11,12,24])
+    seg3 = np.array([23,22,34,33,32,44,45,46,47,48,60,59,58,57,56,68,69,70,71,72,84,83,95])
+    seg4 = np.array([94,82,81,80,92,104,103,91,90,78,79,67,55,54])
+    seg5 = np.array([66,65,64,63,75,74,62,50,51,39,38,37,49,61,73,85,97])
+    seg6 = np.array([109,110,122,123,111,112,100])
+    seg7 = np.array([99,87,88,76,77,89,101,102,114,113,125,124,136,137,138,126,127,115,116,117,129,141,142,130,131,132,144])
     
-    trace['segments'] = [seg1, seg2, seg3, seg4, seg5, seg6, seg7]
+    segments = np.concatenate([seg1, seg2, seg3, seg4, seg5, seg6, seg7])
+    trace['segments'] = np.concatenate([
+        np.repeat(0, seg1.shape[0]),
+        np.repeat(1, seg2.shape[0]),
+        np.repeat(2, seg3.shape[0]),
+        np.repeat(3, seg4.shape[0]),
+        np.repeat(4, seg5.shape[0]),
+        np.repeat(5, seg6.shape[0]),
+        np.repeat(6, seg7.shape[0])
+    ])
     
     idx = np.where(
         (trace['node 0']['is_placecell'] == 1) |
@@ -204,41 +213,33 @@ def MazeSegmentsPVCorrelation(trace: dict):
         (trace['node 9']['is_placecell'] == 1)
     )[0]
     
-    segments_pv_0_4 = [
-        calc_pvc(
-            trace['node 0']['smooth_map_all'][idx, :], 
-            trace['node 4']['smooth_map_all'][idx, :], 
-            seg
-        ) for seg in trace['segments']
-    ]
-    
-    segments_pv_4_5 = [
-        calc_pvc(
-            trace['node 4']['smooth_map_all'][idx, :], 
-            trace['node 5']['smooth_map_all'][idx, :], 
-            seg
-        ) for seg in trace['segments']
-    ]
-    
-    segments_pv_5_9 = [
-        calc_pvc(
-            trace['node 5']['smooth_map_all'][idx, :], 
-            trace['node 9']['smooth_map_all'][idx, :], 
-            seg
-        ) for seg in trace['segments']
-    ]
-    
-    segments_pv_0_9 = [
-        calc_pvc(
-            trace['node 5']['smooth_map_all'][idx, :], 
-            trace['node 9']['smooth_map_all'][idx, :], 
-            seg
-        ) for seg in trace['segments']
-    ]
-    
-    trace['segments_pvc'] = np.array(
-        [segments_pv_0_4, segments_pv_4_5, segments_pv_5_9, segments_pv_0_9]
-    )
+    segments_pvc = np.zeros((4, len(segments)))
+    for i in range(len(segments)):
+        segments_pvc[0, i] = calc_pvc(
+                trace['node 0']['smooth_map_all'][idx, :], 
+                trace['node 4']['smooth_map_all'][idx, :], 
+                np.array(Father2SonGraph[segments[i]])-1
+        )
+
+        segments_pvc[1, i] = calc_pvc(
+                trace['node 4']['smooth_map_all'][idx, :], 
+                trace['node 5']['smooth_map_all'][idx, :], 
+                np.array(Father2SonGraph[segments[i]])-1
+        )
+        
+        segments_pvc[2, i] = calc_pvc(
+                trace['node 5']['smooth_map_all'][idx, :], 
+                trace['node 9']['smooth_map_all'][idx, :], 
+                np.array(Father2SonGraph[segments[i]])-1
+        )
+        
+        segments_pvc[3, i] = calc_pvc(
+                trace['node 0']['smooth_map_all'][idx, :], 
+                trace['node 9']['smooth_map_all'][idx, :], 
+                np.array(Father2SonGraph[segments[i]])-1
+        )
+        
+    trace['segments_pvc'] = segments_pvc
     return trace
 
 def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, 
@@ -447,7 +448,18 @@ if __name__ == '__main__':
     f2.to_excel(r"E:\Data\Dsp_maze\dsp_maze_paradigm_output.xlsx", index=False)
     """
     
-    f2.loc[20, 'recording_folder'] = r"E:\Data\Dsp_maze\10224\20231012"
-    run_all_mice_DLC(20, f2, work_flow=r"E:\Data\Dsp_maze")
+    #f2.loc[20, 'recording_folder'] = r"E:\Data\Dsp_maze\10224\20231012"
+    #run_all_mice_DLC(20, f2, work_flow=r"E:\Data\Dsp_maze")
     
+    for i in range(len(f2)):
+        print(f2['Trace File'][i])
+        with open(f2['Trace File'][i], 'rb') as handle:
+            trace = pickle.load(handle)
+            
+        trace = MazeSegmentsPVCorrelation(trace)
+        
+        with open(f2['Trace File'][i], 'wb') as handle:
+            pickle.dump(trace, handle)
+            
+            
     
