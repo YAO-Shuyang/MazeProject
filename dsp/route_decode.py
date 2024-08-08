@@ -1,9 +1,32 @@
+from turtle import pos
 from sklearn.svm import SVC
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 import warnings
 from tqdm import tqdm
+from mylib.maze_graph import CorrectPath_maze_1 as CP
+from mylib.maze_utils3 import GetDMatrices
+
+def compute_accuracy(y_pred, y_test, x_test):
+    accuracy = np.zeros((7, len(CP)), dtype=np.float64)
+    
+    for j in range(7):
+        for i in range(len(CP)):
+            n_all = np.where(
+                (x_test == CP[i]) & (y_test == j)
+            )[0].shape[0]
+            n_correct = np.where(
+                (y_test == j) &
+                (y_pred == j) & 
+                (x_test == CP[i])
+            )[0].shape[0]
+            if n_all == 0:
+                accuracy[j, i] = np.nan
+            else:
+                accuracy[j, i] = n_correct / n_all
+        
+    return accuracy
 
 def decode_routes(
     trace: dict, 
@@ -34,25 +57,45 @@ def decode_routes(
     lap_ids = trace['traj_lap_ids']
     route_ids = trace['traj_route_ids']
     
+    D = GetDMatrices(1, 48)
+    #dis_traj = D[pos_traj-1, 0]
+    
+    x, y = (pos_traj-1) // 48, (pos_traj-1) % 48
+    
     # cross validation for n_cross_times
     combinations = _cross_validation(route_ids, lap_ids, n_times=n_cross_times)
 
     y_test_all, y_pred_all = [], []
     x_test_pos = []
+    decode_type = []
     for i in tqdm(range(combinations.shape[0])):
         X_train, X_test, y_train, y_test, test_id = _split_train_test(
             neural_traj, 
-            pos_traj, 
+            np.vstack([x, y]), 
             route_ids, 
             lap_ids, 
             combinations[i, :]
         )
+                        
         y_pred = predict_routes(X_train, X_test, y_train, max_iter)
         y_pred_all.append(y_pred)
         y_test_all.append(y_test)
         x_test_pos.append(pos_traj[test_id])
-    
-    return np.concatenate(y_pred_all), np.concatenate(y_test_all), np.concatenate(x_test_pos)
+        
+        decode_type.append(np.repeat(0, y_test.shape[0]))
+        
+        for c in range(X_train.shape[1]):
+            X_train[:, c] = X_train[np.random.permutation(X_train.shape[0]), c] 
+            X_test[:, c] = X_test[np.random.permutation(X_test.shape[0]), c]
+            
+        y_pred = predict_routes(X_train, X_test, y_train, max_iter)
+        y_pred_all.append(y_pred)
+        y_test_all.append(y_test)
+        x_test_pos.append(pos_traj[test_id])
+        
+        decode_type.append(np.repeat(1, y_test.shape[0]))
+              
+    return np.concatenate(y_pred_all), np.concatenate(y_test_all), np.concatenate(x_test_pos), np.concatenate(decode_type)
 
 def _cross_validation(
     route_ids: np.ndarray,
@@ -162,10 +205,12 @@ def predict_routes(
     Predict routes based on neuronal population activity and position.
     """
     # Initialize the SVM classifier with the One-vs-Rest strategy
+    #svm_classifier = OneVsRestClassifier(
+    #    SVC(kernel='linear', max_iter=max_iter)
+    #)
     svm_classifier = OneVsRestClassifier(
         SVC(kernel='rbf', gamma='scale', max_iter=max_iter)
     )
-
     # Train the classifier
     svm_classifier.fit(X_train, y_train)
 
@@ -177,18 +222,24 @@ def predict_routes(
 if __name__ == '__main__':
     import pickle
     import time 
+    import os
+    from mylib.local_path import f2
     
-    with open(r"E:\Data\Dsp_maze\10224\20231014\trace.pkl", 'rb') as handle:
-        trace = pickle.load(handle)
-        neural_traj = trace['neural_traj']
-        pos_traj = trace['pos_traj']
-        lap_ids = trace['traj_lap_ids']
-        route_ids = trace['traj_route_ids']
-        combinations = _cross_validation(route_ids, lap_ids, n_times=1)
-        print("Cross Validation Done.")
-        X_train, X_test, y_train, y_test = _split_train_test(neural_traj, pos_traj, route_ids, lap_ids, combinations[0, :])
-        print("Split Data Done.")
-        t1 = time.time()
-        y_pred = predict_routes(X_train, X_test, y_train)
-        print("Time cost:", time.time() - t1)
-        print(y_pred)
+    for i in range(26, 28):
+        print(i, f2['MiceID'][i], f2['date'][i], ' session '+str(f2['session'][i]))
+        with open(f2['Trace File'][i], 'rb') as handle:
+            trace = pickle.load(handle)
+        
+        y_pred, y_test, x_test, decode_type = decode_routes(trace, n_cross_times=10, max_iter=20000)
+        #y_pred_ctrl, y_test_ctrl, x_test_ctrl = decode_routes(trace, n_cross_times=10, is_control=True)
+        
+        with open(os.path.join(f2['Path'][i], "route_decode.pkl"), 'wb') as handle:
+            pickle.dump(
+                {
+                    "y_pred": y_pred,
+                    "y_test": y_test,
+                    "x_test": x_test,
+                    "decode_type": decode_type
+                }, 
+                handle
+            )

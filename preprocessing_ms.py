@@ -289,16 +289,16 @@ def OldMap(trace, isDraw = True):
     
     return trace
 
-def DrawRateMap(trace, ax = None):
+def DrawRateMap(trace, ax = None, cmap = 'jet'):
     n_neuron = len(trace['smooth_map_all'])
     smooth_map_all = trace['smooth_map_all']
     loc = trace['loc']
     
     for k in tqdm(range(n_neuron)):
         # rate map     
-        im = ax.imshow(np.reshape(smooth_map_all[k],[48,48]), cmap = 'jet')
+        im = ax.imshow(np.reshape(smooth_map_all[k],[48,48]), cmap = cmap)
         cbar = plt.colorbar(im, ax = ax)
-        cbar.set_ticks([0, np.max(smooth_map_all[k, :])])
+        cbar.set_ticks([0, np.nanmax(smooth_map_all[k, :])])
         cbar.set_label('Firing Rate / Hz')
         # maze profile
         color = 'red' if trace['is_placecell'][k] == 1 else 'black'
@@ -310,20 +310,20 @@ def DrawRateMap(trace, ax = None):
         cbar.remove()
         im.remove()
 
-def RateMap(trace: dict) -> dict:
+def RateMap(trace: dict, cmap = 'jet', **kwargs) -> dict:
     maze_type = trace['maze_type']
 
     fig = plt.figure(figsize = (4,3))
     ax = Clear_Axes(plt.axes())
 
-    DrawMazeProfile(maze_type = maze_type, axes = ax, nx = 48)
+    DrawMazeProfile(maze_type = maze_type, axes = ax, nx = 48, **kwargs)
     
     p = trace['p']
     loc = os.path.join(p,'RateMap')
 
     trace['loc'] = loc
     mkdir(loc)
-    DrawRateMap(trace, ax = ax)
+    DrawRateMap(trace, ax = ax, cmap=cmap)
     plt.close()
     return trace
 

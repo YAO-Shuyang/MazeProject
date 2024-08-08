@@ -16,8 +16,9 @@ def LocTimeCurveAxes(
     title_color: str = "black",
     is_invertx: bool = False,
     line_kwargs: dict = {'markeredgewidth': 0, 'markersize': 1, 'color': 'black'},
-    bar_kwargs: dict = {'markeredgewidth': 1, 'markersize': 4},
-    is_dotted_line: bool = False
+    bar_kwargs: dict = {'markeredgewidth': 1, 'markersize': 4, 'color': 'red'},
+    is_dotted_line: bool = False,
+    is_include_incorrect_paths: bool = False
 ) -> tuple[Axes, list, list]:
 
     ax = Clear_Axes(axes=ax, close_spines=['top', 'right'], ifxticks=True, ifyticks=True)
@@ -61,20 +62,21 @@ def LocTimeCurveAxes(
 
     t_max = int(np.nanmax(behav_time)/1000)
     
-    idx = np.where(linearized_x < thre+0.5)[0]
-    linearized_x = linearized_x[idx]
-    behav_time = behav_time[idx]
+    if is_include_incorrect_paths == False:
+        idx = np.where(linearized_x < thre+0.5)[0]
+        linearized_x = linearized_x[idx]
+        behav_time = behav_time[idx]
 
     if is_dotted_line:
         a = ax.plot(linearized_x, behav_time/1000, 'o', **line_kwargs)
     else:
         dx = np.ediff1d(linearized_x)
-        idx = np.where(dx < -10)[0]
+        idx = np.where((dx < -10) | ((dx > 0) & (linearized_x[:-1] > thre-0.5)) | (dx > 10))[0]
         linearized_x = np.insert(linearized_x, idx+1, np.nan)
         behav_time = np.insert(behav_time.astype(float), idx+1, np.nan)
         a = ax.plot(linearized_x, behav_time/1000, **line_kwargs)
         
-    b = ax.plot(x_spikes, t_spikes/1000, '|', color='red', **bar_kwargs)
+    b = ax.plot(x_spikes, t_spikes/1000, '|', **bar_kwargs)
 
     ax.set_title(title, color=title_color)
     ax.set_xticks([1, len(correct_paths[int(maze_type)])/2, len(correct_paths[int(maze_type)])], labels = ['start', 'correct track', 'end'])

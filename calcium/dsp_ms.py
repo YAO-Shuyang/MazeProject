@@ -17,7 +17,7 @@ from matplotlib.axes import Axes
 import seaborn as sns
 from mylib.behavior.behavevents import BehavEvents
 from mylib.maze_graph import correct_paths, NRG, Father2SonGraph, CP_DSP
-from mylib.maze_utils3 import Clear_Axes, DrawMazeProfile, clear_NAN, mkdir, SpikeNodes, SpikeType
+from mylib.maze_utils3 import Clear_Axes, DrawMazeProfile, clear_NAN, mkdir, SpikeNodes, SpikeType, GetDMatrices
 from mylib.maze_utils3 import plot_trajactory, spike_nodes_transform, SmoothMatrix, occu_time_transform
 from mylib.preprocessing_ms import coverage_curve, calc_speed, uniform_smooth_speed, calc_ratemap
 from mylib.preprocessing_ms import plot_spike_monitor, calc_ms_speed
@@ -28,6 +28,7 @@ from scipy.io import loadmat
 from tqdm import tqdm
 from mylib import RateMapAxes, TraceMapAxes, PeakCurveAxes, LocTimeCurveAxes
 from mylib.calcium.firing_rate import calc_rate_map_properties
+from mylib.dsp.neural_traj import get_neural_trajectory, segmented_neural_trajectory
 
 # 我们将correct/incorrect imaging videos合在一起重新跑了CNMF-E。从而，代码需要随之修改。
 
@@ -196,6 +197,7 @@ def MazeSegmentsPVCorrelation(trace: dict):
     seg7 = np.array([99,87,88,76,77,89,101,102,114,113,125,124,136,137,138,126,127,115,116,117,129,141,142,130,131,132,144])
     
     segments = np.concatenate([seg1, seg2, seg3, seg4, seg5, seg6, seg7])
+    son_segments = get_son_area(segments)
     trace['segments'] = np.concatenate([
         np.repeat(0, seg1.shape[0]),
         np.repeat(1, seg2.shape[0]),
@@ -206,40 +208,39 @@ def MazeSegmentsPVCorrelation(trace: dict):
         np.repeat(6, seg7.shape[0])
     ])
     
+    D = GetDMatrices(1, 48)
+    
     idx = np.where(
         (trace['node 0']['is_placecell'] == 1) |
         (trace['node 4']['is_placecell'] == 1) |
         (trace['node 5']['is_placecell'] == 1) |
         (trace['node 9']['is_placecell'] == 1)
     )[0]
-    
-    segments_pvc = np.zeros((4, len(segments)))
-    for i in range(len(segments)):
-        segments_pvc[0, i] = calc_pvc(
-                trace['node 0']['smooth_map_all'][idx, :], 
-                trace['node 4']['smooth_map_all'][idx, :], 
-                np.array(Father2SonGraph[segments[i]])-1
-        )
 
-        segments_pvc[1, i] = calc_pvc(
-                trace['node 4']['smooth_map_all'][idx, :], 
-                trace['node 5']['smooth_map_all'][idx, :], 
-                np.array(Father2SonGraph[segments[i]])-1
+    segments_pvc = np.zeros((4, len(son_segments)))
+    for i in range(len(son_segments)):
+        segments_pvc[0, i], _ = pearsonr(
+                trace['node 0']['smooth_map_all'][idx, son_segments[i]-1], 
+                trace['node 4']['smooth_map_all'][idx, son_segments[i]-1]
         )
         
-        segments_pvc[2, i] = calc_pvc(
-                trace['node 5']['smooth_map_all'][idx, :], 
-                trace['node 9']['smooth_map_all'][idx, :], 
-                np.array(Father2SonGraph[segments[i]])-1
+        segments_pvc[1, i], _ = pearsonr(
+                trace['node 4']['smooth_map_all'][idx, son_segments[i]-1], 
+                trace['node 5']['smooth_map_all'][idx, son_segments[i]-1]
         )
         
-        segments_pvc[3, i] = calc_pvc(
-                trace['node 0']['smooth_map_all'][idx, :], 
-                trace['node 9']['smooth_map_all'][idx, :], 
-                np.array(Father2SonGraph[segments[i]])-1
+        segments_pvc[2, i], _ = pearsonr(
+                trace['node 5']['smooth_map_all'][idx, son_segments[i]-1], 
+                trace['node 9']['smooth_map_all'][idx, son_segments[i]-1]
+        )
+        
+        segments_pvc[3, i], _ = pearsonr(
+                trace['node 0']['smooth_map_all'][idx, son_segments[i]-1], 
+                trace['node 9']['smooth_map_all'][idx, son_segments[i]-1]
         )
         
     trace['segments_pvc'] = segments_pvc
+    trace['segments_x'] = D[son_segments-1, 0]
     return trace
 
 def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, 
@@ -411,6 +412,13 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
         pickle.dump(trace, f)
 
     print("    Plotting:")
+    print("      1. Old Maps")
+    for n in range(10):
+        trace[f'node {n}'] = OldMap(trace[f'node {n}'], isDraw=False)
+        
+    print("      2. Neural Trajectory")
+    trace = get_neural_trajectory(trace)
+    trace = segmented_neural_trajectory(trace)
     
     print("      5. Routewise Correlation")
     trace = RoutewiseCorrelation(trace)
@@ -450,13 +458,15 @@ if __name__ == '__main__':
     
     #f2.loc[20, 'recording_folder'] = r"E:\Data\Dsp_maze\10224\20231012"
     #run_all_mice_DLC(20, f2, work_flow=r"E:\Data\Dsp_maze")
-    
+    from mylib.dlc_ms import OldMap
     for i in range(len(f2)):
         print(f2['Trace File'][i])
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
             
-        trace = MazeSegmentsPVCorrelation(trace)
+        trace['p'] = f2['Path'][i]
+        for n in range(10):
+            trace[f'node {n}']['p'] = f2['Path'][i]
         
         with open(f2['Trace File'][i], 'wb') as handle:
             pickle.dump(trace, handle)
