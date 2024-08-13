@@ -7,6 +7,8 @@ import warnings
 from tqdm import tqdm
 from mylib.maze_graph import CorrectPath_maze_1 as CP
 from mylib.maze_utils3 import GetDMatrices
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+
 
 def compute_accuracy(y_pred, y_test, x_test):
     accuracy = np.zeros((7, len(CP)), dtype=np.float64)
@@ -56,50 +58,75 @@ def decode_routes(
     pos_traj = trace['pos_traj']
     lap_ids = trace['traj_lap_ids']
     route_ids = trace['traj_route_ids']
+    segment_ids = trace['traj_segment_ids']
     
     D = GetDMatrices(1, 48)
     #dis_traj = D[pos_traj-1, 0]
     
     x, y = (pos_traj-1) // 48, (pos_traj-1) % 48
-    
-    # cross validation for n_cross_times
-    combinations = _cross_validation(route_ids, lap_ids, n_times=n_cross_times)
 
     y_test_all, y_pred_all = [], []
     x_test_pos = []
     decode_type = []
-    for i in tqdm(range(combinations.shape[0])):
-        X_train, X_test, y_train, y_test, test_id = _split_train_test(
-            neural_traj, 
-            np.vstack([x, y]), 
-            route_ids, 
-            lap_ids, 
-            combinations[i, :]
+    segments = []
+    
+    for seg in range(0, 7):
+        indices = np.where(
+            segment_ids == seg
+        )[0]
+        # cross validation for n_cross_times
+        combinations = _cross_validation(
+            route_ids[indices], 
+            lap_ids[indices], 
+            seg=seg,
+            n_times=n_cross_times
         )
-                        
-        y_pred = predict_routes(X_train, X_test, y_train, max_iter)
-        y_pred_all.append(y_pred)
-        y_test_all.append(y_test)
-        x_test_pos.append(pos_traj[test_id])
         
-        decode_type.append(np.repeat(0, y_test.shape[0]))
-        
-        for c in range(X_train.shape[1]):
-            X_train[:, c] = X_train[np.random.permutation(X_train.shape[0]), c] 
-            X_test[:, c] = X_test[np.random.permutation(X_test.shape[0]), c]
+        for i in tqdm(range(combinations.shape[0])):
+            X_train, X_test, y_train, y_test, test_id = _split_train_test(
+                neural_traj[:, indices],
+                route_ids[indices], 
+                lap_ids[indices], 
+                combinations[i, :],
+                seg=seg
+            )
             
-        y_pred = predict_routes(X_train, X_test, y_train, max_iter)
-        y_pred_all.append(y_pred)
-        y_test_all.append(y_test)
-        x_test_pos.append(pos_traj[test_id])
+            if seg >= 1:
+                n_components = seg
+                lda = LDA(n_components=n_components)
+                X_train = lda.fit_transform(
+                    X_train, 
+                    y_train
+                )
+                X_test = lda.transform(X_test)
+                
+            print(seg, np.unique(y_train), np.unique(y_test))
+                        
+            y_pred = predict_routes(X_train, X_test, y_train, max_iter)
+            y_pred_all.append(y_pred)
+            y_test_all.append(y_test)
+            x_test_pos.append(pos_traj[indices][test_id])
+            segments.append(np.repeat(seg, y_pred.shape[0]))
         
-        decode_type.append(np.repeat(1, y_test.shape[0]))
+            decode_type.append(np.repeat(0, y_test.shape[0]))
+
+            for s in range(10):
+                y_train = y_train[np.random.permutation(y_train.shape[0])]
+            
+            y_pred = predict_routes(X_train, X_test, y_train, max_iter)
+            y_pred_all.append(y_pred)
+            y_test_all.append(y_test)
+            x_test_pos.append(pos_traj[indices][test_id])
+            segments.append(np.repeat(seg, y_pred.shape[0]))
+        
+            decode_type.append(np.repeat(1, y_test.shape[0]))
               
-    return np.concatenate(y_pred_all), np.concatenate(y_test_all), np.concatenate(x_test_pos), np.concatenate(decode_type)
+    return np.concatenate(y_pred_all), np.concatenate(y_test_all), np.concatenate(x_test_pos), np.concatenate(decode_type), np.concatenate(segments)
 
 def _cross_validation(
     route_ids: np.ndarray,
     lap_ids: np.ndarray,
+    seg: int,
     n_times: int = 100
 ) -> np.ndarray:
     lap_intervals = np.where(np.ediff1d(lap_ids) != 0)[0] + 1
@@ -108,15 +135,15 @@ def _cross_validation(
     lap_ids = lap_ids[lap_beg]
     lap_routes = route_ids[lap_beg]
     
-    idx_route0 = lap_ids[np.where(lap_routes == 0)[0]]
-    idx_route1 = lap_ids[np.where(lap_routes == 1)[0]]
-    idx_route2 = lap_ids[np.where(lap_routes == 2)[0]]
-    idx_route3 = lap_ids[np.where(lap_routes == 3)[0]]
-    idx_route4 = lap_ids[np.where(lap_routes == 4)[0]]
-    idx_route5 = lap_ids[np.where(lap_routes == 5)[0]]
-    idx_route6 = lap_ids[np.where(lap_routes == 6)[0]]
+    segmented_routes = [0, 4, 1, 5, 2, 6, 3]
+    idx_routes = [
+        lap_ids[np.where(lap_routes == segmented_routes[i])[0]] for i in range(seg+1)
+    ]
+    n_lens = np.array([
+        idx_route.shape[0] for idx_route in idx_routes
+    ])
     
-    max_times = idx_route0.shape[0] * idx_route1.shape[0] * idx_route2.shape[0] * idx_route3.shape[0] * idx_route4.shape[0] * idx_route5.shape[0] * idx_route6.shape[0]
+    max_times = np.cumprod(n_lens)[-1]
     if n_times > max_times:
         warnings.warn(
             f"The number of times to cross validation ({n_times}) is too large. "
@@ -127,33 +154,27 @@ def _cross_validation(
         
     n_times = min(n_times, max_times)
     
-    combinations = np.zeros((n_times, 7))
+    combinations = np.zeros((n_times, 7)) * np.nan
     temps = []
     i = 0
     while i < n_times:
-        comb_rand = (
-            np.random.choice(idx_route0),
-            np.random.choice(idx_route1),
-            np.random.choice(idx_route2),
-            np.random.choice(idx_route3),
-            np.random.choice(idx_route4),   
-            np.random.choice(idx_route5),
-            np.random.choice(idx_route6)
-        )
+        comb_rand = [
+            np.random.choice(idx_route) for idx_route in idx_routes
+        ]
         
         if comb_rand not in temps:
-            combinations[i, :] = np.asarray(comb_rand)
+            combinations[i, :seg+1] = np.asarray(comb_rand)
             temps.append(comb_rand)
             i += 1
 
     return combinations
 
 def _split_train_test(
-    neural_traj: np.ndarray, 
-    pos_traj: np.ndarray, 
+    neural_traj: np.ndarray,
     route_ids: np.ndarray,
     lap_ids: np.ndarray,
-    combinations: np.ndarray
+    combinations: np.ndarray,
+    seg: int
 ):
     """
     Split the data into training and testing sets.
@@ -182,14 +203,13 @@ def _split_train_test(
     y_test : numpy.ndarray
         A T-dim vector indicating the route ID (0-6) at each time bin in the testing set.
     """
-    X = np.vstack([neural_traj, pos_traj]).T
     # Standardize the features
     scaler = StandardScaler()
-    X = scaler.fit_transform(X)
+    X = scaler.fit_transform(neural_traj.T)
 
     # Split the data into training and testing sets
     test_idx = np.concatenate(
-        [np.where(lap_ids == comb)[0] for comb in combinations]
+        [np.where(lap_ids == comb)[0] for comb in combinations[:seg+1].astype(np.int64)]
     )
     train_idx = np.setdiff1d(np.arange(X.shape[0]), test_idx)
 
@@ -225,12 +245,12 @@ if __name__ == '__main__':
     import os
     from mylib.local_path import f2
     
-    for i in range(26, 28):
+    for i in range(21, 28):
         print(i, f2['MiceID'][i], f2['date'][i], ' session '+str(f2['session'][i]))
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
         
-        y_pred, y_test, x_test, decode_type = decode_routes(trace, n_cross_times=10, max_iter=20000)
+        y_pred, y_test, x_test, decode_type, segments = decode_routes(trace, n_cross_times=50, max_iter=100000)
         #y_pred_ctrl, y_test_ctrl, x_test_ctrl = decode_routes(trace, n_cross_times=10, is_control=True)
         
         with open(os.path.join(f2['Path'][i], "route_decode.pkl"), 'wb') as handle:
@@ -239,7 +259,8 @@ if __name__ == '__main__':
                     "y_pred": y_pred,
                     "y_test": y_test,
                     "x_test": x_test,
-                    "decode_type": decode_type
+                    "decode_type": decode_type,
+                    "segments": segments
                 }, 
                 handle
             )

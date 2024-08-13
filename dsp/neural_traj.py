@@ -10,13 +10,15 @@ from sklearn.decomposition import FactorAnalysis as FA
 from sklearn.manifold import Isomap
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
 from mylib.maze_utils3 import spike_nodes_transform, mkdir
 import seaborn as sns
-from mylib.maze_graph import NRG, CP_DSP
+from mylib.maze_graph import NRG, CP_DSP, DSP_NRG
 from mylib.maze_graph import Father2SonGraph as F2S
 import umap.umap_ as umap
 import os
+import scipy
 from mylib.maze_utils3 import Clear_Axes
 
 DSPPalette = ['#A9CCE3', '#A8DADC', '#9C8FBC', '#D9A6A9', '#F2E2C5', '#647D91', '#C06C84']
@@ -59,8 +61,8 @@ def get_neural_trajectory(trace: dict, is_normalize: bool = True):
             step_size=50
         )
         
-        kernel = GaussianKernel1d(n = 20, sigma=0.2)
-        neuro_traj.smooth(kernel)
+        kernel = GaussianKernel1d(n = 20, sigma=0.5)
+        neuro_traj = neuro_traj.smooth(kernel)
         neuro_trajs.append(neuro_traj.to_array())
         time_trajs.append(neuro_traj.time)
         pos_trajs.append(neuro_traj.variable)
@@ -86,8 +88,9 @@ def get_neural_trajectory(trace: dict, is_normalize: bool = True):
     return trace
 
 def segmented_neural_trajectory(trace):
-    breakpoints = np.array([6, 23, 94, 66, 109, 99, 144])
+    breakpoints = np.array([6, 23, 94, 66, 97, 99, 144])
     prev_bps = np.array([144, 5, 24, 95, 54, 85, 100])
+    next_bps = np.array([18, 22, 82, 65, 98, 87, 1])
 
     neural_traj = cp.deepcopy(trace['neural_traj'])
     pos_traj = cp.deepcopy(trace['pos_traj'])
@@ -126,7 +129,7 @@ def segmented_neural_trajectory(trace):
         if seg >= 6 and pos_traj[i] not in F2S[prev_bps[seg]]:
             continue
         
-        if pos_traj[i] in F2S[breakpoints[seg]]:
+        if pos_traj[i] in F2S[breakpoints[seg]] or pos_traj[i] in F2S[next_bps[seg]]:
             if is_move_backward == False:
                 segment_ids[beg_idx:i] = seg
                 
@@ -143,81 +146,78 @@ def segmented_neural_trajectory(trace):
     trace['traj_segment_ids'] = segment_ids
     return trace
 
-def umap_dim_reduction(neural_traj: np.ndarray, n_components:int=20, **parakwargs):
-    umap_model = umap.UMAP(n_components=n_components, **parakwargs)  
-    reduced_data = umap_model.fit_transform(neural_traj.T)
-    
-    return reduced_data
-
-def pca_dim_reduction(neural_traj: np.ndarray, n_components=20, **parakwargs):
-    pca = PCA(n_components=n_components, **parakwargs)  
-    reduced_data = pca.fit_transform(neural_traj.T)
-    return reduced_data
-
-def fa_dim_reduction(neural_traj: np.ndarray, n_components=20, **parakwargs):
-    fa = FA(n_components=n_components, **parakwargs)  
-    reduced_data = fa.fit_transform(neural_traj.T)
-    return reduced_data
-
-def lda_dim_reduction(
-    neural_traj: np.ndarray, 
-    traj_labels: np.ndarray, 
-    n_components=20, 
-    is_return_model=False, 
-    model=None,
-    **parakwargs
+def preprocess_neural_traj(
+    trace,
+    event_num : int = 10,
+    is_ego: bool = False,
+    segment: None | int | str = 'all',
+    train_label: str = "route"
 ):
-    if model is None:
-        lda = LDA(n_components=n_components, **parakwargs)  # Reduce to 2 dimensions for visualization
-        reduced_data = lda.fit_transform(neural_traj.T, traj_labels)
-    else:
-        lda = model
-        reduced_data = lda.transform(neural_traj.T)
-    
-    if is_return_model:
-        return reduced_data, lda
-    else:
-        return reduced_data
-    
-def Isomap_dim_reduction(neural_traj: np.ndarray, n_components=20, n_neighbors=5, **parakwargs):
-    isomap = Isomap(n_components=n_components, n_neighbors=n_neighbors, **parakwargs)
-    reduced_data = isomap.fit_transform(neural_traj.T)
-    return reduced_data
-
-def visualize_neurotraj(
-    trace: dict,
-    n_components=20,
-    component_i: int = 0,
-    component_j: int = 1,
-    method: str = "UMAP",
-    segments: None | int | str = 'all',
-    is_show: bool = False,
-    palette: str = 'default',
-    save_dir: str = None,
-    **parakwargs
-):
-    if method not in ["UMAP", "PCA", "FA", "LDA", "Isomap"]:
-        raise ValueError("method should be one of ['UMAP', 'PCA', 'FA', 'LDA', 'Isomap']")
-    
-    print(f"Dimensional reduction with {method} - {n_components} components.")
+    if is_ego == 'ego_pos_traj':
+        is_ego = True
     
     try:
-        neural_traj = trace['neural_traj']
-        pos_traj = trace['pos_traj']
-        lap_ids = trace['traj_lap_ids']
-        route_ids = trace['traj_route_ids']
+        neural_traj = cp.deepcopy(trace['neural_traj'])
+        pos_traj = cp.deepcopy(trace['pos_traj'])
+        lap_ids = cp.deepcopy(trace['traj_lap_ids'])
+        route_ids = cp.deepcopy(trace['traj_route_ids'])
     except:
         trace = get_neural_trajectory(trace)
-        neural_traj = trace['neural_traj']
-        pos_traj = trace['pos_traj']
-        lap_ids = trace['traj_lap_ids']
-        route_ids = trace['traj_route_ids']
+        neural_traj = cp.deepcopy(trace['neural_traj'])
+        pos_traj = cp.deepcopy(trace['pos_traj'])
+        lap_ids = cp.deepcopy(trace['traj_lap_ids'])
+        route_ids = cp.deepcopy(trace['traj_route_ids'])
         
     try: 
-        segment_traj = trace['traj_segment_ids']
+        segment_traj = cp.deepcopy(trace['traj_segment_ids'])
     except:
-        trace = segmented_neural_traj(trace)
+        trace = segmented_neural_trajectory(trace)
+        segment_traj = trace['traj_segment_ids']
+        
+    if is_ego:
+        ego_pos_traj = trace['ego_pos_traj']
+    else:
+        ego_pos_traj = None
+        
+    if segment != 'all':
+        if isinstance(segment, int):
+            if segment not in [0, 1, 2, 3, 4, 5, 6]:
+                raise ValueError(
+                    f"Parameter segment should be 'all' or an integer from 0 to 6, "
+                    f"but got {segment}."
+                )
+            idx = np.where(segment_traj == segment)[0]
+            neural_traj = neural_traj[:, idx]
+            pos_traj = pos_traj[idx]
+            lap_ids = lap_ids[idx]
+            route_ids = route_ids[idx]
+            segment_traj = segment_traj[idx]
+            
+            if is_ego:
+                ego_pos_traj = ego_pos_traj[idx]
+            
+        elif isinstance(segment, list) or isinstance(segment, np.ndarray):
+            if np.asarray(segment).ndim != 1:
+                idx = np.where(segment_traj == segment[0])[0]
+            else:
+                idx = np.where(np.isin(segment_traj, segment))[0]
+                
+            neural_traj = neural_traj[:, idx]
+            pos_traj = pos_traj[idx]
+            lap_ids = lap_ids[idx]
+            route_ids = route_ids[idx]
+            segment_traj = segment_traj[idx]
+            
+            if is_ego:
+                ego_pos_traj = ego_pos_traj[idx]
+            
+        else:
+            raise ValueError(
+                f"Parameter segment should be 'all' or an integer from 0 to 6, "
+                f"but got {segment}."
+            )
     
+
     # Convert to major bin
     pos_traj = spike_nodes_transform(pos_traj, 12).astype(np.float64)
     
@@ -232,33 +232,172 @@ def visualize_neurotraj(
     lap_ids = lap_ids[idx]
     route_ids = route_ids[idx]
     neural_traj = neural_traj[:, idx]
+    segment_traj = segment_traj[idx]
     
+    sum_events_n = np.sum(trace['Spikes'], axis=1)
     # Extract Place cells for analysis only
-    pc_idx = np.unique(
-        np.concatenate(
-            [np.where(trace[f'node {i}']['is_placecell'] == 1)[0] for i in range(10)]
+    if 'pc_idx' not in trace.keys():
+        pc_idx = np.unique(
+            np.concatenate(
+                [np.where(trace[f'node {i}']['is_placecell'] == 1)[0] for i in range(10)]
+            )
         )
-    )
-    neural_traj = neural_traj[pc_idx, :]
-    
+    else:
+        pc_idx = trace['pc_idx']
+        
+    remain_idx = np.intersect1d(pc_idx, np.where(sum_events_n >= event_num)[0])
+    neural_traj = neural_traj[remain_idx, :]
+        
     # Convert to graph
     G = NRG[1]
-    pos_traj_reord = np.zeros_like(pos_traj)
+    pos_traj_reord = np.zeros_like(pos_traj, np.int64)
     for i in range(pos_traj.shape[0]):
-        pos_traj_reord[i] = G[pos_traj[i]]    
+        pos_traj_reord[i] = G[pos_traj[i]]
+    
+    if decode_type == 'lap':
+        idx = np.where(route_ids == 0)[0]
+        neural_traj = neural_traj[:, idx]
+        pos_traj = pos_traj[idx]
+        lap_ids = lap_ids[idx]
+        route_ids = route_ids[idx]
+        segment_traj = segment_traj[idx]
+        
+        if is_ego:
+            ego_pos_traj = ego_pos_traj[idx]
+    
+    return {
+        'neural_traj': neural_traj,
+        'pos_traj': pos_traj,
+        'pos_traj_reord': pos_traj_reord,
+        'traj_lap_ids': lap_ids,
+        'traj_route_ids': route_ids,
+        'traj_segment_ids': segment_traj,
+        'ego_pos_traj': ego_pos_traj,
+        'remain_idx': remain_idx
+    }
+
+def calc_trajectory_similarity(
+    reduced_data: np.ndarray,
+    lap_ids: np.ndarray,
+    route_ids: np.ndarray,
+    dim: int = 3
+):
+    assert reduced_data.shape[1] >= dim
+    reduced_data = reduced_data[:, :dim].T
+    
+    idx = np.where(np.ediff1d(lap_ids) != 0)[0]
+    beg, end = np.concatenate([[0], idx+1]), np.concatenate([idx+1, [lap_ids.shape[0]]])
+    
+    dist_mat = np.zeros((beg.shape[0], beg.shape[0])) * np.nan
+    
+    for i in tqdm(range(beg.shape[0]-1)):
+        for j in range(i+1, beg.shape[0]):
+            D = np.linalg.norm(reduced_data[:, beg[i]:end[i], np.newaxis] - reduced_data[:, np.newaxis, beg[j]:end[j]], axis=0)
+            row_ind, col_ind = scipy.optimize.linear_sum_assignment(D)
+            dist_mat[i, j] = dist_mat[j, i] = np.nanmean(D[row_ind, col_ind])
+            if np.isnan(dist_mat[i, j]):
+                print(i, j, " NAN")
+    return dist_mat, lap_ids[beg], route_ids[beg]
+
+def umap_dim_reduction(neural_traj: np.ndarray, n_components:int=20, **parakwargs):
+    umap_model = umap.UMAP(n_components=n_components, **parakwargs)  
+    reduced_data = umap_model.fit_transform(neural_traj.T)
+    
+    return reduced_data, umap_model
+
+def pca_dim_reduction(neural_traj: np.ndarray, n_components=20, **parakwargs):
+    pca = PCA(n_components=n_components, **parakwargs)  
+    reduced_data = pca.fit_transform(neural_traj.T)
+    return reduced_data, pca
+
+def fa_dim_reduction(neural_traj: np.ndarray, n_components=20, **parakwargs):
+    fa = FA(n_components=n_components, **parakwargs)  
+    reduced_data = fa.fit_transform(neural_traj.T)
+    return reduced_data, fa
+
+def lda_dim_reduction(
+    neural_traj: np.ndarray, 
+    traj_labels: np.ndarray, 
+    n_components=20, 
+    model=None,
+    **parakwargs
+):
+    if model is None:
+        lda = LDA(n_components=n_components, **parakwargs)  # Reduce to 2 dimensions for visualization
+        lda.fit(neural_traj.T, traj_labels)
+        reduced_data = lda.transform(neural_traj.T)
+    else:
+        lda = model
+        reduced_data = lda.transform(neural_traj.T)
+
+    return reduced_data, lda
+    
+def Isomap_dim_reduction(neural_traj: np.ndarray, n_components=20, n_neighbors=5, **parakwargs):
+    isomap = Isomap(n_components=n_components, n_neighbors=n_neighbors, **parakwargs)
+    reduced_data = isomap.fit_transform(neural_traj.T)
+    return reduced_data, isomap
+
+def visualize_neurotraj(
+    trace: dict,
+    n_components=20,
+    component_i: int = 0,
+    component_j: int = 1,
+    method: str = "UMAP",
+    segment: None | int | str = 'all',
+    is_show: bool = False,
+    palette: str = 'default',
+    save_dir: str = None,
+    figsize: tuple = (4*2, 6),
+    train_label: str = "route",
+    pos_type: str = "pos_traj",
+    pca_n: int = 30,
+    **parakwargs
+):
+    if method not in ["UMAP", "PCA", "FA", "LDA", "Isomap"]:
+        raise ValueError("method should be one of ['UMAP', 'PCA', 'FA', 'LDA', 'Isomap']")
+    
+    if train_label not in ['route', 'lap', 'pos']:
+        raise ValueError(f"train_label should be one of ['route', 'lap', 'pos'], but {train_label} is given.")
+    
+    print(f"Dimensional reduction with {method} - {n_components} components.")
+    
+    res = preprocess_neural_traj(
+        trace, 
+        segment=segment, 
+        train_label=train_label, 
+        is_ego=pos_type
+    )
+    
+    neural_traj = res['neural_traj']
+    lap_ids = res['traj_lap_ids']
+    route_ids = res['traj_route_ids']
+    segment_traj = res['traj_segment_ids']
+    pos_traj = res['pos_traj']
+    pos_traj_reord = res['pos_traj_reord']
+    ego_pos_traj = res['ego_pos_traj']
+    
+    if pos_type == 'ego_pos_traj':
+        pos_traj = ego_pos_traj    
         
     if method == "UMAP":
-        reduced_data = umap_dim_reduction(neural_traj, n_components, **parakwargs)
+        reduced_data, model = umap_dim_reduction(neural_traj, n_components, **parakwargs)
     elif method == "PCA":
-        reduced_data = pca_dim_reduction(neural_traj, n_components, **parakwargs)
+        reduced_data, model = pca_dim_reduction(neural_traj, n_components, **parakwargs)
     elif method == "FA":
-        reduced_data = fa_dim_reduction(neural_traj, n_components, **parakwargs)
+        reduced_data, model = fa_dim_reduction(neural_traj, n_components, **parakwargs)
     elif method == "LDA":
-        reduced_data = lda_dim_reduction(neural_traj, pos_traj_reord, n_components, **parakwargs)
+        reduced_data, pca = pca_dim_reduction(neural_traj, pca_n)
+        
+        if train_label == 'lap':
+            reduced_data, lda = lda_dim_reduction(reduced_data.T, lap_ids, n_components, **parakwargs)
+        elif train_label == 'route':
+            reduced_data, lda = lda_dim_reduction(reduced_data.T, route_ids, n_components, **parakwargs)
+        elif train_label == 'pos':
+            reduced_data, lda = lda_dim_reduction(reduced_data.T, pos_traj_reord, n_components, **parakwargs)
+            
+        model = (pca, lda)
     elif method == "Isomap":
-        reduced_data = Isomap_dim_reduction(neural_traj, n_components, **parakwargs)
-    
-    
+        reduced_data, model = Isomap_dim_reduction(neural_traj, n_components, **parakwargs)
     
     print(
         f"Visualizing neural trajectory - component {component_i}"
@@ -266,7 +405,7 @@ def visualize_neurotraj(
         end='\n\n'
     )
         
-    fig, axes = plt.subplots(ncols=2, nrows=1, figsize=(4*2, 6))
+    fig, axes = plt.subplots(ncols=2, nrows=1, figsize=figsize)
     reduced_data_temp = reduced_data[:, [component_i, component_j]]
     
     PC2, PC1 = reduced_data_temp[:, 0], reduced_data_temp[:, 1] # df = pd.DataFrame(reduced_data, columns=['PC1', 'PC2'])
@@ -346,7 +485,208 @@ def visualize_neurotraj(
     return reduced_data
 
 
+def visualize_neurotraj3d(
+    trace: dict,
+    n_components=20,
+    component_i: int = 0,
+    component_j: int = 1,
+    component_k: int = 2,
+    method: str = "UMAP",
+    segment: None | int | str = 'all',
+    is_show: bool = False,
+    palette: str = 'default',
+    save_dir: str = None,
+    figsize: tuple = (4*3, 6),
+    reduced_data: np.ndarray = None,
+    train_label: str = 'route',
+    elev=30,
+    azim=45,
+    pos_type: str = 'pos_traj',
+    **parakwargs
+):
+    if n_components < 3:
+        raise ValueError(f"n_components for 3d plots should be at least 3.")
+    
+    if train_label not in ['route', 'lap', 'pos']:
+        raise ValueError(f"train_label should be one of ['route', 'lap', 'pos'], but {train_label} is given.")
+    
+    if component_i == component_j or component_i == component_k or component_j == component_k:
+        raise ValueError(
+            f"component_i, component_j, component_k should be different, but"
+            f" they are {component_i}, {component_j}, {component_k}."
+        )
+    
+    if method not in ["UMAP", "PCA", "FA", "LDA", "Isomap"]:
+        raise ValueError("method should be one of ['UMAP', 'PCA', 'FA', 'LDA', 'Isomap']")
+    
+    print(f"Dimensional reduction with {method} - {n_components} components.")
+    
+    res = preprocess_neural_traj(
+        trace, 
+        segment=segment, 
+        train_label=train_label, 
+        is_ego=pos_type
+    )
+    
+    neural_traj = res['neural_traj']
+    lap_ids = res['traj_lap_ids']
+    route_ids = res['traj_route_ids']
+    segment_traj = res['traj_segment_ids']
+    pos_traj = res['pos_traj']
+    pos_traj_reord = res['pos_traj_reord']
+    ego_pos_traj = res['ego_pos_traj']
+    
+    if pos_type == 'ego_pos_traj':
+        pos_traj = ego_pos_traj
+        
+    
+    if reduced_data is None:
+        if method == "UMAP":
+            reduced_data, model = umap_dim_reduction(neural_traj, n_components, **parakwargs)
+        elif method == "PCA":
+            reduced_data, model = pca_dim_reduction(neural_traj, n_components, **parakwargs)
+        elif method == "FA":
+            reduced_data, model = fa_dim_reduction(neural_traj, n_components, **parakwargs)
+        elif method == "LDA":
+            reduced_data, pca = pca_dim_reduction(neural_traj, pca_n)
+        
+            if train_label == 'lap':
+                reduced_data, lda = lda_dim_reduction(reduced_data.T, lap_ids, n_components, **parakwargs)
+            elif train_label == 'route':
+                reduced_data, lda = lda_dim_reduction(reduced_data.T, route_ids, n_components, **parakwargs)
+            elif train_label == 'pos':
+                reduced_data, lda = lda_dim_reduction(reduced_data.T, pos_traj_reord, n_components, **parakwargs)
+            
+            model = (pca, lda)
+        elif method == "Isomap":
+            reduced_data, model = Isomap_dim_reduction(neural_traj, n_components, **parakwargs)
+    else:
+        model = None
+    
+    
+    print(
+        f"Visualizing neural trajectory - component {component_i}, {component_j}, {component_k}.", 
+        end='\n\n'
+    )
+        
+    fig, axes = plt.subplots(ncols=3, nrows=1, figsize=figsize, subplot_kw={'projection': '3d'})
+    reduced_data_temp = reduced_data[:, [component_i, component_j, component_k]]
+    
+    PC1, PC2, PC3 = reduced_data_temp[:, 0], reduced_data_temp[:, 1], reduced_data_temp[:, 2] # df = pd.DataFrame(reduced_data, columns=['PC1', 'PC2'])
 
+    idx = np.where(np.ediff1d(lap_ids) != 0)[0]
+    beg = np.concatenate(
+        [[0], idx+1]
+    )
+    end = np.concatenate(
+        [idx+1, [lap_ids.shape[0]]]
+    )
+    linewidths = np.full_like(lap_ids, 0.1).astype(np.float64)
+    for i in range(beg.shape[0]):
+        linewidths[beg[i]:end[i]] = np.linspace(0.2, 2, end[i]-beg[i])
+
+    # Plot the reduced data, color-coding by the related variable
+    vmin, vmax = np.min(pos_traj_reord), np.max(pos_traj_reord)
+    color_a = np.array(sns.color_palette("rainbow", vmax-vmin+1))
+    color_b = sns.color_palette(palette, 7) if palette != 'default' else DSPPalette
+    color_c = np.array(sns.color_palette("rainbow", beg.shape[0]))
+        
+    axes[0].scatter( 
+        PC1, 
+        PC2, 
+        PC3,
+        color=color_a[pos_traj_reord.astype(np.int64) - vmin],
+        alpha=0.5,
+        s=3,
+        linewidth = 0
+    )
+                     
+    for i in range(beg.shape[0]):
+        lef, rig = beg[i], end[i]
+        
+        axes[1].plot(
+            PC1[lef:rig], 
+            PC2[lef:rig], 
+            PC3[lef:rig],
+            color=color_b[int(route_ids[lef])], 
+            linewidth=0.5
+        )
+        axes[2].plot(
+            PC1[lef:rig], 
+            PC2[lef:rig], 
+            PC3[lef:rig],
+            color=color_c[i], 
+            linewidth=0.5
+        )
+        
+    for i in range(PC1.shape[0]-1):
+        if lap_ids[i] != lap_ids[i+1]:
+            axes[0].plot(PC1[i:i+1], PC2[i:i+1], PC3[i:i+1], '^', markersize=5, 
+                         markeredgewidth = 0, color='k',
+                         alpha=0.5)
+            axes[1].plot(PC1[i:i+1], PC2[i:i+1], PC3[i:i+1], '^', markersize=5, 
+                         markeredgewidth = 0, color='k',
+                         alpha=0.5) 
+            axes[2].plot(PC1[i:i+1], PC2[i:i+1], PC3[i:i+1], '^', markersize=5, 
+                         markeredgewidth = 0, color='k',
+                         alpha=0.5) 
+            continue
+        
+        if lap_ids[i] != lap_ids[i-1] or i == 0:
+            axes[0].plot(PC1[i:i+1], PC2[i:i+1], PC3[i:i+1], 'o', markersize=5, 
+                         markeredgewidth = 0.5, markeredgecolor = 'k', color=color_a[int(pos_traj_reord[i])-vmin],
+                         alpha=0.5)
+            axes[1].plot(PC1[i:i+1], PC2[i:i+1], PC3[i:i+1], 'o', markersize=5, 
+                         markeredgewidth = 0.5, markeredgecolor='k', color=color_b[int(route_ids[i])],
+                         alpha=0.5) 
+            axes[1].plot(PC1[i:i+1], PC2[i:i+1], PC3[i:i+1], 'o', markersize=5, 
+                         markeredgewidth = 0.5, markeredgecolor='k', color=color_b[int(route_ids[i])],
+                         alpha=0.5) 
+    
+    axes[0].view_init(elev=elev, azim=azim)
+    axes[1].view_init(elev=elev, azim=azim)
+    axes[2].view_init(elev=elev, azim=azim)
+    
+    axes[0].set_xlabel('PC1')
+    axes[0].set_ylabel('PC2')
+    axes[0].set_zlabel('PC3')
+    
+    axes[1].set_xlabel('PC1')
+    axes[1].set_ylabel('PC2')
+    axes[1].set_zlabel('PC3')
+    
+    axes[2].set_xlabel('PC1')
+    axes[2].set_ylabel('PC2')
+    axes[2].set_zlabel('PC3')
+    
+    if is_show:
+        plt.show()
+    else:
+        if save_dir == None:
+            save_dir = os.path.join(trace['p'], 'neural_traj', f"{method}_DIM{n_components}")
+        mkdir(save_dir)
+        
+        plt.savefig(os.path.join(
+            save_dir, f'{method}{component_i}_{component_j}_{component_k}.png'
+        ), dpi=2400)
+        plt.savefig(os.path.join(
+            save_dir, f'{method}{component_i}&{component_j}_{component_k}.svg'
+        ), dpi=2400)
+    
+        axes[0].clear()
+        axes[1].clear()
+        plt.close()
+    
+    return {
+        'reduced_data': reduced_data,
+        'traj_lap_ids': lap_ids,
+        pos_type: pos_traj,
+        'pos_traj_reord': pos_traj_reord,
+        'traj_route_ids': route_ids,
+        'traj_segment_ids': segment_traj,
+        'remain_idx': res['remain_idx'],
+        'model': model
+    }
 
 if __name__ == '__main__':
     import pickle
@@ -355,12 +695,15 @@ if __name__ == '__main__':
     loc = r"E:\Data\Dsp_maze\10224\20231012\trace.pkl"
     with open(loc, 'rb') as handle:
         trace = pickle.load(handle)
-
+    
     for i in range(len(f2)):
         print(f2['Trace File'][i])
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
-        trace = segmented_neural_traj(trace)
+        
+        trace = get_neural_trajectory(trace)
+        trace = segmented_neural_trajectory(trace)
+        
         with open(f2['Trace File'][i], 'wb') as handle:
             pickle.dump(trace, handle)
     """
