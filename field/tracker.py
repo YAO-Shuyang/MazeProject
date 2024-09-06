@@ -710,6 +710,7 @@ def main(
                     place_field_all[j].append(field_reallocate(res['place_field_all_multiday'][i][int(index_map[i, j])-1], maze_type=maze_type))
             else:
                 place_field_all[j].append(None)
+                
     print("Field Register...")
     field_reg, field_info, place_field_all = Tracker.field_register(
         index_map=index_map,

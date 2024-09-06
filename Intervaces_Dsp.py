@@ -541,3 +541,120 @@ def LatentSpaceOrthogonality_DSP_Interface(
         np.array(mean_trajectory_distance),
         np.array(sub_space_type)
     )
+
+from mylib.dsp.neural_traj import preprocess_neural_traj, pca_dim_reduction, lda_dim_reduction
+def SubspacesOrthogonality_DSP_Interface(trace, variable_names = None):
+    VariablesInputErrorCheck(
+        input_variable = variable_names, 
+        check_variable = ['Segment', 'Smallest Singlar Value', 'Conditional Number', 'Subspace Comparison Type','Shinkage']
+    )
+    
+    PCA_Dimensions = [100, 50, 30]
+    
+    Shrink = []
+    segments = []
+    singvals = []
+    condno = []
+    subspace_type = []
+    
+    for shrinkage in tqdm([0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]):
+        for i in range(1, 7):
+            
+            res = preprocess_neural_traj(trace, segment=i)
+
+            neural_traj = res['neural_traj']
+            lap_ids = res['traj_lap_ids']
+            route_ids = res['traj_route_ids']
+            segment_traj = res['traj_segment_ids']
+            pos_traj = res['pos_traj']
+            pos_traj_reord = res['pos_traj_reord']
+            
+            if neural_traj.shape[0] <= 30:
+                continue
+            
+            pca_n = min(neural_traj.shape[0], shrinkage)
+            #reduced_data_pca, pca = pca_dim_reduction(neural_traj, pca_n)
+            reduced_data_pca = neural_traj.T
+            _, lda_pos = lda_dim_reduction(
+                reduced_data_pca.T, 
+                pos_traj_reord, 
+                n_components=6,
+                solver="eigen",
+                shrinkage=shrinkage
+            )
+            _, lda_route = lda_dim_reduction(
+                reduced_data_pca.T, 
+                route_ids, 
+                n_components=i,
+                solver="eigen",
+                shrinkage=shrinkage
+            )
+            
+            idx = np.where(route_ids == 0)[0]
+            _, lda_lap = lda_dim_reduction(
+                reduced_data_pca.T[:, idx], 
+                lap_ids[idx], 
+                n_components=6,
+                solver="eigen",
+                shrinkage=shrinkage
+            )
+            
+            """
+            # Get total weights of each neuron
+            W1 = pca.components_.T @ lda_pos.scalings_
+            W2 = pca.components_.T @ lda_route.scalings_
+            W3 = pca.components_.T @ lda_lap.scalings_
+            """
+            W1 = lda_pos.scalings_
+            W2 = lda_route.scalings_
+            W3 = lda_lap.scalings_
+            
+            C1 = np.hstack([W1[:, :6], W2])
+            C2 = np.hstack([W1[:, :6], W3[:, :6]])
+            C3 = np.hstack([W2, W3[:, :6]])
+            
+            if np.where(np.isnan(C1))[0].shape[0] > 0:
+                raise ValueError("nan detected in C1")
+        
+            if np.where(np.isnan(C2))[0].shape[0] > 0:
+                raise ValueError("nan detected in C2")
+            
+            if np.where(np.isnan(C3))[0].shape[0] > 0:
+                raise ValueError("nan detected in C3")
+            
+            # pos subspace vs. route subspace
+            cond_number = np.linalg.cond(C1)
+            u, s, vh = np.linalg.svd(C1)
+            Shrink.append(shrinkage)
+            segments.append(i)
+            singvals.append(s[-1])
+            condno.append(cond_number)
+            subspace_type.append(0)
+            
+            # pos subspace vs. lap subspace
+            cond_number = np.linalg.cond(C2)
+            u, s, vh = np.linalg.svd(C2)
+            Shrink.append(shrinkage)
+            segments.append(i)
+            singvals.append(s[-1])
+            condno.append(cond_number)
+            subspace_type.append(1)
+            
+            # route subspace vs. lap subspace
+            cond_number = np.linalg.cond(C3)
+            u, s, vh = np.linalg.svd(C3)
+            Shrink.append(shrinkage)
+            segments.append(i)
+            singvals.append(s[-1])
+            condno.append(cond_number)
+            subspace_type.append(2)
+            
+            del res
+            
+    return (
+        np.array(segments),
+        np.array(singvals),
+        np.array(condno),
+        np.array(subspace_type),
+        np.array(Shrink)
+    )

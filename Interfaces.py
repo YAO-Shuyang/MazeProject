@@ -2051,6 +2051,7 @@ def ConditionalProb_Interface(
     if trace['paradigm'] == 'CrossMaze':
         retained_dur, prob, recover_prob, global_recover_prob, on_next_num, off_next_num = RegisteredField.conditional_prob(
             field_reg=trace['field_reg'],
+            field_info=trace['field_info'],
             thre=4
         )
     
@@ -2064,10 +2065,12 @@ def ConditionalProb_Interface(
     else:
         retained_dur_cis, prob_cis, recover_prob_cis, global_recover_prob_cis, on_next_num_cis, off_next_num_cis = RegisteredField.conditional_prob(
             field_reg=trace['cis']['field_reg'],
+            field_info=trace['field_info'],
             thre=4
         )
         retained_dur_trs, prob_trs, recover_prob_trs, global_recover_prob_trs, on_next_num_trs, off_next_num_trs = RegisteredField.conditional_prob(
             field_reg=trace['trs']['field_reg'],
+            field_info=trace['field_info'],
             thre=4
         )
     
@@ -2102,8 +2105,9 @@ def ConditionalProb_Interface_NovelFalimiar(
     if trace['paradigm'] == 'CrossMaze':
         retained_dur, start_session, prob, recover_prob, on_next_num, off_next_num = RegisteredField.conditional_prob(
             field_reg=trace['field_reg'],
+            field_info=trace['field_info'],
             thre=4,
-            is_overal=False
+            category='time'
         )
     
         return (retained_dur, start_session, prob*100, recover_prob*100, 
@@ -2112,17 +2116,70 @@ def ConditionalProb_Interface_NovelFalimiar(
     else:
         retained_dur_cis, start_session_cis, prob_cis, recover_prob_cis, on_next_num_cis, off_next_num_cis = RegisteredField.conditional_prob(
             field_reg=trace['cis']['field_reg'],
+            field_info=trace['cis']['field_info'],
             thre=4,
-            is_overal=False
+            category='time'
         )
         retained_dur_trs, start_session_trs, prob_trs, recover_prob_trs, on_next_num_trs, off_next_num_trs = RegisteredField.conditional_prob(
             field_reg=trace['trs']['field_reg'],
+            field_info=trace['trs']['field_info'],
             thre=4,
-            is_overal=False
+            category='time'
         )
     
         return (np.concatenate([retained_dur_cis, retained_dur_trs]), 
                 np.concatenate([start_session_cis, start_session_trs]),
+                np.concatenate([prob_cis*100, prob_trs*100]), 
+                np.concatenate([recover_prob_cis*100, recover_prob_trs*100]), 
+                np.concatenate([np.repeat(trace['paradigm'] + ' cis', prob_cis.shape[0]), np.repeat(trace['paradigm'] + ' trs', prob_trs.shape[0])]),
+                np.concatenate([on_next_num_cis, on_next_num_trs]),
+                np.concatenate([off_next_num_cis, off_next_num_trs]))
+        
+        
+# Fig0313
+def ConditionalProb_Interface_Position(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=[
+        'Duration', 'Position', 'Conditional Prob.', 'Conditional Recover Prob.',
+        'Paradigm', 'On-Next Num', 'Off-Next Num'])
+
+    
+    if trace['paradigm'] == 'CrossMaze':
+        retained_dur, position, prob, recover_prob, on_next_num, off_next_num = RegisteredField.conditional_prob(
+            field_reg=trace['field_reg'],
+            field_info=trace['field_info'],
+            thre=4,
+            category='position',
+            seg_range=20,
+            maze_type=trace['maze_type']
+        )
+    
+        return (retained_dur, position, prob*100, recover_prob*100, 
+                np.repeat(trace['paradigm'], prob.shape[0]), 
+                on_next_num, off_next_num)
+    else:
+        retained_dur_cis, position_cis, prob_cis, recover_prob_cis, on_next_num_cis, off_next_num_cis = RegisteredField.conditional_prob(
+            field_reg=trace['cis']['field_reg'],
+            field_info=trace['cis']['field_info'],
+            thre=4,
+            seg_range=20,
+            category='position',
+            maze_type=trace['maze_type']
+        )
+        retained_dur_trs, position_trs, prob_trs, recover_prob_trs, on_next_num_trs, off_next_num_trs = RegisteredField.conditional_prob(
+            field_reg=trace['trs']['field_reg'],
+            field_info=trace['trs']['field_info'],
+            thre=4,
+            seg_range=20,
+            category='position',
+            maze_type=trace['maze_type']
+        )
+    
+        return (np.concatenate([retained_dur_cis, retained_dur_trs]), 
+                np.concatenate([position_cis, position_trs]),
                 np.concatenate([prob_cis*100, prob_trs*100]), 
                 np.concatenate([recover_prob_cis*100, recover_prob_trs*100]), 
                 np.concatenate([np.repeat(trace['paradigm'] + ' cis', prob_cis.shape[0]), np.repeat(trace['paradigm'] + ' trs', prob_trs.shape[0])]),

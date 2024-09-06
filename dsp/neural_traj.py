@@ -8,7 +8,8 @@ from tqdm import tqdm
 from sklearn.decomposition import PCA
 from sklearn.decomposition import FactorAnalysis as FA
 from sklearn.manifold import Isomap
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+#from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+from mylib.dsp._lda_m import LinearDiscriminantAnalysis_Regularized as LDA
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
@@ -149,12 +150,15 @@ def segmented_neural_trajectory(trace):
 def preprocess_neural_traj(
     trace,
     event_num : int = 10,
+    peak_thre: float = 0.4,
     is_ego: bool = False,
     segment: None | int | str = 'all',
     train_label: str = "route"
 ):
-    if is_ego == 'ego_pos_traj':
+    if is_ego == 'ego_pos_traj' or is_ego == True:
         is_ego = True
+    else:
+        is_ego = False
     
     try:
         neural_traj = cp.deepcopy(trace['neural_traj'])
@@ -234,19 +238,28 @@ def preprocess_neural_traj(
     neural_traj = neural_traj[:, idx]
     segment_traj = segment_traj[idx]
     
-    sum_events_n = np.sum(trace['Spikes'], axis=1)
-    # Extract Place cells for analysis only
-    if 'pc_idx' not in trace.keys():
-        pc_idx = np.unique(
-            np.concatenate(
-                [np.where(trace[f'node {i}']['is_placecell'] == 1)[0] for i in range(10)]
-            )
-        )
+    if 'remain_idx' in trace.keys():
+        remain_idx = trace['remain_idx']
+    elif 'Spikes' not in trace.keys():
+        remain_idx = np.arange(neural_traj.shape[0])
     else:
-        pc_idx = trace['pc_idx']
+        sum_events_n = np.sum(trace['Spikes'], axis=1)
+        # Extract Place cells for analysis only
+        if 'pc_idx' not in trace.keys():
+            pc_idx = np.unique(
+                np.concatenate(
+                    [np.where(
+                        (trace[f'node {i}']['is_placecell'] == 1) &
+                        (np.max(trace[f'node {i}']['smooth_map_all'], axis=1) >= peak_thre)
+                    )[0] for i in range(10)
+                    ]
+                )
+            )
+        else:
+            pc_idx = trace['pc_idx']
         
-    remain_idx = np.intersect1d(pc_idx, np.where(sum_events_n >= event_num)[0])
-    neural_traj = neural_traj[remain_idx, :]
+        remain_idx = np.intersect1d(pc_idx, np.where(sum_events_n >= event_num)[0])
+        neural_traj = neural_traj[remain_idx, :]
         
     # Convert to graph
     G = NRG[1]
@@ -254,10 +267,11 @@ def preprocess_neural_traj(
     for i in range(pos_traj.shape[0]):
         pos_traj_reord[i] = G[pos_traj[i]]
     
-    if decode_type == 'lap':
+    if train_label == 'lap':
         idx = np.where(route_ids == 0)[0]
         neural_traj = neural_traj[:, idx]
         pos_traj = pos_traj[idx]
+        pos_traj_reord = pos_traj_reord[idx]
         lap_ids = lap_ids[idx]
         route_ids = route_ids[idx]
         segment_traj = segment_traj[idx]
@@ -331,7 +345,28 @@ def lda_dim_reduction(
         reduced_data = lda.transform(neural_traj.T)
 
     return reduced_data, lda
+
+def get_segmented_peakrate(
+    trace: dict
+):
+    seg_peak_rate = np.zeros((trace['n_neuron'], 10, 7)) * np.nan
     
+    routes = [4, 5, 6, np.nan, 1, 2, 3]
+    for i in range(7):
+        if i != 3:
+            son_area = np.concatenate([F2S[k] for k in np.setdiff1d(CP_DSP[i], CP_DSP[routes[i]])])
+        else:
+            son_area = np.concatenate([F2S[k] for k in CP_DSP[3]])
+            
+        for j in range(10):
+            seg_peak_rate[:, j, i] = np.max(
+                trace[f'node {j}']['smooth_map_all'][:, son_area-1],
+                axis=1
+            )
+            
+    seg_peak_rate = np.std(seg_peak_rate, axis=1)
+    return seg_peak_rate
+
 def Isomap_dim_reduction(neural_traj: np.ndarray, n_components=20, n_neighbors=5, **parakwargs):
     isomap = Isomap(n_components=n_components, n_neighbors=n_neighbors, **parakwargs)
     reduced_data = isomap.fit_transform(neural_traj.T)
@@ -386,7 +421,9 @@ def visualize_neurotraj(
     elif method == "FA":
         reduced_data, model = fa_dim_reduction(neural_traj, n_components, **parakwargs)
     elif method == "LDA":
-        reduced_data, pca = pca_dim_reduction(neural_traj, pca_n)
+        #pca_n = neural_traj.shape[0]
+        #reduced_data, pca = pca_dim_reduction(neural_traj, pca_n)
+        reduced_data = neural_traj.T
         
         if train_label == 'lap':
             reduced_data, lda = lda_dim_reduction(reduced_data.T, lap_ids, n_components, **parakwargs)
@@ -395,7 +432,7 @@ def visualize_neurotraj(
         elif train_label == 'pos':
             reduced_data, lda = lda_dim_reduction(reduced_data.T, pos_traj_reord, n_components, **parakwargs)
             
-        model = (pca, lda)
+        model = lda
     elif method == "Isomap":
         reduced_data, model = Isomap_dim_reduction(neural_traj, n_components, **parakwargs)
     
@@ -501,6 +538,7 @@ def visualize_neurotraj3d(
     train_label: str = 'route',
     elev=30,
     azim=45,
+    pca_n: int = 30,
     pos_type: str = 'pos_traj',
     **parakwargs
 ):
@@ -548,7 +586,9 @@ def visualize_neurotraj3d(
         elif method == "FA":
             reduced_data, model = fa_dim_reduction(neural_traj, n_components, **parakwargs)
         elif method == "LDA":
-            reduced_data, pca = pca_dim_reduction(neural_traj, pca_n)
+            #pca_n = min(pca_n, neural_traj.shape[0])
+            #reduced_data, pca = pca_dim_reduction(neural_traj, pca_n)
+            reduced_data = neural_traj.T
         
             if train_label == 'lap':
                 reduced_data, lda = lda_dim_reduction(reduced_data.T, lap_ids, n_components, **parakwargs)
@@ -557,7 +597,7 @@ def visualize_neurotraj3d(
             elif train_label == 'pos':
                 reduced_data, lda = lda_dim_reduction(reduced_data.T, pos_traj_reord, n_components, **parakwargs)
             
-            model = (pca, lda)
+            model = lda
         elif method == "Isomap":
             reduced_data, model = Isomap_dim_reduction(neural_traj, n_components, **parakwargs)
     else:
@@ -568,7 +608,56 @@ def visualize_neurotraj3d(
         f"Visualizing neural trajectory - component {component_i}, {component_j}, {component_k}.", 
         end='\n\n'
     )
-        
+    
+    plot_neurotraj3d(
+        reduced_data,
+        component_i=component_i,
+        component_j=component_j,
+        component_k=component_k,
+        method=method,
+        figsize=figsize,
+        pos_traj_reord=pos_traj_reord,
+        lap_ids=lap_ids,
+        route_ids=route_ids,
+        segment_ids=segment_traj,
+        day_ids=None,
+        is_show=is_show,
+        palette=palette,
+        save_dir=save_dir,
+        elev=elev,
+        azim=azim
+    )
+
+    return {
+        'reduced_data': reduced_data,
+        'traj_lap_ids': lap_ids,
+        pos_type: pos_traj,
+        'pos_traj_reord': pos_traj_reord,
+        'traj_route_ids': route_ids,
+        'traj_segment_ids': segment_traj,
+        'remain_idx': res['remain_idx'],
+        'model': model
+    }
+
+
+def plot_neurotraj3d(
+    reduced_data: np.ndarray,
+    component_i: int = 0,
+    component_j: int = 1,
+    component_k: int = 2,
+    method: str = "LDA",
+    figsize: tuple = (4*3, 6),
+    pos_traj_reord: np.ndarray = None,
+    lap_ids: np.ndarray = None,
+    route_ids: np.ndarray = None,
+    segment_ids: np.ndarray = None,
+    day_ids: np.ndarray = None,
+    is_show: bool = False,
+    palette: str = 'default',
+    save_dir: str = None,
+    elev=30,
+    azim=45
+):
     fig, axes = plt.subplots(ncols=3, nrows=1, figsize=figsize, subplot_kw={'projection': '3d'})
     reduced_data_temp = reduced_data[:, [component_i, component_j, component_k]]
     
@@ -677,16 +766,6 @@ def visualize_neurotraj3d(
         axes[1].clear()
         plt.close()
     
-    return {
-        'reduced_data': reduced_data,
-        'traj_lap_ids': lap_ids,
-        pos_type: pos_traj,
-        'pos_traj_reord': pos_traj_reord,
-        'traj_route_ids': route_ids,
-        'traj_segment_ids': segment_traj,
-        'remain_idx': res['remain_idx'],
-        'model': model
-    }
 
 if __name__ == '__main__':
     import pickle
