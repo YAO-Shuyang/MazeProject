@@ -18,7 +18,9 @@ def LocTimeCurveAxes(
     line_kwargs: dict = {'markeredgewidth': 0, 'markersize': 1, 'color': 'black'},
     bar_kwargs: dict = {'markeredgewidth': 1, 'markersize': 4, 'color': 'red'},
     is_dotted_line: bool = False,
-    is_include_incorrect_paths: bool = False
+    is_include_incorrect_paths: bool = False,
+    is_ego: bool = False,
+    NRG: dict = NRG,
 ) -> tuple[Axes, list, list]:
 
     ax = Clear_Axes(axes=ax, close_spines=['top', 'right'], ifxticks=True, ifyticks=True)
@@ -27,7 +29,7 @@ def LocTimeCurveAxes(
     if given_x is None:
         assert behav_nodes is not None
         linearized_x = np.zeros_like(behav_nodes, np.float64)
-        graph = NRG[int(maze_type)]
+        graph = NRG[int(maze_type)] if is_ego == False else NRG
 
         try:
             for i in range(behav_nodes.shape[0]):

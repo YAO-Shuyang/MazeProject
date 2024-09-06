@@ -4,10 +4,13 @@ from tqdm import tqdm
 from mylib.stats.indept import indept_field_evolution_chi2, indept_field_evolution_mutual_info, indept_field_evolution_CI
 from mylib.maze_utils3 import GetDMatrices
 import copy as cp
+from mylib.maze_graph import correct_paths as CPs
+from mylib.maze_utils3 import spike_nodes_transform
 
 class RegisteredField(object):
-    def __init__(self, field_reg: np.ndarray) -> None:
+    def __init__(self, field_reg: np.ndarray, field_info: np.ndarray) -> None:
         self._content = field_reg
+        self._info = field_info
         self._session = field_reg.shape[0]
                 
     def report(self, thre: int = 4):
@@ -49,7 +52,6 @@ class RegisteredField(object):
                 non_recover_num = np.where((np.nansum(field_reg[i+1:j, :], axis=0)==0)&(field_reg[i, :] == 1)&(field_reg[j, :] == 0))[0]
                 off_next_prob[j-i-1, 0] += recover_num.shape[0]
                 off_next_prob[j-i-1, 1] += non_recover_num.shape[0]
-                
 
             idx = np.where((field_reg[i, :] == 1)&(field_reg[i+1, :] == 0))[0]
             silent_num += idx.shape[0]
@@ -118,6 +120,80 @@ class RegisteredField(object):
 
         return duration, start_sessions.flatten(), retained_prob.flatten(), conditional_recover_prob.flatten(), np.sum(on_next_prob, axis=1).flatten(), np.sum(off_next_prob, axis=1).flatten()
     
+    def report_with_position(self, thre: int = 4, seg_range: int = 8, maze_type: int = 1):
+        CP = CPs[maze_type]
+        
+        field_reg = self._content
+        field_info = self._info
+        
+        field_centers = np.zeros_like(field_info[:, :, 2], dtype=np.float64)-1
+        for i in range(field_info.shape[0]):
+            idx = np.where(np.isnan(field_info[i, :, 2]) == False)[0]
+            field_centers[i, idx] = spike_nodes_transform(field_info[i, idx, 2], 12)
+            
+        duration = np.repeat(np.arange(field_reg.shape[0]+1), CP.shape[0] - seg_range) # Retained duration, silent duration, not detected duration
+        segment_id = np.reshape(
+            np.repeat(np.arange(CP.shape[0] - seg_range)+1, field_reg.shape[0]+1),
+            [CP.shape[0] - seg_range, field_reg.shape[0]+1]
+        ).T
+        on_next_prob = np.zeros((field_reg.shape[0]+1, 2, CP.shape[0] - seg_range), dtype=np.int64) # State ON with duration t -> State ON/OFF/NOT DETECTED on the next sessions
+        off_next_prob = np.zeros((field_reg.shape[0]+1, 2, CP.shape[0] - seg_range), dtype=np.int64) # State OFF on Session t -> State ON DETECTED on Session t+1
+
+        for s in range(CP.shape[0] - seg_range):
+            for i in range(field_reg.shape[0]-1): 
+                for j in range(i+1, field_reg.shape[0]): 
+                    if i == 0: 
+
+                        base_num = np.where((np.sum(field_reg[i:j, :], axis=0)==j-i)&(field_reg[j, :] == 0))[0]
+                        active_num = np.where(np.sum(field_reg[i:j+1, :], axis=0)==j-i+1)[0]
+                        
+                        base_num_pos = base_num[np.isin(field_centers[i, base_num], CP[s:s+seg_range])]
+                        active_num_pos = active_num[np.isin(field_centers[i, active_num], CP[s:s+seg_range])]
+                        on_next_prob[j-i, 0, s] += active_num_pos.shape[0]
+                        on_next_prob[j-i, 1, s] += base_num_pos.shape[0]
+                    
+                    elif i == 1:
+                        base_num = np.where((np.sum(field_reg[i:j, :], axis=0)==j-i)&(field_reg[j, :] == 0)&(field_reg[i-1, :] != 1))[0]
+                        active_num = np.where((np.sum(field_reg[i:j+1, :], axis=0)==j-i+1)&(field_reg[i-1, :] != 1))[0]
+
+                        base_num_pos = base_num[np.isin(field_centers[i, base_num], CP[s:s+seg_range])]
+                        active_num_pos = active_num[np.isin(field_centers[i, active_num], CP[s:s+seg_range])]
+                        on_next_prob[j-i, 0, s] += active_num_pos.shape[0]
+                        on_next_prob[j-i, 1, s] += base_num_pos.shape[0]
+                
+                    else:
+                        base_num = np.where((np.sum(field_reg[i:j, :], axis=0)==j-i)&(field_reg[j, :] == 0)&
+                                            ((field_reg[i-1, :] == 0)|((np.isnan(field_reg[i-1, :]))&
+                                                                     (field_reg[i-2, :] != 1))))[0]
+                        active_num = np.where((np.sum(field_reg[i:j+1, :], axis=0)==j-i+1)&
+                                          ((field_reg[i-1, :] == 0)|((np.isnan(field_reg[i-1, :]))&
+                                                                     (field_reg[i-2, :] != 1))))[0]
+
+                        base_num_pos = base_num[np.isin(field_centers[i, base_num], CP[s:s+seg_range])]
+                        active_num_pos = active_num[np.isin(field_centers[i, active_num], CP[s:s+seg_range])]
+                        on_next_prob[j-i, 0, s] += active_num_pos.shape[0]
+                        on_next_prob[j-i, 1, s] += base_num_pos.shape[0]
+                
+                    if j == i + 1:
+                        continue
+                     
+                    recover_num = np.where((np.sum(field_reg[i+1:j, :], axis=0)==0)&(field_reg[i, :] == 1)&(field_reg[j, :] == 1))[0]
+                    non_recover_num = np.where((np.nansum(field_reg[i+1:j, :], axis=0)==0)&(field_reg[i, :] == 1)&(field_reg[j, :] == 0))[0]
+                    
+                    recover_num_pos = recover_num[np.isin(field_centers[i, recover_num], CP[s:s+seg_range])]
+                    non_recover_num_pos = non_recover_num[np.isin(field_centers[i, non_recover_num], CP[s:s+seg_range])]
+                    off_next_prob[j-i-1, 0, s] += recover_num_pos.shape[0]
+                    off_next_prob[j-i-1, 1, s] += non_recover_num_pos.shape[0]
+
+        retained_prob = on_next_prob[:, 0, :] / np.sum(on_next_prob, axis=1)
+        conditional_recover_prob = off_next_prob[:, 0, :] / np.sum(off_next_prob, axis=1)
+    
+        retained_prob[np.where(np.sum(on_next_prob, axis=1) <= thre)] = np.nan
+        conditional_recover_prob[np.where(np.sum(off_next_prob, axis=1) <= thre)] = np.nan
+        on_next_prob[-1, 0] = on_next_prob[-2, 0]
+
+        return duration, segment_id.flatten(), retained_prob.flatten(), conditional_recover_prob.flatten(), np.sum(on_next_prob, axis=1).flatten(), np.sum(off_next_prob, axis=1).flatten()
+    
     def count_lifespan(self):
         field_reg = self._content
         life_span = np.zeros(field_reg.shape[0], dtype=np.int64) # State ON with duration t -> State ON/OFF/NOT DETECTED on the next sessions
@@ -142,13 +218,17 @@ class RegisteredField(object):
         return np.arange(1, field_reg.shape[0]+1), life_span
     
     @staticmethod
-    def conditional_prob(field_reg, thre: int = 4, is_overal: bool = True):
-        Reg = RegisteredField(field_reg)
+    def conditional_prob(field_reg, field_info, thre: int = 4, category: str = 'all', seg_range: int = 8, maze_type: int = 1):
+        Reg = RegisteredField(field_reg, field_info)
         
-        if is_overal:
+        assert category in ['all', 'time', 'position']
+        
+        if category == 'all':
             return Reg.report(thre=thre)
-        else:
+        elif category == 'time':
             return Reg.report_with_initial_session(thre=thre, max_init_n=field_reg.shape[0] - 2)
+        elif category == 'position':
+            return Reg.report_with_position(thre=thre, seg_range=seg_range, maze_type=maze_type)
     
     @staticmethod
     def get_field_lifespans(field_reg: np.ndarray):

@@ -56,7 +56,8 @@ def GetPlaceField(
     events_num_crit: int = 10, 
     need_events_num: bool = True, 
     smooth_map: np.ndarray | None = None,
-    split_thre: float = 0.2
+    split_thre: float = 0.2,
+    reactivate_num: int = 5
 ) -> dict:
     """
     GeneratePlaceField: to generate all fields of the given cell.
@@ -106,7 +107,8 @@ def GetPlaceField(
         IS_QUALIFIED_FIELD, retain_fields = field_quality_control(spike_nodes=trace['spike_nodes'], 
                                                                   spikes=trace['Spikes'][n, :],
                                                                   ms_time=trace['ms_time_behav'], field_bins=subfield, 
-                                                                  events_num_crit = events_num_crit)
+                                                                  events_num_crit = events_num_crit,
+                                                                  reactivate_num = reactivate_num)
         #t5 = time.time()
         #print("     Field quality control: ", t5-t4)
         if IS_QUALIFIED_FIELD:
@@ -159,7 +161,8 @@ def field_quality_control(
     spikes: np.ndarray, 
     ms_time: np.ndarray,
     field_bins: np.ndarray, 
-    events_num_crit: int = 10
+    events_num_crit: int = 10,
+    reactivate_num: int = 5
 ) -> bool:
     field_bins_expanded = field_bins[:, np.newaxis]
     matches = (spike_nodes == field_bins_expanded) & (spikes == 1)
@@ -176,25 +179,34 @@ def field_quality_control(
     # Test the number of laps it distributed.
     dt = np.ediff1d(ms_time[total_indices])
     
-    if len(np.where(dt >= 10000)[0]) < 5:
+    if len(np.where(dt >= 10000)[0]) < reactivate_num:
         return False, None
     else:
         return True, field_bins
     
 # get all cell's place field
-def place_field(trace: dict, thre_type: int = 2, parameter: float = 0.4, events_num_crit: int = 10, need_events_num: bool = True, split_thre: float = 0.2):
+def place_field(
+    trace: dict, 
+    thre_type: int = 2, 
+    parameter: float = 0.4, 
+    events_num_crit: int = 10, 
+    need_events_num: bool = True, 
+    split_thre: float = 0.2,
+    reactivate_num: int = 5
+):
     place_field_all = []
     smooth_map_all = cp.deepcopy(trace['smooth_map_all'])
     maze_type = trace['maze_type']
     for k in tqdm(range(trace['n_neuron'])):
         a_field = GetPlaceField(
-                trace=trace, 
-                n=k, 
-                thre_type=thre_type, 
-                parameter=parameter, 
-                events_num_crit=events_num_crit, 
-                need_events_num=need_events_num,
-                split_thre=split_thre
+            trace=trace, 
+            n=k, 
+            thre_type=thre_type, 
+            parameter=parameter, 
+            events_num_crit=events_num_crit, 
+            need_events_num=need_events_num,
+            split_thre=split_thre,
+            reactivate_num=reactivate_num
         )
         place_field_all.append(a_field)
     print("    Place field has been generated successfully.")

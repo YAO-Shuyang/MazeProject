@@ -464,9 +464,7 @@ if __name__ == '__main__':
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
             
-        trace['p'] = f2['Path'][i]
-        for n in range(10):
-            trace[f'node {n}']['p'] = f2['Path'][i]
+        #trace = field_register_dsp(trace, overlap_thre=0.6)
         
         with open(f2['Trace File'][i], 'wb') as handle:
             pickle.dump(trace, handle)
