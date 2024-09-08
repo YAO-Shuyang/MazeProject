@@ -1,6 +1,6 @@
 # Track Field Across Route.
 
-from mylib.field.tracker import Tracker, get_field_ids
+from mylib.field.tracker import Tracker, TrackerDsp, get_field_ids
 from mylib.maze_graph import S2F, CP_DSP, NRG, Father2SonGraph
 from mylib.maze_utils3 import mkdir, Clear_Axes, spike_nodes_transform
 from mylib.calcium.axes.loc_time_curve import LocTimeCurveAxes
@@ -21,7 +21,14 @@ seg5 = np.array([66,65,64,63,75,74,62,50,51,39,38,37,49,61,73,85,97])
 seg6 = np.array([109,110,122,123,111,112,100])
 seg7 = np.array([99,87,88,76,77,89,101,102,114,113,125,124,136,137,138,126,127,115,116,117,129,141,142,130,131,132,144])
 
-def field_register_dsp(trace, overlap_thre: float, maze_type: int = 1, is_shuffle: bool = False, corr_thre: float = 0.3):
+def field_register_dsp_old(trace, overlap_thre: float, maze_type: int = 1, is_shuffle: bool = False, corr_thre: float = 0.3):
+    """
+    This method was similar to Chen, Yao et al., 2024
+    
+    Using overlaping of place fields to track and match place fields across routes.
+    
+    Now it is deprecated. 9/8/2024
+    """
     corrs = np.zeros((trace['n_neuron'], 2))
 
     for i in range(trace['n_neuron']):
@@ -33,17 +40,18 @@ def field_register_dsp(trace, overlap_thre: float, maze_type: int = 1, is_shuffl
             trace['node 5']['smooth_map_all'][i, :],
             trace['node 9']['smooth_map_all'][i, :]
         )[0]
+
         
     qualified_cell = np.where(
-        ((corrs[:, 0] > corr_thre)&(trace['node 0']['is_placecell'] == 1)&(trace['node 4']['is_placecell'] == 1)) | 
-        ((corrs[:, 1] > corr_thre)&(trace['node 5']['is_placecell'] == 1)&(trace['node 9']['is_placecell'] == 1))
+        ((corrs[:, 0] >= corr_thre)&(trace['node 0']['is_placecell'] == 1)&(trace['node 4']['is_placecell'] == 1)) | 
+        ((corrs[:, 1] >= corr_thre)&(trace['node 5']['is_placecell'] == 1)&(trace['node 9']['is_placecell'] == 1))
     )[0]
     
     n_neuron = trace['n_neuron']
     index_map = np.meshgrid(np.arange(1, n_neuron+1), np.arange(10))[0]
     place_field_all = [[trace[f'node {i}']['place_field_all'][k] for i in range(10)] for k in range(n_neuron)]
     is_placecell = np.vstack([trace[f'node {i}']['is_placecell'] for i in range(10)])
-    print(len(place_field_all), is_placecell.shape[1])
+
     smooth_map_all = np.full((10, n_neuron, 2304), np.nan)
     for i in range(10):
         smooth_map_all[i, :, :] = trace[f'node {i}']['smooth_map_all']
@@ -67,6 +75,66 @@ def field_register_dsp(trace, overlap_thre: float, maze_type: int = 1, is_shuffl
     trace['field_ids'] = field_ids[qualified_field]
     trace['place_field_all_multiroute'] = place_field_all
     trace['qualified_cell'] = qualified_cell
+    return trace
+
+
+def field_register_dsp(trace, corr_thre: float = 0.3):
+    """
+    This method was similar to Chen, Yao et al., 2024
+    
+    Using overlaping of place fields to track and match place fields across routes.
+    
+    Now it is deprecated. 9/8/2024
+    """
+    corrs = np.zeros((trace['n_neuron'], 2))
+
+    for i in range(trace['n_neuron']):
+        corrs[i, 0] = pearsonr(
+            trace['node 0']['smooth_map_all'][i, :],
+            trace['node 4']['smooth_map_all'][i, :]
+        )[0]
+        corrs[i, 1] = pearsonr(
+            trace['node 5']['smooth_map_all'][i, :],
+            trace['node 9']['smooth_map_all'][i, :]
+        )[0]
+
+        
+    qualified_cell = np.where(
+        ((corrs[:, 0] >= corr_thre)&(trace['node 0']['is_placecell'] == 1)&(trace['node 4']['is_placecell'] == 1)) | 
+        ((corrs[:, 1] >= corr_thre)&(trace['node 5']['is_placecell'] == 1)&(trace['node 9']['is_placecell'] == 1))
+    )[0]
+    
+    n_neuron = trace['n_neuron']
+    
+    print(f"Registering {n_neuron} neurons")
+    field_reg, field_info = TrackerDsp.field_register(trace)
+    
+    qualified_field = np.where(
+        np.isin(field_info[0, :, 0].astype(np.int64), qualified_cell+1)
+    )[0]
+    
+    trace['field_reg'] = field_reg[:, qualified_field]
+    trace['field_info'] = field_info[:, qualified_field, :]
+    trace['qualified_cell'] = qualified_cell
+    
+    segment_bins = [
+        np.concatenate([Father2SonGraph[i] for i in seg1]),
+        np.concatenate([Father2SonGraph[i] for i in seg2]),
+        np.concatenate([Father2SonGraph[i] for i in seg3]),
+        np.concatenate([Father2SonGraph[i] for i in seg4]),
+        np.concatenate([Father2SonGraph[i] for i in seg5]), 
+        np.concatenate([Father2SonGraph[i] for i in seg6]),
+        np.concatenate([Father2SonGraph[i] for i in seg7])
+    ]
+    
+    field_segs = np.zeros(qualified_field.shape[0])
+    field_centers = field_info[0, qualified_field, 2].astype(np.int64)
+    
+    for i in range(7):
+        field_segs[np.isin(field_centers, segment_bins[i])] = i+1
+        
+    trace['field_segs'] = field_segs
+        
     return trace
 
 def _get_range_dsp(
@@ -115,19 +183,20 @@ def proofread(trace, rate_thre: float = 5., min_spike_num: int = 3):
     place_field_all = cp.deepcopy(trace['place_field_all_multiroute']) 
     # (10, n_fields)
     field_centers = field_info[:, :, 2]
-    print(field_reg.shape, field_info.shape, smooth_map_all.shape, len(place_field_all))
     field_segs = np.zeros(field_to_cell.shape[1], dtype=np.int64)
     
     for i in range(field_reg.shape[1]):
-        
-        for init_ in np.where(field_reg[:, i] == 1)[0]:
+        idx = np.where(field_reg[:, i] == 1)[0]
+        for t in range(len(idx)):
+            init_ = idx[t]
             field_area = place_field_all[field_to_cell[init_, i]][init_][int(field_centers[init_, i])]
 
             overlap_bins = np.asarray([np.intersect1d(segment_bins[k], field_area).shape[0] for k in range(7)])
+            
             field_segs[i] = np.argmax(overlap_bins)+1
             
             # Backward proofread
-            if init_ != 0:    
+            if init_ != 0:
                 peak_rate = np.max(smooth_map_all[init_, field_to_cell[init_, i], field_area-1])
                 for prev in range(init_-1, -1, -1):
                     if field_reg[prev, i] == 1:
@@ -148,7 +217,7 @@ def proofread(trace, rate_thre: float = 5., min_spike_num: int = 3):
                     dt = np.where(np.ediff1d(trace[f'node {prev}']['ms_time_behav'][spike_idx]) > 10000)[0]
                     
                     if dt.shape[0] < min_spike_num-1:
-                        continue                  
+                        continue
                 
                     if np.max(smooth_map_all[prev, field_to_cell[init_, i], subfield-1]) <= peak_rate/rate_thre:
                         continue
@@ -224,15 +293,13 @@ def LocTimeCurve_with_Field(trace):
             )[0]
             
         idx = np.where(trace['field_info'][0, :, 0] == cell+1)[0]
-        field_shadow_colors = sns.color_palette("Spectral", len(idx))
+        field_shadow_colors = sns.color_palette("Spectral", idx.shape[0])
+        transformed_bins = _get_range_dsp(field_area)
         for i in range(idx.shape[0]):
+            k = int(trace['field_info'][j, idx[i], 2])
+            field_area = trace['place_field_all'][cell][j][k]
             for j in range(10):
                 if trace['field_reg'][j, idx[i]] == 1:
-                    k = int(trace['field_info'][j, idx[i], 2])
-                    field_area = trace['place_field_all_multiroute'][cell][j][k]
-                    transformed_bins = _get_range_dsp(field_area)
-                    
-            
                     t1 = trace[f'node {j}']['ms_time_behav'][0]/1000
                     t2 = trace[f'node {j}']['ms_time_behav'][-1]/1000
                 
@@ -243,8 +310,6 @@ def LocTimeCurve_with_Field(trace):
         t2 = trace['node 5']['ms_time_behav'][0]/1000
         t3 = trace['node 9']['ms_time_behav'][-1]/1000
         ax.set_yticks([0, t1, t2, t3], [0, t1, 0, t3-t2])
-        
-        shadow_colors = sns.color_palette("Set2", len(trace['place_field_all_multiroute'][cell]))
         
         plt.savefig(os.path.join(save_loc, f'{cell+1}.png'), dpi=600)
         plt.savefig(os.path.join(save_loc, f'{cell+1}.svg'), dpi=600)
@@ -262,12 +327,10 @@ if __name__ == '__main__':
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
         
-        trace = field_register_dsp(trace, overlap_thre=0.8, corr_thre=3)
-        trace = proofread(trace, rate_thre=4, min_spike_num=3)
-        
+        trace = field_register_dsp(trace, corr_thre=0.3)
+        #trace = proofread(trace, rate_thre=4, min_spike_num=3)
+
         with open(f2['Trace File'][i], 'wb') as handle:
             pickle.dump(trace, handle)
         #LocTimeCurve_with_Field(trace)
-        
-        
         

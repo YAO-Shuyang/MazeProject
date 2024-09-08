@@ -217,3 +217,42 @@ def get_field_number(trace: dict, key: str = 'place_field_all'):
     for i in range(trace['n_neuron']):
         num[i] = len(trace[key][i].keys())
     return num
+
+def place_field_dsp(
+    trace: dict, 
+    thre_type: int = 2, 
+    parameter: float = 0.4, 
+    events_num_crit: int = 10, 
+    need_events_num: bool = True, 
+    split_thre: float = 0.2,
+    reactivate_num: int = 5
+):
+    place_field_all = []
+    smooth_map_all = np.zeros((trace['n_neuron'], 10, 2304))
+    trace['Spikes'] = np.concatenate([trace[f'node {i}']['Spikes'] for i in range(10)], axis=1)
+    trace['spike_nodes'] = np.concatenate([trace[f'node {i}']['spike_nodes'] for i in range(10)])
+    trace['ms_time_behav'] = np.concatenate([trace[f'node {i}']['ms_time_behav'] for i in range(10)])
+    for i in range(10):
+        smooth_map_all[:, i, :] = trace[f'node {i}']['smooth_map_all']
+    trace['smooth_map_all'] = np.sum(smooth_map_all, axis=1)
+    
+    maze_type = trace['maze_type']
+    for k in tqdm(range(trace['n_neuron'])):
+        a_field = GetPlaceField(
+            trace=trace, 
+            n=k, 
+            thre_type=thre_type, 
+            parameter=parameter, 
+            events_num_crit=events_num_crit, 
+            need_events_num=need_events_num,
+            split_thre=split_thre,
+            reactivate_num=reactivate_num
+        )
+        place_field_all.append(a_field)
+    print("    Place field has been generated successfully.")
+
+    del trace['Spikes']
+    del trace['spike_nodes']
+    del trace['ms_time_behav']
+
+    return place_field_all
