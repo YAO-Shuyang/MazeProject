@@ -5,7 +5,7 @@ from matplotlib_venn import venn3, venn3_circles
 from mylib.dp_analysis import field_arange, plot_field_arange, BehaviorEventsAnalyzer
 from mylib.dp_analysis import plot_1day_line, plot_field_arange_all, FieldDisImage, ImageBase
 from mylib.diff_start_point import DSPMazeLapSplit
-from mylib.calcium.field_criteria import place_field
+from mylib.calcium.field_criteria import place_field, place_field_dsp
 from mylib.field.in_field import set_range
 from mylib import LocTimeCurveAxes
 

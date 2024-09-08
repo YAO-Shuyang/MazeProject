@@ -19,7 +19,7 @@ from mylib.behavior.behavevents import BehavEvents
 from mylib.maze_graph import correct_paths, NRG, Father2SonGraph, CP_DSP
 from mylib.maze_utils3 import Clear_Axes, DrawMazeProfile, clear_NAN, mkdir, SpikeNodes, SpikeType, GetDMatrices
 from mylib.maze_utils3 import plot_trajactory, spike_nodes_transform, SmoothMatrix, occu_time_transform
-from mylib.preprocessing_ms import coverage_curve, calc_speed, uniform_smooth_speed, calc_ratemap
+from mylib.preprocessing_ms import coverage_curve, calc_speed, uniform_smooth_speed, calc_ratemap, place_field_dsp
 from mylib.preprocessing_ms import plot_spike_monitor, calc_ms_speed
 from mylib.preprocessing_ms import calc_SI
 from mylib.divide_laps.lap_split import LapSplit
@@ -393,6 +393,11 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
 
     plot_spike_monitor(spike_num_mon1, spike_num_mon2, spike_num_mon3, spike_num_mon4, save_loc = os.path.join(trace['p'], 'behav'))
 
+    print("Total Place Fields:")
+    trace['place_field_all'] = place_field_dsp(
+        trace, thre_type=2, parameter=0.4, events_num_crit=10, need_events_num=True, split_thre=0.2, reactivate_num=5
+    )
+
     print("    C. Calculating firing rate for each neuron and identified their place fields (those areas which firing rate >= 50% peak rate)")
     # Set occu_time <= 50ms spatial bins as nan to avoid too big firing rate
 
@@ -465,6 +470,9 @@ if __name__ == '__main__':
             trace = pickle.load(handle)
             
         #trace = field_register_dsp(trace, overlap_thre=0.6)
+        trace['place_field_all'] = place_field_dsp(
+            trace, thre_type=2, parameter=0.4, events_num_crit=10, need_events_num=True, split_thre=0.2, reactivate_num=5
+        )
         
         with open(f2['Trace File'][i], 'wb') as handle:
             pickle.dump(trace, handle)

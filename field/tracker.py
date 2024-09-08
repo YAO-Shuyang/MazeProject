@@ -2,7 +2,7 @@ import numpy as np
 import warnings
 import pandas as pd
 from mylib.local_path import f1, f_CellReg_day, f3, f4
-from mylib.statistic_test import GetMultidayIndexmap, ReadCellReg
+from mylib.statistic_test import GetMultidayIndexmap, ReadCellReg, calc_ratemap
 from mylib.multiday.core import MultiDayCore
 from mylib.maze_utils3 import field_reallocate, GetDMatrices
 from tqdm import tqdm
@@ -543,7 +543,7 @@ class Tracker(object):
         overlap_thre: float = OVERLAP_THRE,
         maze_type: int = 1,
         is_shuffle: bool = False
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, list[list[dict]]]:
         """field_register: Register all place fields from the registered neuron
 
         Parameters
@@ -875,8 +875,156 @@ if __name__ == "__main__":
             prefix='trace_mdays_conc'
         )
 
-print("Overlap thre: ", OVERLAP_THRE)
-print("Reiterate times: ", REITERATE_TIMES)
-print("Merged field supreme: ", MERGED_FIELD_SUPREME)
-print("Merged Identify Threshold: ", MERGED_IDENTIFY_THRE)
-print("Merged Overlap Threshold: ", MERGED_OVERLAP_THRE)
+if __name__ == "__main__":
+    print("Overlap thre: ", OVERLAP_THRE)
+    print("Reiterate times: ", REITERATE_TIMES)
+    print("Merged field supreme: ", MERGED_FIELD_SUPREME)
+    print("Merged Identify Threshold: ", MERGED_IDENTIFY_THRE)
+    print("Merged Overlap Threshold: ", MERGED_OVERLAP_THRE)
+    
+import copy as cp
+class TrackerDsp(object):
+    def __init__(self):
+        pass
+    
+    def register(
+        self,
+        init_rate: np.ndarray,
+        field_area: np.ndarray,
+        Spikes: np.ndarray,
+        spike_nodes: np.ndarray,
+        occu_times: np.ndarray,
+        Ms: np.ndarray,
+        n_shuffle: int = 1000,
+        percent: int | float = 95
+    ):
+        assert len(init_rate) == 10
+        assert len(Spikes) == 10
+        assert len(spike_nodes) == 10
+        assert len(occu_times) == 10
+        
+        idxs = [
+            np.where(np.isin(spike_nodes[i], field_area))[0] for i in range(10)
+        ]
+        
+        n_spikes = np.sum(
+            [np.sum(Spikes[i][idxs[i]]) for i in range(10)]
+        )
+        
+        n_frames = np.sum(
+            [idxs[i].shape[0] for i in range(10)]
+        )
+        
+        rig_boundary = np.cumsum(
+            [idxs[i].shape[0] for i in range(10)]
+        )
+        lef_boundary = np.concatenate([[0], rig_boundary[:-1]])
+        
+        rates = np.zeros((n_shuffle, 10), np.float64)
+        
+        Spikes_rand = [[] for _ in range(10)]
+        
+        for i in range(n_shuffle):
+            Spikes = self.shuffle_spikes(
+                field_area=field_area,
+                Spikes=Spikes,
+                idxs=idxs,
+                n_spikes=n_spikes,
+                n_frames=n_frames,
+                lef_boundary=lef_boundary,
+                rig_boundary=rig_boundary
+            )
+            
+            for j in range(10):
+                Spikes_rand[j].append(Spikes[j])
+        
+        for j in range(10):
+            Spikes_rand[j] = np.vstack(Spikes_rand[j])
+    
+            smooth_rate = calc_ratemap(
+                Spikes=Spikes_rand[j],
+                spike_nodes=spike_nodes[j],
+                occu_times=occu_times[j],
+                Ms=Ms
+            )[2]
+            rates[:, j] = np.max(smooth_rate[field_area-1], axis=1)
+            
+        thre = np.percentile(rates, 100-percent, axis=0)
+        
+        reg = np.where((init_rate - thre >= 0)&(init_rate >= 0.4), 1, 0)
+        return reg
+        
+    
+    def shuffle_spikes(
+        self,
+        Spikes: np.ndarray,
+        idxs: list[np.ndarray],
+        n_spikes: int,
+        n_frames: int,
+        lef_boundary: np.ndarray,
+        rig_boundary: np.ndarray
+    ) -> np.ndarray:
+        spike_seq = np.zeros(n_frames)
+        spike_seq[np.random.choice(n_frames, n_spikes, replace=False)] = 1
+        
+        for i in range(10):
+            Spikes[i][idxs[i]] = 0
+            Spikes[i][idxs[i]] = spike_seq[lef_boundary[i]:rig_boundary[i]]
+        
+        return Spikes
+        
+        
+    
+    @staticmethod
+    def field_register(trace, n_shuffle=1000) -> tuple[np.ndarray, np.ndarray]:
+        field_reg = []
+        field_info = []
+        
+        Spikes = cp.deepcopy([
+            trace[f'node {i}']['Spikes'] for i in range(10)
+        ])
+        
+        spike_nodes = [
+            trace[f'node {i}']['spike_nodes'] for i in range(10)
+        ]
+        
+        occu_time = cp.deepcopy([
+            trace[f'node {i}']['occu_time_spf'] for i in range(10)
+        ])
+        
+        for i in tqdm(range(trace['n_neuron'])):
+            for k in trace['place_field_all'][i].keys():
+                tracker = TrackerDsp()
+                field_area = trace['place_field_all'][i][k]
+                reg = tracker.register(
+                    init_rate=np.array([
+                        np.max(trace[f'node {j}']['smooth_map_all'][i, field_area-1]) for j in range(10)
+                    ]),
+                    field_area=field_area,
+                    Spikes=[Spikes[j][i, :] for j in range(10)],
+                    spike_nodes=cp.deepcopy(spike_nodes),
+                    occu_times=occu_time,
+                    n_shuffle=n_shuffle, 
+                    Ms=trace['Ms']
+                )
+                
+                if np.sum(reg) == 0:
+                    del trace['place_field_all'][i][k]
+                else:
+                    info = np.full((10, 4), np.nan)
+                    info[:, 0] = i+1
+                    info[:, 1] = np.array([
+                        trace[f'node {j}']['is_placecell'][i] for j in range(10)
+                    ])
+                    info[:, 2] = k
+                    info[:, 3] = len(field_area)
+                    
+                    field_reg.append(reg)
+                    field_info.append(info)
+        
+        field_reg = np.hstack(field_reg).astype(np.int64)
+        info = np.zeros((field_reg.shape[0], field_reg.shape[1], 4), np.float64)
+        for i in range(field_reg.shape[1]):
+            info[:, i, :] = field_info[i]
+        
+        return field_reg, info
