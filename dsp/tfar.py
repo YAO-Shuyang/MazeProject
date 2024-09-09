@@ -107,14 +107,10 @@ def field_register_dsp(trace, corr_thre: float = 0.3):
     n_neuron = trace['n_neuron']
     
     print(f"Registering {n_neuron} neurons")
-    field_reg, field_info = TrackerDsp.field_register(trace)
+    field_reg, field_info = TrackerDsp.field_register(trace, qualified_cells=qualified_cell)
     
-    qualified_field = np.where(
-        np.isin(field_info[0, :, 0].astype(np.int64), qualified_cell+1)
-    )[0]
-    
-    trace['field_reg'] = field_reg[:, qualified_field]
-    trace['field_info'] = field_info[:, qualified_field, :]
+    trace['field_reg'] = field_reg
+    trace['field_info'] = field_info
     trace['qualified_cell'] = qualified_cell
     
     segment_bins = [
@@ -127,8 +123,8 @@ def field_register_dsp(trace, corr_thre: float = 0.3):
         np.concatenate([Father2SonGraph[i] for i in seg7])
     ]
     
-    field_segs = np.zeros(qualified_field.shape[0])
-    field_centers = field_info[0, qualified_field, 2].astype(np.int64)
+    field_segs = np.zeros(field_reg.shape[1])
+    field_centers = field_info[0, :, 2].astype(np.int64)
     
     for i in range(7):
         field_segs[np.isin(field_centers, segment_bins[i])] = i+1
@@ -294,10 +290,11 @@ def LocTimeCurve_with_Field(trace):
             
         idx = np.where(trace['field_info'][0, :, 0] == cell+1)[0]
         field_shadow_colors = sns.color_palette("Spectral", idx.shape[0])
-        transformed_bins = _get_range_dsp(field_area)
+        
         for i in range(idx.shape[0]):
-            k = int(trace['field_info'][j, idx[i], 2])
-            field_area = trace['place_field_all'][cell][j][k]
+            k = int(trace['field_info'][0, idx[i], 2])
+            field_area = trace['place_field_all'][cell][k]
+            transformed_bins = _get_range_dsp(field_area)
             for j in range(10):
                 if trace['field_reg'][j, idx[i]] == 1:
                     t1 = trace[f'node {j}']['ms_time_behav'][0]/1000
@@ -322,15 +319,15 @@ if __name__ == '__main__':
     import pickle
     from mylib.calcium.field_criteria import place_field
     
-    for i in range(len(f2)):     
+    for i in range(19, 20):     
         print(i, f2['MiceID'][i], f2['date'][i])   
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
         
-        trace = field_register_dsp(trace, corr_thre=0.3)
+        #trace = field_register_dsp(trace, corr_thre=0.3)
         #trace = proofread(trace, rate_thre=4, min_spike_num=3)
 
-        with open(f2['Trace File'][i], 'wb') as handle:
-            pickle.dump(trace, handle)
-        #LocTimeCurve_with_Field(trace)
+        #with open(f2['Trace File'][i], 'wb') as handle:
+        #    pickle.dump(trace, handle)
+        LocTimeCurve_with_Field(trace)
         
