@@ -68,7 +68,7 @@ def shuffle_test_isi(SI, spikes, spike_nodes, occu_time, shuffle_n = 1000, Ms = 
     # occu_time: numpy,ndarray, shape:(2304,), is the behaviral occupation time at each spatial bin
     SI_rand = np.zeros(shuffle_n) # 1000 times
     t_total = np.nansum(occu_time)/1000
-    t_nodes_frac = occu_time/1000/ (t_total+ 1E-6) 
+    t_nodes_frac = occu_time/1000/ (t_total+ 1E-6)
     spike_ind = np.where(spikes==1)[0] # spike index
     isi = np.append(spike_ind[0], np.ediff1d(spike_ind)) # get interspike interval
 

@@ -667,7 +667,7 @@ def AllocentricFieldProportion_DSP_Interface(trace, variable_names = None):
         check_variable = ['Segment', 'Proportion']
     )
     
-    field_reg = trace['field_reg']
+    field_reg = trace['field_reg_modi']
     field_segs = trace['field_segs']
 
     prop = np.ones(6)
@@ -678,10 +678,10 @@ def AllocentricFieldProportion_DSP_Interface(trace, variable_names = None):
         allo_field_idx = np.where(
             (field_segs == seg+1) & 
             (
-                (field_reg[0, :] == 1) |
-                (field_reg[4, :] == 1) |
-                (field_reg[5, :] == 1) |
-                (field_reg[9, :] == 1)
+                (field_reg[0, :] >= 1) |
+                (field_reg[4, :] >= 1) |
+                (field_reg[5, :] >= 1) |
+                (field_reg[9, :] >= 1)
             ) &
             (np.sum(field_reg[1:4, :], axis=0)+np.sum(field_reg[6:9, :], axis=0) == seg)
         )[0]
@@ -696,7 +696,7 @@ def FieldStateSwitchWithSegment_DSP_Interface(trace, variable_names = None):
         check_variable = ['Segment', 'Proportion', 'Category']
     )
     
-    field_reg = trace['field_reg']
+    field_reg = trace['field_reg_modi']
     field_segs = trace['field_segs']
     
     segments = np.concatenate([np.arange(7) for i in range(9)])
@@ -713,19 +713,19 @@ def FieldStateSwitchWithSegment_DSP_Interface(trace, variable_names = None):
         formed_field_idx = np.where(
             (field_segs == seg+1) &
             (field_reg[0, :] == 0) &
-            (field_reg[4, :] == 1)
+            (field_reg[4, :] >= 1)
         )[0]
         
         disped_field_idx = np.where(
             (field_segs == seg+1) &
-            (field_reg[0, :] == 1) &
+            (field_reg[0, :] >= 1) &
             (field_reg[4, :] == 0)
         )[0]
         
         retain_field_idx = np.where(
             (field_segs == seg+1) &
-            (field_reg[0, :] == 1) &
-            (field_reg[4, :] == 1)
+            (field_reg[0, :] >= 1) &
+            (field_reg[4, :] >= 1)
         )[0]
         
         prop[(seg-1)] = formed_field_idx.shape[0] / field_idx.shape[0]
@@ -741,19 +741,19 @@ def FieldStateSwitchWithSegment_DSP_Interface(trace, variable_names = None):
         formed_field_idx = np.where(
             (field_segs == seg+1) &
             (field_reg[5, :] == 0) &
-            (field_reg[9, :] == 1)
+            (field_reg[9, :] >= 1)
         )[0]
         
         disped_field_idx = np.where(
             (field_segs == seg+1) &
-            (field_reg[5, :] == 1) &
+            (field_reg[5, :] >= 1) &
             (field_reg[9, :] == 0)
         )[0]
         
         retain_field_idx = np.where(
             (field_segs == seg+1) &
-            (field_reg[5, :] == 1) &
-            (field_reg[9, :] == 1)
+            (field_reg[5, :] >= 1) &
+            (field_reg[9, :] >= 1)
         )[0]
         
         prop[(seg-1) + 21] = formed_field_idx.shape[0] / field_idx.shape[0]
@@ -769,19 +769,19 @@ def FieldStateSwitchWithSegment_DSP_Interface(trace, variable_names = None):
         formed_field_idx = np.where(
             (field_segs == seg+1) &
             (field_reg[4, :] == 0) &
-            (field_reg[5, :] == 1)
+            (field_reg[5, :] >= 1)
         )[0]
         
         disped_field_idx = np.where(
             (field_segs == seg+1) &
-            (field_reg[4, :] == 1) &
+            (field_reg[4, :] >= 1) &
             (field_reg[5, :] == 0)
         )[0]
         
         retain_field_idx = np.where(
             (field_segs == seg+1) &
-            (field_reg[4, :] == 1) &
-            (field_reg[5, :] == 1)
+            (field_reg[4, :] >= 1) &
+            (field_reg[5, :] >= 1)
         )[0]
         
         prop[(seg-1) + 42] = formed_field_idx.shape[0] / field_idx.shape[0]

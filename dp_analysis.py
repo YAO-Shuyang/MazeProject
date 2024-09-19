@@ -25,6 +25,7 @@ import seaborn as sns
 def field_arange(trace, is_pc: bool = True):
     num = np.zeros(144, dtype=np.int64)
     n = trace['n_neuron']
+    
     place_field_all = trace['place_field_all']
     
     if np.nansum(trace['is_placecell']) <= 50:

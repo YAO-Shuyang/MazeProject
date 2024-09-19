@@ -227,6 +227,7 @@ def place_field_dsp(
     split_thre: float = 0.2,
     reactivate_num: int = 5
 ):
+    G = maze_graphs[(1, 48)]
     place_field_all = []
     smooth_map_all = np.zeros((trace['n_neuron'], 10, 2304))
     trace['Spikes'] = np.concatenate([trace[f'node {i}']['Spikes'] for i in range(10)], axis=1)
@@ -234,6 +235,17 @@ def place_field_dsp(
     trace['ms_time_behav'] = np.concatenate([trace[f'node {i}']['ms_time_behav'] for i in range(10)])
     for i in range(10):
         smooth_map_all[:, i, :] = trace[f'node {i}']['smooth_map_all']
+        for n in range(trace['n_neuron']):
+            idx = np.where(trace[f'node {i}']['Spikes'][n, :] == 1)[0]
+            spike_bins = np.unique(trace[f'node {i}']['spike_nodes'][idx])
+            extended_bins = []
+            for j in spike_bins:
+                extended_bins += G[j]
+        
+            extended_bins = np.unique(extended_bins)
+            remove_bins = np.setdiff1d(np.arange(1, 2305), extended_bins)
+            smooth_map_all[n, i, remove_bins-1] = 0
+            
     trace['smooth_map_all'] = np.sum(smooth_map_all, axis=1)
     
     maze_type = trace['maze_type']
