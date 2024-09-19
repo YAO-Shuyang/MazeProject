@@ -9,6 +9,12 @@ from tqdm import tqdm
 import os
 import pickle
 import gc
+import matplotlib.pyplot as plt
+import time
+from mylib.maze_utils3 import Clear_Axes
+from mazepy.datastruc.neuact import SpikeTrain
+from mazepy.basic._utils import _convert_to_kilosort_form
+from mazepy.basic._calc_rate import _get_kilosort_spike_counts
 
 OVERLAP_THRE = 0.75
 REITERATE_TIMES = 3
@@ -792,96 +798,7 @@ def main(
     with open(os.path.join(os.path.dirname(cellreg_dir), prefix+appendix+".pkl"), 'wb') as handle:
         print(os.path.join(os.path.dirname(cellreg_dir), prefix+appendix+".pkl"))
         pickle.dump(DATA, handle)
-
-
-if __name__ == "__main__":  
-    import pickle
-    from mylib.local_path import f_CellReg_modi as f
-    from tqdm import tqdm
-    from mylib.maze_utils3 import mkdir
-    import shutil
-
-
-    work_folder = r"F:\trace_multiday_0.75_ovelapdecide"
-    mkdir(work_folder)
-    for i in range(len(f)):
-        if f['include'][i] == 0:
-            continue
-        
-        p = os.path.join(work_folder, str(i)+'.pkl')
-        print(p)
-        shutil.copy(f['Trace File'][i], p)
-
-    for i in tqdm(range(8, len(f))):
-        if f['include'][i] == 0:
-            continue
-        
-        if f['maze_type'][i] == 0:
-            continue
-        """
-        with open(f['Trace File'][i], 'rb') as handle:
-            trace = pickle.load(handle)
-        
-        j = 50
-        idx = np.where(trace['field_ids'] == j)[0]
-        print(trace['field_ids'][idx])
-        print(trace['field_info'][:, idx, 0])
-
-        """
-        is_shuffle = f['Type'][i] == 'Shuffle'
-
-        if f['paradigm'][i] == 'CrossMaze':
-            if f['maze_type'][i] == 0:
-                index_map = GetMultidayIndexmap(
-                    mouse=f['MiceID'][i],
-                    stage=f['Stage'][i],
-                    session=f['session'][i],
-                    occu_num=2
-                )    
-            else:
-                with open(f['cellreg_folder'][i], 'rb') as handle:
-                    index_map = pickle.load(handle)
-        else:
-            index_map = ReadCellReg(f['cellreg_folder'][i])
-        """
-        # CellReg
-        try:
-            index_map = GetMultidayIndexmap(
-                    mouse=f['MiceID'][i],
-                    stage=f['Stage'][i],
-                    session=f['session'][i],
-                    occu_num=2
-            )            
-        except:
-            index_map = ReadCellReg(f['cellreg_folder'][i])
-        """        
-        index_map[np.where((index_map < 0)|np.isnan(index_map))] = 0
-        mat = np.where(index_map>0, 1, 0)
-        num = np.sum(mat, axis = 0)
-        index_map = index_map[:, np.where(num >= 2)[0]]
-        print(index_map.shape)
-        main(
-            i=i,
-            f=f,
-            index_map=index_map,
-            overlap_thre=OVERLAP_THRE, 
-            cellreg_dir=f['cellreg_folder'][i],
-            mouse=f['MiceID'][i], 
-            stage=f['Stage'][i], 
-            session=f['session'][i], 
-            maze_type=f['maze_type'][i], 
-            behavior_paradigm=f['paradigm'][i], 
-            is_shuffle=is_shuffle, 
-            prefix='trace_mdays_conc'
-        )
-
-if __name__ == "__main__":
-    print("Overlap thre: ", OVERLAP_THRE)
-    print("Reiterate times: ", REITERATE_TIMES)
-    print("Merged field supreme: ", MERGED_FIELD_SUPREME)
-    print("Merged Identify Threshold: ", MERGED_IDENTIFY_THRE)
-    print("Merged Overlap Threshold: ", MERGED_OVERLAP_THRE)
-    
+          
 import copy as cp
 from mazepy.datastruc.neuact import SpikeTrain
 from mazepy.datastruc.variables import Variable1D
@@ -925,7 +842,7 @@ class TrackerDsp(object):
         rates = np.zeros((n_shuffle, 10), np.float64)
         
         Spikes_rand = [[] for _ in range(10)]
-        
+
         for i in range(n_shuffle):
             Spikes = self.shuffle_spikes(
                 Spikes=Spikes,
@@ -935,28 +852,42 @@ class TrackerDsp(object):
                 lef_boundary=lef_boundary,
                 rig_boundary=rig_boundary
             )
-            
             for j in range(10):
                 Spikes_rand[j].append(Spikes[j][idxs[j]])
-        
+                
         for j in range(10):
             Spikes_rand[j] = np.vstack(Spikes_rand[j])
+            if Spikes_rand[j].shape[1] == 0:
+                continue
             
-            smooth_rate = calc_ratemap(
-                Spikes=Spikes_rand[j],
-                spike_nodes=spike_nodes[j][idxs[j]],
-                occu_time=occu_time[j],
-                Ms=Ms
-            )[2]
+            try:
+                res = _convert_to_kilosort_form(Spikes_rand[j])
+                kilosort_spikes = res[0, :]
+                kilosort_variables = spike_nodes[j][res[1, :]]
+                spike_counts = _get_kilosort_spike_counts(
+                    kilosort_spikes.astype(np.int64),
+                    kilosort_variables.astype(np.int64),
+                    2304
+                )  
+              
+                rate = spike_counts/(occu_time[j]/1000)
+                rate[np.isnan(rate)] = 0
+                smooth_rate = rate#rate @ Ms.T
+                rates[:smooth_rate.shape[0], j] = np.max(smooth_rate[:, field_area-1], axis=1)
+            except:
+                smooth_rate = calc_ratemap(
+                    Spikes=Spikes_rand[j],
+                    spike_nodes=spike_nodes[j][idxs[j]],
+                    occu_time=occu_time[j],
+                    Ms=Ms
+                )[2]
              
-            rates[:, j] = np.max(smooth_rate[:, field_area-1], axis=1)
-            
-        thre = np.percentile(rates, 100-percent, axis=0)
+                rates[:, j] = np.max(smooth_rate[:, field_area-1], axis=1)
         
+        thre = np.percentile(rates, 100-percent, axis=0)
         reg = np.where((init_rate - thre >= 0)&(init_rate >= 0.4), 1, 0)
         return reg
         
-    
     def shuffle_spikes(
         self,
         Spikes: np.ndarray,
@@ -974,8 +905,98 @@ class TrackerDsp(object):
             Spikes[i][idxs[i]] = spike_seq[lef_boundary[i]:rig_boundary[i]]
         
         return Spikes
+    
+    @staticmethod
+    def visualize_single_field(
+        trace, 
+        cell: int,
+        field_center: int,
+        save_loc: str,
+        file_name: str | None = None,
+        n_shuffle: int = 1000
+    ):
+        if field_center not in trace['place_field_all'][cell].keys():
+            raise ValueError(
+                f"Field {field_center} not found in cell {cell}."
+                f"Only {list(trace['place_field_all'][cell].keys())} are available."
+            )
+
+        Spikes = cp.deepcopy([
+            trace[f'node {i}']['Spikes'] for i in range(10)
+        ])
+        
+        spike_nodes = [
+            trace[f'node {i}']['spike_nodes'] for i in range(10)
+        ]
+        
+        occu_time = cp.deepcopy([
+            trace[f'node {i}']['occu_time_spf'] for i in range(10)
+        ])
+        
+        field_area = trace['place_field_all'][cell][field_center]
+        init_rate = np.array([
+                np.max(trace[f'node {j}']['smooth_map_all'][cell, field_area-1]) for j in range(10)
+            ])
+        tracker = TrackerDsp()
+        reg, shuf_rate = tracker.register(
+            init_rate=init_rate,
+            field_area=field_area,
+            Spikes=[Spikes[j][cell, :] for j in range(10)],
+            spike_nodes=cp.deepcopy(spike_nodes),
+            occu_time=occu_time,
+            n_shuffle=n_shuffle, 
+            Ms=trace['Ms'],
+            is_return_shuffle=True
+        )
+        
+        v_max = max(np.max(shuf_rate), np.max(init_rate))
+        v_max = max(int(v_max * 1.1), 1)
+        min_thre, max_thre = np.percentile(shuf_rate, [5, 100], axis=0)
+        
+
+        # Visualize Radar Chart.
+        angles = np.linspace(0, 2*np.pi, 10, endpoint=False)
+        
+        min_thre = np.append(min_thre, min_thre[0])
+        max_thre = np.append(max_thre, max_thre[0])
+        angles = np.append(angles, angles[0])
+        init_rate = np.append(init_rate, init_rate[0])
+        
+        fig = plt.figure(figsize=(4, 4))
+        ax = plt.subplot(111, projection='polar')
+        
+        colors = ['#A9CCE3', '#A8DADC', '#9C8FBC', '#D9A6A9', '#A9CCE3', 
+                  '#A9CCE3', '#F2E2C5', '#647D91', '#C06C84', '#A9CCE3']
+            
+        ax.fill(angles, max_thre, color='grey', alpha=0.3, edgecolor = None)
+        ax.fill(angles, min_thre, color='white', edgecolor = None)
+        ax.plot(angles, init_rate, color = 'k', linewidth = 0.5)
+            
+        ax.set_aspect('equal')
+        
+        ax.set_theta_offset(np.pi / 2)
+        ax.set_theta_direction(-1)
         
         
+        labels = ['1a', '2', '3', '4', '1b', '1c', '5', '6', '7', '1d']
+        ax.set_thetagrids(np.degrees(angles[:-1]), labels)
+    
+        ax.spines['polar'].set_linewidth(0.5)
+        
+        for i, line in enumerate(ax.yaxis.get_gridlines()):
+            line.set_linewidth(0.5)
+        
+        for i, line in enumerate(ax.xaxis.get_gridlines()):
+            line.set_linewidth(0.5)
+            line.set_color(colors[i])
+    
+        ax.set_ylim(0, v_max)    
+        if file_name is None:
+            file_name = f'Cell_{cell+1}_Field_{field_center}'
+        
+        plt.savefig(os.path.join(save_loc, file_name + '.png'), dpi=600)
+        plt.savefig(os.path.join(save_loc, file_name + '.svg'))
+        plt.close()
     
     @staticmethod
     def field_register(trace, n_shuffle=1000, qualified_cells = None) -> tuple[np.ndarray, np.ndarray]:
@@ -1039,3 +1060,16 @@ class TrackerDsp(object):
             info[:, i, :] = field_info[i]
         
         return field_reg, info
+    
+if __name__ == '__main__':
+    with open(r"E:\Data\Dsp_maze\10227\20231010\trace.pkl", 'rb') as f:
+        trace = pickle.load(f)
+        
+    tracker = TrackerDsp()
+    field_reg, field_info = tracker.field_register(trace, n_shuffle=1000)
+    
+    with open(r"E:\Data\Dsp_maze\10227\20231010\field_reg.pkl", 'wb') as f:
+        pickle.dump(field_reg, f)
+        
+    with open(r"E:\Data\Dsp_maze\10227\20231010\field_info.pkl", 'wb') as f:
+        pickle.dump(field_info, f)

@@ -143,129 +143,43 @@ def _get_range_dsp(
     return transformed_bin
 
 
-def proofread(trace, rate_thre: float = 5., min_spike_num: int = 3):
-    segment_bins = [
-        np.concatenate([Father2SonGraph[i] for i in seg1]),
-        np.concatenate([Father2SonGraph[i] for i in seg2]),
-        np.concatenate([Father2SonGraph[i] for i in seg3]),
-        np.concatenate([Father2SonGraph[i] for i in seg4]),
-        np.concatenate([Father2SonGraph[i] for i in seg5]), 
-        np.concatenate([Father2SonGraph[i] for i in seg6]),
-        np.concatenate([Father2SonGraph[i] for i in seg7])
-    ]
-    
-    route_with_seg = [
-        np.array([0, 4, 5, 9]),
-        np.array([0, 4, 5, 6, 9]),
-        np.array([0, 1, 4, 5, 6, 9]),
-        np.array([0, 1, 4, 5, 6, 7, 9]),
-        np.array([0, 1, 2, 4, 5, 6, 7, 9]),
-        np.array([0, 1, 2, 4, 5, 6, 7, 8, 9]),
-        np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-    ]
-    
-    n_neuron = trace['n_neuron']
-    index_map = np.meshgrid(np.arange(1, n_neuron+1), np.arange(10))[0]
-    place_field_all = [[trace[f'node {i}']['place_field_all'][k] for i in range(10)] for k in range(n_neuron)]
-    is_placecell = np.vstack([trace[f'node {i}']['is_placecell'] for i in range(10)])
-    smooth_map_all = np.full((10, n_neuron, 2304), np.nan)
-    for i in range(10):
-        smooth_map_all[i, :, :] = trace[f'node {i}']['smooth_map_all']
-        
-    field_reg, field_info = cp.deepcopy(trace['field_reg']), cp.deepcopy(trace['field_info'])
-    
-    field_to_cell = field_info[:, :, 0].astype(np.int64)-1 # (10, n_fields)
-    # (list, (n_neuron, 10, dict where the number of keys is n_fields_of_each_neuron))
-    place_field_all = cp.deepcopy(trace['place_field_all_multiroute']) 
-    # (10, n_fields)
-    field_centers = field_info[:, :, 2]
-    field_segs = np.zeros(field_to_cell.shape[1], dtype=np.int64)
+def proofread(trace, min_reactivate_num: int = 5, min_spike_num: int = 5):
+    field_reg = trace['field_reg']
+    field_info = trace['field_info']
     
     for i in range(field_reg.shape[1]):
-        idx = np.where(field_reg[:, i] == 1)[0]
-        for t in range(len(idx)):
-            init_ = idx[t]
-            field_area = place_field_all[field_to_cell[init_, i]][init_][int(field_centers[init_, i])]
-
-            overlap_bins = np.asarray([np.intersect1d(segment_bins[k], field_area).shape[0] for k in range(7)])
-            
-            field_segs[i] = np.argmax(overlap_bins)+1
-            
-            # Backward proofread
-            if init_ != 0:
-                peak_rate = np.max(smooth_map_all[init_, field_to_cell[init_, i], field_area-1])
-                for prev in range(init_-1, -1, -1):
-                    if field_reg[prev, i] == 1:
-                        break
-                    
-                    if prev not in route_with_seg[field_segs[i]-1]:
-                        continue
-                    
-                    subfield = cp.deepcopy(field_area)
-                    for j in place_field_all[field_to_cell[init_, i]][prev].keys():
-                        subfield = np.setdiff1d(subfield, place_field_all[field_to_cell[init_, i]][prev][j])
-                    
-                    spike_idx = np.where(
-                        (np.isin(trace[f'node {prev}']['spike_nodes'], subfield)) & 
-                        (trace[f'node {prev}']['Spikes'][field_to_cell[init_, i], :] == 1)
-                    )[0]
-                    
-                    dt = np.where(np.ediff1d(trace[f'node {prev}']['ms_time_behav'][spike_idx]) > 10000)[0]
-                    
-                    if dt.shape[0] < min_spike_num-1:
-                        continue
+        for j in range(field_reg.shape[0]):
+            # Check if the field satisfies the criteria.
+            cell = int(field_info[j, i, 0])
+            field_center = int(field_info[j, i, 2])
+            field_area = trace['place_field_all'][cell-1][field_center]
                 
-                    if np.max(smooth_map_all[prev, field_to_cell[init_, i], subfield-1]) <= peak_rate/rate_thre:
-                        continue
-                    else:
-                        field_reg[prev, i] = 1
-                        field_info[prev, i, 0] = field_to_cell[init_, i]+1
-                        field_info[prev, i, 2] = field_centers[init_, i]
-                        peak_rate = np.max(smooth_map_all[prev, field_to_cell[init_, i], field_area-1])
-                        place_field_all[field_to_cell[init_, i]][prev][int(field_centers[init_, i])] = field_area
-                    
-            # Forward proofread
-            if init_ != field_reg.shape[0]-1:
-                for next_ in range(init_+1, field_reg.shape[0]-1):
-                    
-                    if field_reg[next_, i] == 1:
-                        break
-                    
-                    if next_ not in route_with_seg[field_segs[i]-1]:
-                        continue
+            idx = np.where((np.isin(
+                trace[f'node {j}']['spike_nodes'], field_area
+            )) & (trace[f'node {j}']['Spikes'][cell-1, :] == 1))[0]
                 
-                    subfield = cp.deepcopy(field_area)
-                    for j in place_field_all[field_to_cell[init_, i]][next_].keys():
-                        subfield = np.setdiff1d(subfield, place_field_all[field_to_cell[init_, i]][next_][j])
+            spike_num = idx.shape[0]
+            dt = np.ediff1d(trace[f'node {j}']['ms_time_behav'][idx])
+            n_react = np.where(dt >= 10000)[0].shape[0]
+            
+            if field_reg[j, i] == 1:    
+                # Too little spikes
+                if spike_num < min_spike_num or n_react < min_reactivate_num-1:
+                    field_reg[j, i] = 0
                     
-                    spike_idx = np.where(
-                        (np.isin(trace[f'node {next_}']['spike_nodes'], subfield)) & 
-                        (trace[f'node {next_}']['Spikes'][field_to_cell[init_, i], :] == 1)
-                    )[0]
-                    
-                    dt = np.where(np.ediff1d(trace[f'node {next_}']['ms_time_behav'][spike_idx]) > 10000)[0]
-                    
-                    if dt.shape[0] < min_spike_num-1:
-                        continue
-                        
-                    if np.max(smooth_map_all[next_, field_to_cell[init_, i], subfield-1]) <= peak_rate/rate_thre:
-                        continue
-                    else:
-                        field_reg[next_, i] = 1
-                        field_info[next_, i, 0] = field_to_cell[init_, i]+1
-                        field_info[next_, i, 2] = field_centers[init_, i]
-                        peak_rate = np.max(smooth_map_all[next_, field_to_cell[init_, i], field_area-1])
-                        place_field_all[field_to_cell[init_, i]][next_][int(field_centers[init_, i])] = field_area
+            elif field_reg[j, i] == 0:
+                # Check if whether it is a weakened field or it is genuinely not active.
+                if spike_num >= min_spike_num and n_react >= min_reactivate_num-1:
+                    field_reg[j, i] = 2
     
-    trace['field_reg'] = field_reg
-    trace['field_info'] = field_info
-    trace['place_field_all_multiroute'] = place_field_all
-    trace['field_segs'] = field_segs
+    trace['field_reg_modi'] = field_reg
+    
     return trace
+                
     
 def LocTimeCurve_with_Field(trace):
     save_loc = os.path.join(trace['p'], "LocTimeCurve with Field")
-    mkdir(save_loc)   
+    mkdir(save_loc)
     
     fig = plt.figure(figsize=(3, 4))
     ax = Clear_Axes(plt.axes(), close_spines=['top', 'right'], ifxticks=True, ifyticks=True)    
@@ -296,7 +210,7 @@ def LocTimeCurve_with_Field(trace):
             field_area = trace['place_field_all'][cell][k]
             transformed_bins = _get_range_dsp(field_area)
             for j in range(10):
-                if trace['field_reg'][j, idx[i]] == 1:
+                if trace['field_reg'][j, idx[i]] >= 1:
                     t1 = trace[f'node {j}']['ms_time_behav'][0]/1000
                     t2 = trace[f'node {j}']['ms_time_behav'][-1]/1000
                 
@@ -317,17 +231,26 @@ def LocTimeCurve_with_Field(trace):
 if __name__ == '__main__':
     from mylib.local_path import f2
     import pickle
-    from mylib.calcium.field_criteria import place_field
+    from mylib.calcium.field_criteria import place_field_dsp
+    from mylib.maze_utils3 import SmoothMatrix
     
-    for i in range(19, 20):     
+    for i in range(22, 28):
         print(i, f2['MiceID'][i], f2['date'][i])   
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
+        """
+        trace['place_field_all'] = place_field_dsp(
+            trace=trace,
+            thre_type=2,
+            parameter=0.5,
+            events_num_crit=5,
+            split_thre=0.6
+        )
+        """
+        trace = field_register_dsp(trace, corr_thre=0.3)
+        trace = proofread(trace, min_reactivate_num=4, min_spike_num=4)
+        with open(f2['Trace File'][i], 'wb') as handle:
+            pickle.dump(trace, handle)
         
-        #trace = field_register_dsp(trace, corr_thre=0.3)
-        #trace = proofread(trace, rate_thre=4, min_spike_num=3)
-
-        #with open(f2['Trace File'][i], 'wb') as handle:
-        #    pickle.dump(trace, handle)
-        LocTimeCurve_with_Field(trace)
+        #LocTimeCurve_with_Field(trace)
         

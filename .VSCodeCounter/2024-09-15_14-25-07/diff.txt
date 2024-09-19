@@ -1,0 +1,58 @@
+Date : 2024-09-15 14:25:07
+Directory : e:\Anaconda\envs\maze\Lib\site-packages\mylib
+Total : 27 files,  3221 codes, 102 comments, 733 blanks, all 4056 lines
+
+Languages
++----------+------------+------------+------------+------------+------------+
+| language | files      | code       | comment    | blank      | total      |
++----------+------------+------------+------------+------------+------------+
+| Python   |         27 |      3,221 |        102 |        733 |      4,056 |
++----------+------------+------------+------------+------------+------------+
+
+Directories
++------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                         | files      | code       | comment    | blank      | total      |
++------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                            |         27 |      3,221 |        102 |        733 |      4,056 |
+| . (Files)                                                                    |          6 |        730 |         27 |        147 |        904 |
+| behavior                                                                     |          2 |         88 |          1 |         27 |        116 |
+| calcium                                                                      |          5 |        437 |         25 |         89 |        551 |
+| calcium (Files)                                                              |          4 |        433 |         25 |         89 |        547 |
+| calcium\axes                                                                 |          1 |          4 |          0 |          0 |          4 |
+| dsp                                                                          |          8 |      1,307 |         34 |        268 |      1,609 |
+| field                                                                        |          6 |        659 |         15 |        202 |        876 |
++------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| filename                                                                     | language | code       | comment    | blank      | total      |
++------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\Interfaces.py                  | Python   |         51 |          1 |          6 |         58 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\Intervaces_Dsp.py              | Python   |        631 |         22 |        138 |        791 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\behavior\correct_rate.py       | Python   |         46 |          1 |         19 |         66 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\behavior\dsp_behav.py          | Python   |         42 |          0 |          8 |         50 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\axes\loc_time_curve.py | Python   |          4 |          0 |          0 |          4 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\dsp_ms.py              | Python   |       -478 |         11 |        -83 |       -550 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\dsp_ms_old.py          | Python   |        851 |         14 |        166 |      1,031 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\field_criteria.py      | Python   |         57 |          0 |          6 |         63 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\calcium\firing_rate.py         | Python   |          3 |          0 |          0 |          3 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\dp_analysis.py                 | Python   |          0 |          0 |          1 |          1 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\dsp\__init__.py                | Python   |          0 |          0 |          1 |          1 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\dsp\_lda_m.py                  | Python   |         56 |          2 |         13 |         71 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\dsp\cross_day.py               | Python   |         75 |          1 |         15 |         91 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\dsp\manifold.py                | Python   |         13 |          0 |          4 |         17 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\dsp\neural_traj.py             | Python   |        704 |         15 |        128 |        847 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\dsp\route_decode.py            | Python   |        216 |         11 |         39 |        266 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\dsp\starting_cell.py           | Python   |         45 |          0 |         15 |         60 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\dsp\tfar.py                    | Python   |        198 |          5 |         53 |        256 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\field_tracker.py         | Python   |         63 |          0 |         17 |         80 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\hmm.py                   | Python   |         80 |          1 |         20 |        101 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\hsm.py                   | Python   |        138 |         12 |         41 |        191 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\sfer.py                  | Python   |        110 |          1 |         35 |        146 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\tracker.py               | Python   |        150 |          0 |         44 |        194 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\field\tracker_v2.py            | Python   |        118 |          1 |         45 |        164 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\local_path.py                  | Python   |          2 |          0 |          0 |          2 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\maze_graph.py                  | Python   |         43 |          4 |          2 |         49 |
+| e:\Anaconda\envs\maze\Lib\site-packages\mylib\statistic_test.py              | Python   |          3 |          0 |          0 |          3 |
+| Total                                                                        |          |      3,221 |        102 |        733 |      4,056 |
++------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
