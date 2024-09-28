@@ -241,14 +241,78 @@ def compare_fit_recover(I, A, P):
 
 def func_curved_surface(data, b, u, v, w):
     y, x = data
-    return (x + b) / (u*y + v*x + w)
+    return (x + b) / (u*y + v*(x-1) + w)
 
 def fit_curved_surface(I, A, P):
     
     def objective_function(params):
         return np.sum((func_curved_surface((I, A), *params) - P) ** 2)
     
-    bounds = [(0.00001, 100), (0.00001, 100), (0.00001, 100), (0.00001, 100)]
+    bounds = [(-1 + 1e-10, 100), (1e-10, 100), (1e-10, 100), (1e-10, 100)]
     result = differential_evolution(objective_function, bounds, maxiter=10000)
     print("Optimized Parameters:", result.x)
     return result.x
+
+
+class Feature:
+    def __init__(self):
+        pass
+        
+    @staticmethod
+    def survival_frac(sequences: list[np.ndarray]):
+        max_length = max([len(seq) for seq in sequences])
+        prob = np.zeros(max_length)
+        
+        padded_seq = np.zeros((len(sequences), max_length))
+        for i, seq in enumerate(sequences):
+            padded_seq[i, :len(seq)] = seq
+        
+        prob = np.mean(padded_seq, axis=0)
+        return prob
+    
+    @staticmethod
+    def A_distribution(sequences: list[np.ndarray]):
+        duration = []
+        
+        for i, seq in enumerate(sequences):
+            
+            A = 1
+            
+            for j in range(1, len(seq)):
+                if seq[j] == 1:
+                    A += 1
+                else:
+                    duration.append(A)
+                    A = 0
+            if A != 0:
+                duration.append(A)
+                
+        return np.array(duration)
+    
+    @staticmethod
+    def I_distribution(sequences: list[np.ndarray]):
+        duration = []
+        
+        for i, seq in enumerate(sequences):
+            I = 0
+            
+            for j in range(1, len(seq)):
+                if seq[j] == 0:
+                    I += 1
+                else:
+                    if I != 0:
+                        duration.append(I)
+                    I = 0
+            if I != 0:
+                duration.append(I)
+        return np.array(duration)
+    
+    @staticmethod
+    def switch_frequency(sequences: list[np.ndarray]):
+        return np.concatenate(
+            [np.where(np.ediff1d(seq) != 0)[0] for seq in sequences]
+        )
+        
+    @staticmethod
+    def all_A(sequences: list[np.ndarray]):
+        return np.array([np.sum(seq) for seq in sequences])

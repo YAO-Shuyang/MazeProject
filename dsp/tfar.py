@@ -107,7 +107,7 @@ def field_register_dsp(trace, corr_thre: float = 0.3):
     n_neuron = trace['n_neuron']
     
     print(f"Registering {n_neuron} neurons")
-    field_reg, field_info = TrackerDsp.field_register(trace, qualified_cells=qualified_cell)
+    field_reg, field_info = TrackerDsp.field_register(trace, n_shuffle=1000, qualified_cells=qualified_cell)
     
     trace['field_reg'] = field_reg
     trace['field_info'] = field_info
@@ -166,6 +166,7 @@ def proofread(trace, min_reactivate_num: int = 5, min_spike_num: int = 5):
                 # Too little spikes
                 if spike_num < min_spike_num or n_react < min_reactivate_num-1:
                     field_reg[j, i] = 0
+                    field_info[:, i, 5] = 0
                     
             elif field_reg[j, i] == 0:
                 # Check if whether it is a weakened field or it is genuinely not active.
@@ -173,6 +174,7 @@ def proofread(trace, min_reactivate_num: int = 5, min_spike_num: int = 5):
                     field_reg[j, i] = 2
     
     trace['field_reg_modi'] = field_reg
+    trace['field_info'] = field_info
     
     return trace
                 
@@ -234,7 +236,7 @@ if __name__ == '__main__':
     from mylib.calcium.field_criteria import place_field_dsp
     from mylib.maze_utils3 import SmoothMatrix
     
-    for i in range(22, 28):
+    for i in range(18, len(f2)):
         print(i, f2['MiceID'][i], f2['date'][i])   
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
