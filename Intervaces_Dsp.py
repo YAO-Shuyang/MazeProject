@@ -42,6 +42,27 @@ def plot_segments(ax: Axes, dx: float = 0, dy: float = 0) -> Axes:
     ax.plot(np.arange(segs[5], segs[6]) + dx, np.repeat(dy, seg7.shape[0]), linewidth = 0.5, color = color[6])
     return ax
 
+# Fig0803
+def ROINumber_DSP_Interface(trace: dict, spike_threshold = 30, variable_names = None):
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['ROI Number'])
+    return np.array([trace['n_neuron']])
+
+# Fig0805
+def PlaceCellsProportion_DSP_Interface(trace: dict, spike_threshold = 30, variable_names = None):   
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Proportion'])
+    is_pc = np.vstack([trace[f'node {i}']['is_placecell'] for i in range(10)])
+    return np.array([
+        np.where(np.sum(is_pc, axis=0) > 0)[0].shape[0] / is_pc.shape[1]
+    ])
+
+# Fig0806
+def ProportionOfPCAcrossRoutes_DSP_Interface(trace, variable_names = None):
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Route', 'Proportion'])
+    is_pc = np.vstack([trace[f'node {i}']['is_placecell'] for i in range(10)])
+    
+    
+    return np.array([1, 2, 3, 4, 1, 1, 5, 6, 7, 1]), np.sum(is_pc, axis=1) / is_pc.shape[1]
+
 # Generate learning curve for cross maze paradigm. Fig0020
 def LearningCurve_DSP_Interface(trace: dict, spike_threshold = 30, variable_names = None):
     KeyWordErrorCheck(trace, __file__, ['correct_time', 'paradigm'])
@@ -667,13 +688,15 @@ def AllocentricFieldProportion_DSP_Interface(trace, variable_names = None):
         check_variable = ['Segment', 'Proportion']
     )
     
-    field_reg = trace['field_reg_modi']
+    field_reg = cp.deepcopy(trace['field_reg_modi'])
+    field_reg[field_reg == 2] = 1
+    field_info = trace['field_info']
     field_segs = trace['field_segs']
 
     prop = np.ones(6)
     print(np.unique(field_segs))
     for seg in range(1, 7):
-        field_idx = np.where(field_segs == seg+1)[0]
+        field_idx = np.where((field_segs == seg+1))[0]
         
         allo_field_idx = np.where(
             (field_segs == seg+1) & 
@@ -683,10 +706,13 @@ def AllocentricFieldProportion_DSP_Interface(trace, variable_names = None):
                 (field_reg[5, :] >= 1) |
                 (field_reg[9, :] >= 1)
             ) &
-            (np.sum(field_reg[1:4, :], axis=0)+np.sum(field_reg[6:9, :], axis=0) == seg)
+            (np.nansum(field_reg[1:4, :], axis=0)+np.nansum(field_reg[6:9, :], axis=0) == seg)
         )[0]
         
-        prop[seg-1] = allo_field_idx.shape[0] / field_idx.shape[0]
+        if field_idx.shape[0] == 0:
+            prop[seg-1] = np.nan
+        else:
+            prop[seg-1] = allo_field_idx.shape[0] / field_idx.shape[0]
         
     return np.arange(1, 7), prop
 
@@ -789,3 +815,19 @@ def FieldStateSwitchWithSegment_DSP_Interface(trace, variable_names = None):
         prop[(seg-1) + 56] = retain_field_idx.shape[0] / field_idx.shape[0]
 
     return segments, prop, category
+
+def Exclusivity_DSP_Interface(trace, variable_names = None):
+    VariablesInputErrorCheck(
+        input_variable = variable_names, 
+        check_variable = ["X", "Y", "P"]
+    )
+    
+    field_reg = trace['field_reg_modi'][:, np.where(trace['field_segs'] >= 6)[0]]
+    x, y = np.meshgrid(np.arange(10), np.arange(10))
+    p = np.zeros((10, 10))
+    
+    for i in range(10):
+        for j in range(10):
+            p[i, j] = np.where((field_reg[i, :] >= 1) & (field_reg[j, :] >= 1))[0].shape[0] / np.where((field_reg[i, :] >= 1) & (np.isnan(field_reg[j, :]) == False))[0].shape[0]
+    
+    return x.flatten(), y.flatten(), p.flatten()

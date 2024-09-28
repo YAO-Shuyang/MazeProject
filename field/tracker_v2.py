@@ -4,14 +4,15 @@ import copy as cp
 from tqdm import tqdm
 
 class Tracker2d:
-    def __init__(self, field_reg: np.ndarray):
-        self._field_reg = cp.deepcopy(field_reg)
-        self._refine_reg()
+    def __init__(self, field_reg: np.ndarray = None):
+        if field_reg is not None:
+            self._field_reg = cp.deepcopy(field_reg)
+            self._refine_reg()
         
-        max_disppear = min(self._field_reg.shape[0] - 2, 9)
-        max_retained = self._field_reg.shape[0] - 1
+            max_disppear = min(self._field_reg.shape[0] - 2, 9)
+            max_retained = self._field_reg.shape[0] - 1
         
-        self.P1 = np.zeros((max_disppear, max_retained, 2)) # Recover Prob.
+            self.P1 = np.zeros((max_disppear, max_retained, 2)) # Recover Prob.
         
     def _refine_reg(self):
         for i in range(1, self._field_reg.shape[0]-1): 
@@ -75,11 +76,13 @@ class Tracker2d:
 
         return sequences
                     
-    def calc_P1(self) -> np.ndarray:
-        field_reg = self._field_reg
-        sequences = self.convert_to_sequence()
+    def calc_P1(self, sequences: list[np.ndarray] = None) -> np.ndarray:
+        if sequences is None:
+            sequences = self.convert_to_sequence()
 
-        probs = np.zeros((field_reg.shape[0], field_reg.shape[0], 2))
+        max_length = max([len(seq) for seq in sequences])
+
+        probs = np.zeros((max_length, max_length, 2))
 
         for seq in sequences:
             for i in range(seq.shape[0]-1):
@@ -90,9 +93,14 @@ class Tracker2d:
         return probs
         
     @staticmethod
-    def recovery_prob2d(field_reg: np.ndarray):
+    def recovery_prob2d(field_reg: np.ndarray) -> np.ndarray:
         tracker = Tracker2d(field_reg)
         return tracker.calc_P1()
+    
+    @staticmethod
+    def get_joint_prob(sequences: list[np.ndarray]) -> np.ndarray:
+        tracker = Tracker2d()
+        return tracker.calc_P1(sequences)
         
 if __name__ == "__main__":
     import numpy as np

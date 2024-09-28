@@ -798,7 +798,20 @@ def main(
     with open(os.path.join(os.path.dirname(cellreg_dir), prefix+appendix+".pkl"), 'wb') as handle:
         print(os.path.join(os.path.dirname(cellreg_dir), prefix+appendix+".pkl"))
         pickle.dump(DATA, handle)
-          
+    
+def stellar(p_value: float):
+    p_value = 1 - np.abs(0.5 - p_value) * 2
+    if p_value >= 0.05 or np.isnan(p_value):
+        return ""
+    elif p_value < 0.05 and p_value >= 0.01:
+        return "*"
+    elif p_value < 0.01 and p_value >= 0.001:
+        return "**"
+    elif p_value < 0.001 and p_value >= 0.0001:
+        return "***"
+    elif p_value < 0.0001:
+        return "****"
+    
 import copy as cp
 from mazepy.datastruc.neuact import SpikeTrain
 from mazepy.datastruc.variables import Variable1D
@@ -814,8 +827,9 @@ class TrackerDsp(object):
         spike_nodes: np.ndarray,
         occu_time: np.ndarray,
         Ms: np.ndarray,
-        n_shuffle: int = 1000,
-        percent: int | float = 95
+        n_shuffle: int = 10000,
+        percent: int | float = 95,
+        is_return_shuffle: bool = False
     ):
         assert len(init_rate) == 10
         assert len(Spikes) == 10
@@ -844,8 +858,8 @@ class TrackerDsp(object):
         Spikes_rand = [[] for _ in range(10)]
 
         for i in range(n_shuffle):
-            Spikes = self.shuffle_spikes(
-                Spikes=Spikes,
+            Spikes_r = self.shuffle_spikes(
+                Spikes=cp.deepcopy(Spikes),
                 idxs=idxs,
                 n_spikes=n_spikes,
                 n_frames=n_frames,
@@ -853,27 +867,27 @@ class TrackerDsp(object):
                 rig_boundary=rig_boundary
             )
             for j in range(10):
-                Spikes_rand[j].append(Spikes[j][idxs[j]])
+                Spikes_rand[j].append(Spikes_r[j][idxs[j]])
                 
         for j in range(10):
             Spikes_rand[j] = np.vstack(Spikes_rand[j])
             if Spikes_rand[j].shape[1] == 0:
                 continue
-            
+
             try:
                 res = _convert_to_kilosort_form(Spikes_rand[j])
                 kilosort_spikes = res[0, :]
-                kilosort_variables = spike_nodes[j][res[1, :]]
+                kilosort_variables = spike_nodes[j][idxs[j]] - 1
                 spike_counts = _get_kilosort_spike_counts(
                     kilosort_spikes.astype(np.int64),
                     kilosort_variables.astype(np.int64),
                     2304
-                )  
-              
+                ) 
+
                 rate = spike_counts/(occu_time[j]/1000)
-                rate[np.isnan(rate)] = 0
-                smooth_rate = rate#rate @ Ms.T
-                rates[:smooth_rate.shape[0], j] = np.max(smooth_rate[:, field_area-1], axis=1)
+                rate[np.isnan(rate) | np.isinf(rate)] = 0
+                smooth_rate = rate @ Ms.T
+                rates[:, j] = np.max(smooth_rate[:, field_area-1], axis=1)
             except:
                 smooth_rate = calc_ratemap(
                     Spikes=Spikes_rand[j],
@@ -883,10 +897,25 @@ class TrackerDsp(object):
                 )[2]
              
                 rates[:, j] = np.max(smooth_rate[:, field_area-1], axis=1)
+    
+        thre = np.percentile(rates, 100-percent/2, axis=0)
         
-        thre = np.percentile(rates, 100-percent, axis=0)
-        reg = np.where((init_rate - thre >= 0)&(init_rate >= 0.4), 1, 0)
-        return reg
+        reg = np.where((init_rate - thre >= 0), 1., 0.)
+        
+        for i in range(10):
+            if idxs[i].shape[0] <= 10:
+                reg[i] = np.nan
+                rates[:, i] = np.nan
+                thre[i] = np.nan
+        
+        P = np.array([np.where(rates[:, i] < init_rate[i])[0].shape[0] / n_shuffle for i in range(10)])
+        P += reg * 0 # Add nan
+        is_high_quality = np.where(thre - 0.2 < 0)[0].shape[0] == 0
+        
+        if is_return_shuffle:
+            return reg, P, thre, is_high_quality, rates
+        else:
+            return reg, P, thre, is_high_quality
         
     def shuffle_spikes(
         self,
@@ -905,7 +934,7 @@ class TrackerDsp(object):
             Spikes[i][idxs[i]] = spike_seq[lef_boundary[i]:rig_boundary[i]]
         
         return Spikes
-    
+
     @staticmethod
     def visualize_single_field(
         trace, 
@@ -913,8 +942,12 @@ class TrackerDsp(object):
         field_center: int,
         save_loc: str,
         file_name: str | None = None,
-        n_shuffle: int = 1000
+        n_shuffle: int = 10000,
+        percent: int | float = 95
     ):
+        if os.path.exists(save_loc) == False:
+            os.mkdir(save_loc)
+            
         if field_center not in trace['place_field_all'][cell].keys():
             raise ValueError(
                 f"Field {field_center} not found in cell {cell}."
@@ -938,7 +971,7 @@ class TrackerDsp(object):
                 np.max(trace[f'node {j}']['smooth_map_all'][cell, field_area-1]) for j in range(10)
             ])
         tracker = TrackerDsp()
-        reg, shuf_rate = tracker.register(
+        reg, P, thre, is_hq, shuf_rate = tracker.register(
             init_rate=init_rate,
             field_area=field_area,
             Spikes=[Spikes[j][cell, :] for j in range(10)],
@@ -948,11 +981,11 @@ class TrackerDsp(object):
             Ms=trace['Ms'],
             is_return_shuffle=True
         )
-        
-        v_max = max(np.max(shuf_rate), np.max(init_rate))
-        v_max = max(int(v_max * 1.1), 1)
-        min_thre, max_thre = np.percentile(shuf_rate, [5, 100], axis=0)
-        
+        print(f"Reg: {reg}\n  P-values: {P}\n  Threshold: {thre}")
+        v_max = max(np.nanmax(shuf_rate), np.nanmax(init_rate))
+        v_max = max(1, int(v_max) + 1)
+        min_thre, max_thre = np.nanpercentile(shuf_rate, [(100 - percent)/2, 100 - (100 - percent)/2], axis=0)
+        print(f"  Min Threshold: {min_thre}; Max Threshold: {max_thre}")
 
         # Visualize Radar Chart.
         angles = np.linspace(0, 2*np.pi, 10, endpoint=False)
@@ -960,16 +993,23 @@ class TrackerDsp(object):
         min_thre = np.append(min_thre, min_thre[0])
         max_thre = np.append(max_thre, max_thre[0])
         angles = np.append(angles, angles[0])
+        degree = 2 * np.pi / 10
         init_rate = np.append(init_rate, init_rate[0])
         
         fig = plt.figure(figsize=(4, 4))
         ax = plt.subplot(111, projection='polar')
         
-        colors = ['#A9CCE3', '#A8DADC', '#9C8FBC', '#D9A6A9', '#A9CCE3', 
+        colors = ['#A9CCE3', '#A8DADC', '#9C8FBC', '#D9A6A9', '#A9CCE3',
                   '#A9CCE3', '#F2E2C5', '#647D91', '#C06C84', '#A9CCE3']
-            
-        ax.fill(angles, max_thre, color='grey', alpha=0.3, edgecolor = None)
-        ax.fill(angles, min_thre, color='white', edgecolor = None)
+        
+        idx = np.where(np.isnan(max_thre) == False)[0]
+        nan_idx = np.where(np.isnan(max_thre) == True)[0]
+        angle_lef = angles - degree / 2
+        angle_rig = angles + degree / 2
+        ax.fill(angles[idx], max_thre[idx], color='grey', alpha=0.3, edgecolor = None)
+        ax.fill(angles[idx], min_thre[idx], color='white', edgecolor = None)
+        for nidx in nan_idx:
+            ax.fill([angle_lef[nidx], angle_rig[nidx],  angle_lef[nidx]], [v_max, v_max, 0], color='white',edgecolor = None)
         ax.plot(angles, init_rate, color = 'k', linewidth = 0.5)
             
         ax.set_aspect('equal')
@@ -977,6 +1017,8 @@ class TrackerDsp(object):
         ax.set_theta_offset(np.pi / 2)
         ax.set_theta_direction(-1)
         
+        for i in range(len(angles)-1):
+            ax.text(angles[i], v_max, stellar(P[i]), ha='center', va='center', color = 'k', fontsize = 4)
         
         labels = ['1a', '2', '3', '4', '1b', '1c', '5', '6', '7', '1d']
         ax.set_thetagrids(np.degrees(angles[:-1]), labels)
@@ -994,14 +1036,18 @@ class TrackerDsp(object):
         if file_name is None:
             file_name = f'Cell_{cell+1}_Field_{field_center}'
         
+        color = "red" if is_hq else "black"
+        ax.set_title(file_name, color=color)
+        
         plt.savefig(os.path.join(save_loc, file_name + '.png'), dpi=600)
         plt.savefig(os.path.join(save_loc, file_name + '.svg'))
         plt.close()
     
     @staticmethod
-    def field_register(trace, n_shuffle=1000, qualified_cells = None) -> tuple[np.ndarray, np.ndarray]:
+    def field_register(trace, n_shuffle=10000, qualified_cells = None, percent = 99) -> tuple[np.ndarray, np.ndarray]:
         field_reg = []
         field_info = []
+        is_high_quality = []
         
         Spikes = cp.deepcopy([
             trace[f'node {i}']['Spikes'] for i in range(10)
@@ -1020,11 +1066,13 @@ class TrackerDsp(object):
         
         delete_keys = [[] for _ in range(trace['n_neuron'])]
         
+        shuf_rate_accu = []
+        
         for i in tqdm(qualified_cells):
             for k in trace['place_field_all'][i].keys():
                 tracker = TrackerDsp()
                 field_area = trace['place_field_all'][i][k]
-                reg = tracker.register(
+                reg, P, thre, is_hq, shuf_rate = tracker.register(
                     init_rate=np.array([
                         np.max(trace[f'node {j}']['smooth_map_all'][i, field_area-1]) for j in range(10)
                     ]),
@@ -1033,43 +1081,58 @@ class TrackerDsp(object):
                     spike_nodes=cp.deepcopy(spike_nodes),
                     occu_time=occu_time,
                     n_shuffle=n_shuffle, 
-                    Ms=trace['Ms']
+                    Ms=trace['Ms'],
+                    is_return_shuffle=True,
+                    percent=percent
                 )
                 
-                if np.sum(reg) == 0:
+                if np.nansum(reg) == 0:
                     delete_keys[i].append(k)
                 else:
-                    info = np.full((10, 4), np.nan)
+                    info = np.full((10, 7), np.nan)
                     info[:, 0] = i+1
                     info[:, 1] = np.array([
                         trace[f'node {j}']['is_placecell'][i] for j in range(10)
                     ])
                     info[:, 2] = k
                     info[:, 3] = len(field_area)
+                    info[:, 4] = P
+                    info[:, 5] = 1 if is_hq else 0
+                    info[:, 6] = thre
                     
                     field_reg.append(reg)
                     field_info.append(info)
+                    shuf_rate_accu.append(shuf_rate)
                     
         for i in qualified_cells:
             for k in delete_keys[i]:
                 trace['place_field_all'][i].pop(k)
         
-        field_reg = np.vstack(field_reg).T.astype(np.int64)
-        info = np.zeros((field_reg.shape[0], field_reg.shape[1], 4), np.float64)
+        field_reg = np.vstack(field_reg).T
+        info = np.zeros((field_reg.shape[0], field_reg.shape[1], 7), np.float64)
         for i in range(field_reg.shape[1]):
             info[:, i, :] = field_info[i]
         
+        shuf_rate_all = np.zeros((field_reg.shape[1], n_shuffle, 10), np.float64)
+        for i in range(field_reg.shape[1]):
+            shuf_rate_all[i, :, :] = shuf_rate_accu[i]
+            
+        with open(os.path.join(trace['p'], "field_shuffle.pkl"), 'wb') as handle:
+            pickle.dump(shuf_rate_all, handle)
         return field_reg, info
     
 if __name__ == '__main__':
-    with open(r"E:\Data\Dsp_maze\10227\20231010\trace.pkl", 'rb') as f:
-        trace = pickle.load(f)
-        
-    tracker = TrackerDsp()
-    field_reg, field_info = tracker.field_register(trace, n_shuffle=1000)
+    from mylib.local_path import f2
+    import pickle
     
-    with open(r"E:\Data\Dsp_maze\10227\20231010\field_reg.pkl", 'wb') as f:
-        pickle.dump(field_reg, f)
+    for i in range(len(f2)):
+        with open(f2['Trace File'][i], 'rb') as handle:
+            trace = pickle.load(handle)
         
-    with open(r"E:\Data\Dsp_maze\10227\20231010\field_info.pkl", 'wb') as f:
-        pickle.dump(field_info, f)
+        tracker = TrackerDsp.field_register(
+            trace,
+            n_shuffle=10000
+        )
+        
+        with open(f2['Trace File'][i], 'wb') as handle:
+            pickle.dump(trace, handle)

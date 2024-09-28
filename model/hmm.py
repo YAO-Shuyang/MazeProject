@@ -3,17 +3,20 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
+from tqdm import tqdm
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print("Using device:", device)
 
 class HMM:
-    def __init__(self, N, device, target_prob: float = 0.6):
+    def __init__(self, N, device=device, target_prob: float = 0.6):
         """
         Initialize the HMM model.
 
         Args:
             N (int): Number of hidden states.
-            emission_probs (np.ndarray): Emission probabilities for each state.
-            initial_state (int): Index of the initial state.
             device (torch.device): Device to run the computations on.
+            target_prob (float): Target emission probability to determine the initial state.
         """
         self.N = N
         self.device = device
@@ -31,6 +34,7 @@ class HMM:
         self.initial_state = np.argmin(np.abs(emission_probs - target_prob))
         self.p0 = emission_probs[self.initial_state]
         self.predicted_prob = None
+        self._loss = None  # Initialize loss
 
     def get_emission_probs(self) -> np.ndarray:
         k_values = np.arange(self.N)
@@ -136,46 +140,46 @@ class HMM:
 
         return gamma, xi
 
-
-    def get_predicted_prob(self, sequences, sequence_lengths):
+    def get_predicted_prob(self, sequences):
         """
         Compute P(s_{t+1} = 1 | s_{1:t}) for each time step in each sequence.
-    
+
         Args:
             sequences (torch.Tensor): Tensor of shape (num_sequences, max_seq_length) containing the sequences.
             sequence_lengths (torch.Tensor): Tensor of shape (num_sequences,) containing the lengths of each sequence.
-    
+
         Returns:
             next_obs_probabilities_list (list[np.ndarray]): List of NumPy arrays containing the probabilities for each sequence.
         """
+        sequences, sequence_lengths = self.get_padded_sequences(sequences)
         num_sequences, max_seq_length = sequences.shape
-    
+
         with torch.no_grad():
             # Forward algorithm
             alpha, _ = self.forward(sequences, sequence_lengths)
-        
+
             # Initialize tensor for next observation probabilities
             next_obs_probabilities = torch.zeros((num_sequences, max_seq_length - 1), device=self.device)
-        
+
             # For each time step t, compute P(s_{t+1} = 1 | s_{1:t})
             for t in range(max_seq_length - 1):
                 # Compute P(h_t | s_{1:t})
                 alpha_t = alpha[:, t, :]  # Shape: (num_sequences, N)
                 alpha_sum = alpha_t.sum(dim=1, keepdim=True) + 1e-10
                 state_prob_t = alpha_t / alpha_sum  # P(h_t | s_{1:t})
-    
+
                 # Predict P(h_{t+1} | s_{1:t}) = state_prob_t @ transition_matrix
                 state_prob_next = torch.matmul(state_prob_t, self.transition_matrix)
-    
+
                 # Compute P(s_{t+1} = 1 | s_{1:t})
                 next_obs_probs_t = torch.matmul(state_prob_next, self.emission_probs)
-    
+
                 next_obs_probabilities[:, t] = next_obs_probs_t
-    
+
             # Convert to CPU and NumPy
             next_obs_probabilities_np = next_obs_probabilities.cpu().numpy()
             sequence_lengths_np = sequence_lengths.cpu().numpy()
-        
+
             # Split into a list of arrays corresponding to each sequence
             next_obs_probabilities_list = []
             for i in range(next_obs_probabilities_np.shape[0]):
@@ -188,32 +192,50 @@ class HMM:
 
         self.predicted_prob = next_obs_probabilities_list
         return next_obs_probabilities_list
+
+    def get_padded_sequences(self, sequences: list[np.ndarray]):
+        sequence_lengths = torch.tensor([len(seq) for seq in sequences], dtype=torch.long)
+        # Convert sequences and lengths to tensors
     
-    def calc_loss(self, sequences, padded_sequences, sequence_lengths):
+        max_length = torch.max(sequence_lengths)
+
+        # Pad sequences to the maximum length
+        max_seq_length = max(sequence_lengths)
+        num_sequences = len(sequences)
+        padded_sequences = torch.zeros((num_sequences, max_seq_length), dtype=torch.long)
+
+        for i, seq in enumerate(sequences):
+            seq_len = sequence_lengths[i]
+            padded_sequences[i, :seq_len] = torch.tensor(seq, dtype=torch.long)
+
+        # Move data to GPU if available
+        padded_sequences = padded_sequences.to(device)
+        sequence_lengths = sequence_lengths.to(device)
+        return padded_sequences, sequence_lengths
+
+    def calc_loss(self, sequences: list[np.ndarray]):
         """Calculate negative log likelihood loss"""
-        if self.predicted_prob is None:
-            predicted_prob = self.get_predicted_prob(padded_sequences, sequence_lengths)
-        else:
-            predicted_prob = self.predicted_prob
-            
+        predicted_prob = self.get_predicted_prob(sequences)
+
         # Compute the log-likelihood
         loss = 0
         for i in range(len(predicted_prob)):
-            loss += np.sum(sequences[i][1:] * np.log(predicted_prob[i]) + (1 - sequences[i][1:]) * np.log(1 - predicted_prob[i]))
-        
-        n_total = np.sum([len(seq)-1 for seq in sequences])
+            if len(predicted_prob[i]) > 0:
+                loss += np.sum(sequences[i][1:] * np.log(predicted_prob[i] + 1e-10) + (1 - sequences[i][1:]) * np.log(1 - predicted_prob[i] + 1e-10))
+
+        n_total = np.sum([len(seq)-1 for seq in sequences if len(seq) > 1])
         self._loss = -loss / n_total
         print(f"Hidden Markov Model with {self.N} hidden states:\n"
               f"  Loss: {self.loss}\n"
               f"  Transition Matrix: {self.transition_matrix}\n"
-              f"  Emission Matrix: {self.emission_probs}"
-              f"  Initial States: {self.initial_state} with P0 = {self.p0}.")
+              f"  Emission Matrix: {self.emission_probs}\n"
+              f"  Initial State: {self.initial_state} with P0 = {self.p0}.\n")
         return self._loss
-    
+
     @property
     def loss(self):
         return self._loss
-        
+
     def compute_loss(self, scaling_factors, sequence_lengths):
         # Compute the log-likelihood
         log_likelihood = -torch.sum(torch.log(scaling_factors), dim=1)
@@ -222,78 +244,100 @@ class HMM:
         average_loss = total_loss / sequence_lengths.sum()
         return total_loss.item(), average_loss.item()
 
-    def train(self, sequences, sequence_lengths, iterations=10):
-        for iteration in range(iterations):
-            # Forward algorithm
-            alpha, scaling_factors = self.forward(sequences, sequence_lengths)
+    def fit(self, data_loader, iterations=10):
+        for iteration in tqdm(range(iterations)):
+            total_loss = 0.0
+            total_sequences = 0
+            numerator_accum = torch.zeros_like(self.transition_matrix, device=self.device)
+            denominator_accum = torch.zeros_like(self.transition_matrix, device=self.device)
+            for batch_idx, (batch_sequences, batch_lengths) in enumerate(data_loader):
+                batch_sequences = batch_sequences.to(self.device)
+                batch_lengths = batch_lengths.to(self.device)
 
-            # Compute loss
-            total_loss, average_loss = self.compute_loss(scaling_factors, sequence_lengths)
-            print(f"Iteration {iteration + 1}, Total Loss: {total_loss:.4f}, Average Loss: {average_loss:.6f}")
+                # Forward algorithm
+                alpha, scaling_factors = self.forward(batch_sequences, batch_lengths)
 
-            # Backward algorithm
-            beta = self.backward(sequences, sequence_lengths, scaling_factors)
+                # Compute loss
+                batch_total_loss, batch_average_loss = self.compute_loss(scaling_factors, batch_lengths)
+                total_loss += batch_total_loss
+                total_sequences += batch_lengths.sum().item()
 
-            # Compute gamma and xi
-            gamma, xi = self.compute_gamma_xi(alpha, beta, sequences, sequence_lengths, scaling_factors)
+                # Backward algorithm
+                beta = self.backward(batch_sequences, batch_lengths, scaling_factors)
 
-            # Update transition matrix
-            xi_sum = xi.sum(dim=1)  # Sum over time steps
-            gamma_sum = gamma[:, :-1, :].sum(dim=1)  # Sum over time steps excluding the last
+                # Compute gamma and xi
+                gamma, xi = self.compute_gamma_xi(alpha, beta, batch_sequences, batch_lengths, scaling_factors)
 
-            numerator = xi_sum.sum(dim=0)  # Sum over sequences
-            denominator = gamma_sum.sum(dim=0).unsqueeze(1) + 1e-10  # Sum over sequences
+                # Accumulate numerators and denominators
+                xi_sum = xi.sum(dim=1)  # Sum over time steps
+                gamma_sum = gamma[:, :-1, :].sum(dim=1)  # Sum over time steps excluding the last
 
-            self.transition_matrix = numerator / denominator
+                numerator_batch = xi_sum.sum(dim=0)  # Sum over sequences
+                denominator_batch = gamma_sum.sum(dim=0).unsqueeze(1) + 1e-10  # Sum over sequences
+
+                numerator_accum += numerator_batch
+                denominator_accum += denominator_batch
+
+            # Update transition matrix once per iteration
+            self.transition_matrix = numerator_accum / denominator_accum
 
             # Ensure rows sum to 1
             self.transition_matrix = self.transition_matrix / self.transition_matrix.sum(dim=1, keepdim=True)
 
-    def get_transition_matrix(self):
-        return self.transition_matrix.cpu().numpy()  
+            average_loss = total_loss / total_sequences
+            #print(f"Iteration {iteration + 1}, Total Loss: {total_loss:.4f}, Average Loss: {average_loss:.6f}")
 
-if __name__ == "__main__":
+    def get_transition_matrix(self):
+        return self.transition_matrix.cpu().numpy()
     
+    @staticmethod
+    def process_fit(
+        N: int, # Number of hidden states
+        sequences: list[np.ndarray],
+        batch_size: int = 4096,
+        n_iterations: int = 1000
+    ) -> 'HMM':
+
+        # Initialize the HMM model
+        hmm_model = HMM(N, device)
+        
+        padded_sequences, sequence_lengths = hmm_model.get_padded_sequences(sequences)
+        # Create a TensorDataset
+        dataset = torch.utils.data.TensorDataset(padded_sequences, sequence_lengths)
+
+        # Create a DataLoader
+        data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+        # Train the HMM using the DataLoader
+        hmm_model.fit(data_loader, iterations=n_iterations)
+        return hmm_model
+        
+    def simulate(self, sequences: list[np.ndarray]) -> list[np.ndarray]:
+        self.get_predicted_prob(sequences)
+        simu_seq = []
+        for n, seq in enumerate(sequences):
+            simu = [1]
+            for i in range(len(seq) - 1):
+                curr_p = self.predicted_prob[n][i]
+                simu.append(np.random.choice([0, 1], p=[1 - curr_p, curr_p]))
+            simu_seq.append(np.array(simu))
+        return simu_seq
+        
+if __name__ == "__main__":
     import pickle
     # Number of hidden states
-    N = 40  # You can change this to 5, 10, 20, etc.
+    N = 20  # You can change this to 5, 10, 20, etc.
     # Get sequences
 
     with open(r"E:\Anaconda\envs\maze\Lib\site-packages\mylib\test\demo_seq.pkl", 'rb') as handle:
         sequences = pickle.load(handle)
 
-    # Convert sequences and lengths to tensors
-    sequence_lengths = torch.tensor([len(seq) for seq in sequences], dtype=torch.long)
-    max_length = torch.max(sequence_lengths)
-
-    # Pad sequences to the maximum length
-    max_seq_length = max(sequence_lengths)
-    num_sequences = len(sequences)
-    padded_sequences = torch.zeros((num_sequences, max_seq_length), dtype=torch.long)
-
-    for i, seq in enumerate(sequences):
-        seq_len = sequence_lengths[i]
-        padded_sequences[i, :seq_len] = torch.tensor(seq, dtype=torch.long)
-
-    # Move data to GPU if available
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print("Using device:", device)
-
-    padded_sequences = padded_sequences.to(device)
-    sequence_lengths = sequence_lengths.to(device)
-
-    # Initialize the HMM model
-    hmm_model = HMM(N, device)
-
-    # Train the HMM
-    hmm_model.train(padded_sequences, sequence_lengths, iterations=100)
-
-    # Get the trained transition matrix
-    trained_transition_matrix = hmm_model.get_transition_matrix()
-    
-    # Get loss
-    loss = hmm_model.calc_loss(
-        sequences=sequences, 
-        padded_sequences=padded_sequences, 
-        sequence_lengths=sequence_lengths
+    hmm_model = HMM.process_fit(
+        N=N,
+        sequences=sequences,
+        batch_size=4096,
+        n_iterations=100
     )
+
+    # Get loss
+    loss = hmm_model.calc_loss(sequences)
