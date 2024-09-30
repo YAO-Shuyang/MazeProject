@@ -1044,7 +1044,7 @@ class TrackerDsp(object):
         plt.close()
     
     @staticmethod
-    def field_register(trace, n_shuffle=10000, qualified_cells = None, percent = 99) -> tuple[np.ndarray, np.ndarray]:
+    def field_register(trace, n_shuffle=10000, percent = 99) -> tuple[np.ndarray, np.ndarray]:
         field_reg = []
         field_info = []
         is_high_quality = []
@@ -1061,8 +1061,7 @@ class TrackerDsp(object):
             trace[f'node {i}']['occu_time_spf'] for i in range(10)
         ])
         
-        if qualified_cells is None:
-            qualified_cells = np.arange(trace['n_neuron'])
+        qualified_cells = np.arange(trace['n_neuron'])
         
         delete_keys = [[] for _ in range(trace['n_neuron'])]
         

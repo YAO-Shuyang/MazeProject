@@ -107,7 +107,7 @@ def field_register_dsp(trace, corr_thre: float = 0.3):
     n_neuron = trace['n_neuron']
     
     print(f"Registering {n_neuron} neurons")
-    field_reg, field_info = TrackerDsp.field_register(trace, n_shuffle=1000, qualified_cells=qualified_cell)
+    field_reg, field_info = TrackerDsp.field_register(trace, n_shuffle=1000)
     
     trace['field_reg'] = field_reg
     trace['field_info'] = field_info
@@ -255,4 +255,4 @@ if __name__ == '__main__':
             pickle.dump(trace, handle)
         
         #LocTimeCurve_with_Field(trace)
-        
+        np.roll()
