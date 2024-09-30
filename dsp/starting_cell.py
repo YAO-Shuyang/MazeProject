@@ -52,10 +52,12 @@ def get_initial_traj(trace, limit=10):
     }
 
 class StartingCell:
-    def __init__(self, smooth_map_all: list[dict]) -> None:
+    def __init__(self, field_reg: np.ndarray, place_field_all: list[dict]) -> None:
         """
         Parameters
         ----------
+        field_reg : np.ndarray
+            A matrix of shape (10, n_fields) that records the status of each place field on each route.
         place_field_all : list[dict]
             A list contains place fields on ten routes for a given neuron, and each of the inside list has k keys,
             where k is the number of fields on that route and the value of keys is the field center.
@@ -71,89 +73,109 @@ class StartingCell:
             get_son_area(CP_DSP[self._R[i]])-1 for i in range(10)
         ]
         self._dis = [self._D[self._SP[i], self._bin[i]] for i in range(10)]
+        self._max_dis = np.array([np.max(i) for i in self._dis])
         
-        self._smooth_maps = [
-            smooth_map_all[i][self._bin[i][np.argsort(self._dis[i])]] for i in range(10)
-        ]
-        """
-        from mylib.maze_utils3 import DrawMazeProfile
-        for i in range(10):
-            plt.figure()
-            ax = plt.axes()
-            #maps = np.full_like(smooth_map_all[i], np.nan)
-            maps = smooth_map_all[i]
-            #maps[self._bin[i][np.argsort(self._dis[i])]] = np.arange(self._bin[i].shape[0])
-            maps = np.reshape(maps, [48, 48])
-            ax.imshow(maps)
-            DrawMazeProfile(maze_type=1, axes=ax,color='black', nx=48)
-            ax.set_title(f"Route {i+1}")
-            plt.show()
-        """    
-            
-    def update_smooth_map(self, smooth_map_all: list[dict]):
-        self._smooth_maps = [
-            smooth_map_all[i][self._bin[i][np.argsort(self._dis[i])]] for i in range(10)
-        ]
-        
-    def get_map(self):
-        return np.vstack([self._smooth_maps[i][:CP_DSP[3].shape[0]*16] for i in range(10)])
-        
-    def shuffle_maps(self):
-        #shuf_maps = []
-        shuf_maps = [np.roll(self._smooth_maps[i], np.random.randint(0, self._smooth_maps[i].shape[0])) for i in range(10)]
-        """
-        for i in range(10):
-            if i in [0]:
-                shift_route_0 = np.random.randint(0, self._smooth_maps[0].shape[0])
-                shuf_maps.append(np.roll(self._smooth_maps[0], shift_route_0))
-            elif i in [4, 5, 9]:
-                shuf_maps.append(np.roll(self._smooth_maps[i], shift_route_0))
-            else:
-                shuf_maps.append(np.roll(self._smooth_maps[i], np.random.randint(0, self._smooth_maps[i].shape[0])))
-        """
-        return np.vstack([shuf_maps[i][:CP_DSP[3].shape[0]*16] for i in range(10)])
+        self._null = self.get_null_hypo(field_reg, place_field_all)
+        self._field_reg = field_reg
+        self._place_field_all = place_field_all
+        self._init_field_range()
     
-    def calc_corr(self, smooth_maps: np.ndarray):
-        """
-        smooth_maps: 10 * length
-        """
-        n_steps = int(smooth_maps.shape[1]/16)
-        corr_steps = np.zeros(n_steps)
-        for i in range(n_steps):
-            corr = pearsonr_pairwise(
-                smooth_maps[:, i*16:(i+1)*16], axis=1
-            )
-            corr[np.isnan(corr)] = -1
-            corr_steps[i] = np.nanmean(corr[np.where(np.triu(corr, k=1)!=0)])
+    def _get_range(self, field_area: np.ndarray, start_point: int) -> tuple[int, int]:
+        dis = self._D[start_point, field_area-1]
+        return np.min(dis), np.max(dis)
+    
+    def _init_field_range(self):
+        self._lef_bounds = np.full((10, self._field_reg.shape[1]), np.nan)
+        self._rig_bounds = np.full((10, self._field_reg.shape[1]), np.nan)
+        
+        for i in self._null:
+            for j in range(self._field_reg.shape[1]):
+                if self._field_reg[i, j] >= 1:
+                    field_centers = list(self._place_field_all.keys())[j]
+                    lef, rig = self._get_range(self._place_field_all[field_centers], self._SP[i])
+                    self._lef_bounds[i, j] = lef
+                    self._rig_bounds[i, j] = rig
+        
+        self._lef_bounds = self._lef_bounds[self._null, :]
+        self._rig_bounds = self._rig_bounds[self._null, :]
+        
+        self._lef_bounds, self._rig_bounds = self.sort_bounds(self._lef_bounds, self._rig_bounds)
+    
+    # Sort boundarys based on distance
+    def sort_bounds(self, lef_bounds: np.ndarray, rig_bounds: np.ndarray):
+        for i in range(lef_bounds.shape[0]):
+            sort_idx = np.argsort(lef_bounds[i])
+            lef_bounds[i, :], rig_bounds[i, :] = lef_bounds[i, sort_idx], rig_bounds[i, sort_idx]
+        return lef_bounds, rig_bounds
+    
+    def calc_overlapping(self, lef: np.ndarray, rig: np.ndarray):
+        overlap = 0
+        for d in range(1, lef.shape[0]):
+            res_1 = rig[:lef.shape[0]-d] - lef[d:]
+            res_2 = rig[d:] - lef[:lef.shape[0]-d]
+            
+            min_dis = np.min(np.vstack([res_1, res_2, rig[:lef.shape[0]-d] - lef[:lef.shape[0]-d], rig[d:] - lef[d:]]), axis=0)
+            overlap += np.sum(min_dis[min_dis > 0])
+            
+        _range = np.sort(rig-lef)[::-1]
+        if np.isnan(overlap):
+            print(lef, rig)
+        
+        return overlap / np.nansum(_range[1:] * np.arange(1, lef.shape[0]))
+            
+    def get_shift_distance(self, n_shuffle=1000):
+        shift_dis = np.zeros((self._null.shape[0], n_shuffle))
+        
+        for i, n in enumerate(self._null):
+            shift_dis[i, :] = np.random.rand(n_shuffle) * self._max_dis[n]
+        
+        idx = np.where(self._R[self._null] == 0)[0]
+        if idx.shape[0] > 1:
+            shift_dis[idx, :] = shift_dis[idx[0], :]
+        return shift_dis
+    
+    def shuffle_fields(self, lef_bounds: np.ndarray, rig_bounds: np.ndarray, shift_dis: int):
+        lef, rig = lef_bounds + shift_dis[:, np.newaxis], rig_bounds + shift_dis[:, np.newaxis]
+        
+        max_dis = self._max_dis[self._null][:, np.newaxis]
+        idx = np.where((lef - max_dis >= 0))[0]
+        lef[idx] -= max_dis[idx]
+        rig[idx] -= max_dis[idx]
+        
+        idx = np.where((rig - max_dis > 0)&(lef < max_dis))[0]
+        lef[idx] = 0
+        rig[idx] -= max_dis[idx]
+        
+        lef, rig = self.sort_bounds(lef, rig)
+        
+        return lef[:, 0], rig[:, 0]
+            
+    def update(self, field_reg: np.ndarray, place_field_all: list[dict]):
+        self._field_reg = field_reg
+        self._place_field_all = place_field_all
+        self._null = self.get_null_hypo(field_reg, place_field_all)
+        self._init_field_range()
+    
+    def is_starting_cell(self, n_shuffle=1000, is_return_shuf = False):
+        lef_bounds, rig_bounds = self._lef_bounds, self._rig_bounds
+        real_oi = self.calc_overlapping(lef_bounds[:, 0], rig_bounds[:, 0])
 
-        return corr_steps
-    
-    def is_starting_cell(self, n_shuffle=1000, is_return_shuf = False, null_hypo: np.ndarray = np.arange(10)):
-        smooth_map = self.get_map()
-        real_corr = self.calc_corr(smooth_map[null_hypo, :])
-        
-        """
-        x = np.linspace(8, smooth_map.shape[1]-8, int(smooth_map.shape[1]/16))
-        ax = plt.axes()
-        ax.imshow(smooth_map[null_hypo, :])
-        ax.set_aspect("auto")
-        ax.plot(x, real_corr, color = 'white')
-        ax.invert_yaxis()
-        plt.show()
-        """
-        shuf_corr = np.zeros((n_shuffle, real_corr.shape[0]))
+        shuf_oi = np.zeros(n_shuffle)
+        shift_dis = self.get_shift_distance(n_shuffle)
         for i in range(n_shuffle):
-            shuf_maps = self.shuffle_maps()
-            shuf_corr[i, :] = self.calc_corr(shuf_maps[null_hypo, :])
+            lef, rig = self.shuffle_fields(lef_bounds, rig_bounds, shift_dis[:, i])
+            shuf_oi[i] = self.calc_overlapping(lef, rig)
             
-        P = np.array([
-            np.where(shuf_corr[:, i] - real_corr[i] > 0)[0].shape[0] / n_shuffle for i in range(real_corr.shape[0])
-        ])
+        P = np.mean(real_oi < shuf_oi)
         
         if is_return_shuf:
-            return real_corr, P, shuf_corr
+            return real_oi, P, shuf_oi
         else:
-            return real_corr, P
+            return real_oi, P
+        
+    @property
+    def null(self):
+        return self._null
     
     @staticmethod
     def visualize_shuffle_results(
@@ -163,27 +185,30 @@ class StartingCell:
         save_loc:str = None,
         percent: float = 95,
         file_name: str = None,
-        is_show: bool = False,
-        null_hypo: np.ndarray = np.arange(10)
+        is_show: bool = False
     ):
-        cell = StartingCell([trace[f"node {j}"]["smooth_map_all"][n, :] for j in range(10)])
-        null_hypo = cell.get_null_hypo(field_reg=trace['field_reg_modi'][:, np.where(trace['field_info'][0, :, 0] == n+1)[0]], 
-                                       place_field_all=trace['place_field_all'][n])
-        print(null_hypo+1)
-        corr, p, shuf_corr = cell.is_starting_cell(n_shuffle=n_shuffle, is_return_shuf=True, null_hypo=null_hypo)
+        
+        field_reg = trace['field_reg_modi'][:, np.where(trace['field_info'][0, :, 0] == n+1)[0]]
+        cell = StartingCell(field_reg=field_reg, place_field_all=trace['place_field_all'][n])
+        overlap, p, shuf_overlap = cell.is_starting_cell(n_shuffle=n_shuffle, is_return_shuf=True)
     
-        v_min = np.percentile(shuf_corr, (100-percent)/2, axis=0)
-        v_max = np.percentile(shuf_corr, 100 - (100-percent)/2, axis=0)
-        x = np.arange(corr.shape[0])
+        v_min = np.percentile(shuf_overlap, (100-percent)/2, axis=0)
+        v_max = np.percentile(shuf_overlap, 100 - (100-percent)/2, axis=0)
         
         fig = plt.figure(figsize=(6, 2))
         ax = Clear_Axes(plt.axes(), close_spines=['top', 'right'], ifxticks=True, ifyticks=True)
-        ax.plot(x, corr, color = 'black', linewidth = 0.5)
-        ax.fill_between(x, v_min, v_max, color='gray', edgecolor=None, alpha=0.8)
+        ax.hist(shuf_overlap, bins=100, range=(0, 1), color='gray')
+        ax.axvline(overlap, color='red', linewidth=0.5)
+        ax.axvline(v_min, ls=':', color='black', linewidth=0.5)
+        ax.axvline(v_max, ls=':', color='black', linewidth=0.5)
+        ax.set_xlim([0, 1])
+        ax.set_title(f"Cell {n+1} {int(trace['MiceID'])} {int(trace['date'])}\n"
+                     f"P-value: {round(p, 3)}  Overlap: {round(overlap, 3)}")
         
         print(f"{int(trace['MiceID'])}_{int(trace['date'])}_Cell {n+1}:\n"
-              f"Correla.: {corr}\n"
-              f"P-values: {p}")
+              f"Overlap: {overlap}\n"
+              f"P-values: {p}\n"
+              f"Null: {cell.null+1}")
         
         if is_show:
             plt.show()
@@ -202,34 +227,38 @@ class StartingCell:
         self, field_reg: np.ndarray, 
         place_field_all: list[dict]
     ) -> np.ndarray:
-        print(field_reg.shape[1], len(place_field_all.keys()))
         assert field_reg.shape[1] == len(place_field_all.keys())
         field_reg[field_reg > 1] = 1
         
         field_center = np.array(list(place_field_all.keys()))
-        dis = self._D[self._SP, :][:, np.array([k for k in place_field_all.keys()])-1] * field_reg
+        dis = self._D[self._SP, :][:, field_center-1] * field_reg
         dis[dis == 0] = np.nan
         
         nearest = np.nanmin(dis, axis=1)
-        nearest_keys = 
-        return np.where(nearest <= 30)[0]
+        return np.intersect1d(np.where(nearest <= 100)[0], np.array([1, 2, 3, 6, 7, 8]))
     
     @staticmethod
-    def classify(trace, n_shuffle=1000):
-        is_startingcell = np.zeros(trace['n_neuron'])
-        starting_corr = np.zeros((trace['n_neuron'], CP_DSP[3].shape[0]))
-        starting_p = np.zeros((trace['n_neuron'], CP_DSP[3].shape[0]))
+    def classify(trace, n_shuffle=10000, p_thre = 0.01):
+        n_neuron = trace['n_neuron']
+        SC_OI = np.zeros(n_neuron)
+        SC_P = np.zeros(n_neuron)
         cell = None
         
-        for i in tqdm(range(trace['n_neuron'])):
+        for i in tqdm(range(n_neuron)):
+            field_reg = trace['field_reg_modi'][:, np.where(trace['field_info'][0, :, 0] == i+1)[0]]
             if cell is None:
-                cell = StartingCell([trace[f"node {j}"]["smooth_map_all"][i, :] for j in range(10)])
+                cell = StartingCell(field_reg=field_reg, place_field_all=trace['place_field_all'][i])
             else:
-                cell.update_smooth_map([trace[f"node {j}"]["smooth_map_all"][i, :] for j in range(10)])
-            starting_corr[i, :], starting_p[i, :] = cell.is_starting_cell(n_shuffle=n_shuffle)
+                cell.update(field_reg=field_reg, place_field_all=trace['place_field_all'][i])
+                
+            SC_OI[i], SC_P[i] = cell.is_starting_cell(n_shuffle=n_shuffle)
         
-        trace['starting_corr'] = starting_corr
-        trace['starting_p'] = starting_p
+        trace['SC_OI'] = SC_OI
+        trace['SC_P'] = SC_P
+        trace['SC_P_thre'] = p_thre
+        trace['SC_P_shuffle'] = n_shuffle
+        trace['SC'] = np.where(SC_P < p_thre, 1, 0)
+        
         return trace
             
         
@@ -239,7 +268,7 @@ if __name__ == '__main__':
     from mylib.local_path import f2
     
     for i in range(len(f2)):
-        if i != 21:
+        if i != 26:
             continue
         print(i, f2['MiceID'][i], f2['date'][i])
         
@@ -248,7 +277,7 @@ if __name__ == '__main__':
         
         StartingCell.visualize_shuffle_results(
             trace,
-            n=82-1,
+            n=15-1,
             is_show=True,
-            null_hypo=np.array([2, 5, 6, 7, 8])
+            n_shuffle=10000
         )
