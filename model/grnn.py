@@ -80,7 +80,7 @@ class ProbabilityRNN(nn.Module):
         r_i = torch.full((batch_size, 1), self.p0, device=device)
         r_preds = []
 
-        for t in range(seq_len - 1):
+        for t in range(seq_len-1):
             s_i = s[:, t].unsqueeze(-1)  # Shape: (batch_size, 1)
             input_t = torch.cat([s_i, r_i], dim=-1)  # Shape: (batch_size, 2)
             input_t = input_t.unsqueeze(1)  # Shape: (batch_size, 1, 2)
@@ -198,6 +198,7 @@ class ProbabilityRNN(nn.Module):
                 simu.append(np.random.choice([0, 1], p=[1 - curr_p, curr_p]))
             simu_seq.append(np.array(simu))
         return simu_seq
+    
 
     def get_predicted_prob(self, sequences: list[np.ndarray]) -> list[np.ndarray]:
         """
