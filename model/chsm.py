@@ -2,6 +2,7 @@
 
 import numpy as np
 from scipy.optimize import minimize
+from tqdm import tqdm
 
 def reci_func(x, r, L0, b0, L1, b1):
     return np.clip(
@@ -20,15 +21,21 @@ def poly2_func(x, r, a1, b1, c1, a2, b2, c2):
         x * (a1 * r**2 + b1 * r + c1) + (1-x) * (a2 * (1-r)**2 + b2 * (1-r) + c2),
         0, 1
     )
+    
+def poly3_func(x, r, a1, b1, c1, d1, a2, b2, c2, d2):
+    return np.clip(
+        x * (a1 * r**3 + b1 * r**2 + c1 * r + d1) + (1-x) * (a2 * (1-r)**3 + b2 * (1-r)**2 + c2 * (1-r) + d2),
+        0, 1
+    )
 
 class ContinuousHiddenStateModel:
     def __init__(self, func: str, p0: str = 0.6) -> None:
         """
-        func: 'reci', 'logistic', 'poly2'
+        func: 'reci', 'logistic', 'poly2', 'poly3'
         """
-        if func not in ['reci', 'logistic', 'poly2']:
+        if func not in ['reci', 'logistic', 'poly2', 'poly3']:
             raise ValueError(
-                f"func must be one of ['reci', 'logistic', 'poly2'], "
+                f"func must be one of ['reci', 'logistic', 'poly2', 'poly3'], "
                 f"but {func} is given."
             )
             
@@ -40,8 +47,11 @@ class ContinuousHiddenStateModel:
             self.init_guess = [0.6, 0.01, 0.6, 0.01]
             self._func = logistic_func
         elif func == 'poly2':
-            self.init_guess = [0.3, 0.3, 0.4, -0.3, -0.3, 0.4]
+            self.init_guess = [0.2, 0.4, 0.4, -0.2, -0.4, 0.6]
             self._func = poly2_func
+        elif func == 'poly3':
+            self.init_guess = [0.2, 0.3, 0.4, 0.1, -0.2, -0.3, -0.1, 0.6]
+            self._func = poly3_func
         
         self.func_name = func
         self.loss_tracker = []
@@ -104,24 +114,35 @@ class ContinuousHiddenStateModel:
         else:
             raise ValueError("Model is not fitted yet.")
     
-    def simulate(self, sequences: list[np.ndarray]) -> list[np.ndarray]:
-        self.get_predicted_prob(sequences)
-            
+    def simulate(self, sequences: list[np.ndarray], is_noise: bool = False) -> list[np.ndarray]:            
         simu_seq = []
         for n, seq in enumerate(sequences):
+            if is_noise:
+                pe = np.random.normal(0, 0.03, len(seq))
+            else:
+                pe = np.repeat(0, len(seq))
+                
             simu = [1]
+            curr_p = [self.p0]
             for i in range(len(seq) - 1):
-                curr_p = self.predicted_prob[n][i]
-                simu.append(np.random.choice([0, 1], p=[1 - curr_p, curr_p]))
+                p = np.clip(curr_p[-1] + pe[i], 0, 1)
+                simu.append(np.random.choice([0, 1], p=[1 - p, p]))
+                curr_p.append(self.predict(simu[-1], p))
             simu_seq.append(np.array(simu))
         return simu_seq
         
-    def get_predicted_prob(self, sequences: list[np.ndarray]) -> list[np.ndarray]:
+    def get_predicted_prob(self, sequences: list[np.ndarray], is_noise: bool = False) -> list[np.ndarray]:
         predicted_prob = []
         for seq in sequences:
+            if is_noise:
+                pe = np.random.normal(0, 0.03, len(seq))
+            else:
+                pe = np.repeat(0, len(seq))
+                
             curr_p = [self.p0]
             for i in range(1, len(seq) - 1):
-                curr_p.append(self.predict(seq[i], curr_p[-1]))
+                p = np.clip(curr_p[-1] + pe[i], 0, 1)
+                curr_p.append(self.predict(seq[i], p))
             predicted_prob.append(np.array(curr_p, np.float64))
         self.predicted_prob = predicted_prob
         return predicted_prob
@@ -133,7 +154,7 @@ class ContinuousHiddenStateModel:
         loss = 0
         for i in range(len(self.predicted_prob)):
             if len(self.predicted_prob[i]) > 0:
-                loss += np.sum(sequences[i][1:] * np.log(self.predicted_prob[i] - 1e-10) + (1 - sequences[i][1:]) * np.log(1 - self.predicted_prob[i] + 1e-10))
+                loss += np.nansum(sequences[i][1:] * np.log(self.predicted_prob[i] - 1e-10) + (1 - sequences[i][1:]) * np.log(1 - self.predicted_prob[i] + 1e-10))
         
         n_total = np.sum([len(seq)-1 for seq in sequences if len(seq) > 1])
         self._loss = -loss / n_total
@@ -145,6 +166,57 @@ class ContinuousHiddenStateModel:
     @property
     def loss(self):
         return self._loss
+    
+    def _check_permanent_silent(self, field_reg):
+        for i in range(field_reg.shape[0]):
+            I = 0
+            for j in range(field_reg.shape[1]):
+                if field_reg[i, j] == 0:
+                    I += 1
+                else:
+                    I = 0
+                
+                if I >= 9:
+                    field_reg[i, j:] = 0
+        
+        return field_reg
+    
+    def simulate_across_day(self, n_step: int = 26, n_fields: int = 10000, is_noise: bool = False, is_gated: bool = True):
+        field_reg = np.vstack(self.simulate([np.arange(n_step) for _ in range(n_fields)], is_noise))
+        if is_gated: 
+            # Gate mechanism to permanently set silent fields
+            field_reg = self._check_permanent_silent(field_reg)
+        
+        for i in tqdm(range(1, n_step)):
+            dn = n_fields - int(np.nansum(field_reg[:, i]))
+            if dn > 0:
+                append_reg = np.zeros((dn, n_step), np.float64) * np.nan
+                append_seq = np.vstack(self.simulate([np.arange(n_step-i) for _ in range(dn)], is_noise))
+                if is_gated:
+                    append_reg[:, i:] = self._check_permanent_silent(append_seq)
+                field_reg = np.vstack([field_reg, append_reg])
+                
+        # Set as permanent silent neurons
+        if is_gated == False:
+            return field_reg, field_identity
+        
+        field_identity = np.ones_like(field_reg, np.float64)
+        field_identity[np.isnan(field_reg)] = np.nan
+        for i in range(field_reg.shape[0]):
+            I = 0
+            for j in range(field_reg.shape[1]):
+                if field_reg[i, j] == 0:
+                    I += 1
+                else:
+                    I = 0
+                
+                if I >= 9:
+                    field_reg[i, j:] = 0
+                    field_identity[i, j:] = np.nan
+                    break
+                
+        return field_reg, field_identity
+            
     
 if __name__ == "__main__":
     import pickle

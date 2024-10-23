@@ -22,8 +22,15 @@ class Tracker2d:
                 (self._field_reg[i+1, :] == 1)
             )[0]
             self._field_reg[i, idx] = 1
+            
+    @property
+    def field_reg(self):
+        return self._field_reg
     
     def convert_to_sequence(self):
+        """
+        convert field_reg and related structure to sequences.
+        """
         field_reg = self._field_reg
         sequences = []
         for i in range(field_reg.shape[0]-1):
@@ -50,7 +57,6 @@ class Tracker2d:
                     )[0]
                     for k in idx:
                         sequences.append(field_reg[i:j+1, k].astype(np.int64))
-                
                 else:
                     idx = np.where(
                         (np.isnan(np.sum(field_reg[i:j+1, :], axis=0)) == False) &
@@ -60,7 +66,30 @@ class Tracker2d:
                     for k in idx:
                         sequences.append(field_reg[i:j+1, k].astype(np.int64))
                     
-
+        # Cut the sequence if 0 continuously occurs for 8 times
+        for i in range(len(sequences)-1):
+            num_zero = 0
+            is_split = False
+            split_point = []
+            for j in range(sequences[i].shape[0]):
+                if num_zero == 8:
+                    is_split = True
+                
+                if sequences[i][j] == 0:
+                    num_zero += 1
+                else:
+                    if is_split:
+                        split_point.append(j)
+                        is_split = False
+                    num_zero = 0
+            
+            if len(split_point) != 0:      
+                split_point = [0] + split_point + [sequences[i].shape[0]]
+                for j in range(1, len(split_point)-1):
+                    sequences.append(sequences[i][split_point[j]:split_point[j+1]])
+                        
+                sequences[i] = sequences[i][split_point[0]:split_point[1]]
+        
         for i in range(len(sequences)-1, -1, -1):
             if np.sum(sequences[i]) == 0:
                 sequences.pop(i)
@@ -73,9 +102,212 @@ class Tracker2d:
                     if sequences[i].shape[0] <= 1:
                         sequences.pop(i)
                     break
-
+        
         return sequences
+    
+    @staticmethod
+    def reconstruct_reg(field_reg, thre: int = 5):
+        tracker = Tracker2d(field_reg)
+        field_reg = tracker.field_reg
+        
+        sequences = []
+        n_session = []
+        for i in range(field_reg.shape[0]-1):
+            for j in range(i+1, field_reg.shape[0]):
+                if i == 0 and j != field_reg.shape[0]-1:
+                    idx = np.where(
+                        (np.isnan(np.sum(field_reg[i:j+1, :], axis=0)) == False) &
+                        (np.isnan(field_reg[j+1, :]) == True)
+                    )[0]
+                    for k in idx:
+                        sequences.append(field_reg[i:j+1, k].astype(np.int64))
+                        n_session.append(i)
                     
+                elif i != 0 and j == field_reg.shape[0]-1:
+                    idx = np.where(
+                        (np.isnan(np.sum(field_reg[i:j+1, :], axis=0)) == False) &
+                        (np.isnan(field_reg[i-1, :]) == True)
+                    )[0]
+                    for k in idx:
+                        sequences.append(field_reg[i:j+1, k].astype(np.int64))
+                        n_session.append(i)
+                
+                elif i == 0 and j == field_reg.shape[0]-1:
+                    idx = np.where(
+                        (np.isnan(np.sum(field_reg[i:j+1, :], axis=0)) == False)
+                    )[0]
+                    for k in idx:
+                        sequences.append(field_reg[i:j+1, k].astype(np.int64))
+                        n_session.append(i)
+                else:
+                    idx = np.where(
+                        (np.isnan(np.sum(field_reg[i:j+1, :], axis=0)) == False) &
+                        (np.isnan(field_reg[i-1, :]) == True) &
+                        (np.isnan(field_reg[j+1, :]) == True)
+                    )[0]
+                    for k in idx:
+                        sequences.append(field_reg[i:j+1, k].astype(np.int64))
+                        n_session.append(i)
+                    
+        # Cut the sequence if 0 continuously occurs for 8 times
+        for i in range(len(sequences)-1):
+            num_zero = 0
+            is_split = False
+            split_point = []
+            for j in range(sequences[i].shape[0]):
+                if num_zero == 8:
+                    is_split = True
+                
+                if sequences[i][j] == 0:
+                    num_zero += 1
+                else:
+                    if is_split:
+                        split_point.append(j)
+                        is_split = False
+                    num_zero = 0
+            
+            if len(split_point) != 0:      
+                split_point = [0] + split_point + [sequences[i].shape[0]]
+                for j in range(1, len(split_point)-1):
+                    sequences.append(sequences[i][split_point[j]:split_point[j+1]])
+                    n_session.append(n_session[i] + split_point[j])
+                        
+                sequences[i] = sequences[i][split_point[0]:split_point[1]]
+        
+        for i in range(len(sequences)-1, -1, -1):
+            if np.sum(sequences[i]) == 0:
+                sequences.pop(i)
+                n_session.pop(i)
+                continue
+    
+            for j in range(sequences[i].shape[0]):
+                if sequences[i][j] == 1:
+                    sequences[i] = sequences[i][j:]
+                    n_session[i] = n_session[i]+j
+
+                    if sequences[i].shape[0] <= thre-1:
+                        sequences.pop(i)
+                        n_session.pop(i)
+                    break
+        
+        # Reconstuct the sequence
+        reconstructed_reg = np.zeros((field_reg.shape[0], len(sequences))) * np.nan
+        for i, seq in enumerate(sequences):
+            reconstructed_reg[n_session[i]:n_session[i]+seq.shape[0], i] = seq
+        return reconstructed_reg
+    
+    @staticmethod
+    def convert_for_glm(field_reg, glm_params, least_length=5, seq_format=False) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        
+        sequences = []
+        param_sequences = []
+        for i in range(field_reg.shape[0]-1):
+            for j in range(i+1, field_reg.shape[0]):
+                if i == 0 and j != field_reg.shape[0]-1:
+                    idx = np.where(
+                        (np.isnan(np.sum(field_reg[i:j+1, :], axis=0)) == False) &
+                        (np.isnan(field_reg[j+1, :]) == True)
+                    )[0]
+                    for k in idx:
+                        sequences.append(field_reg[i:j+1, k].astype(np.int64))
+                        param_sequences.append(glm_params[i:j+1, k, :])
+                    
+                elif i != 0 and j == field_reg.shape[0]-1:
+                    idx = np.where(
+                        (np.isnan(np.sum(field_reg[i:j+1, :], axis=0)) == False) &
+                        (np.isnan(field_reg[i-1, :]) == True)
+                    )[0]
+                    for k in idx:
+                        sequences.append(field_reg[i:j+1, k].astype(np.int64))
+                        param_sequences.append(glm_params[i:j+1, k, :])
+                
+                elif i == 0 and j == field_reg.shape[0]-1:
+                    idx = np.where(
+                        (np.isnan(np.sum(field_reg[i:j+1, :], axis=0)) == False)
+                    )[0]
+                    for k in idx:
+                        sequences.append(field_reg[i:j+1, k].astype(np.int64))
+                        param_sequences.append(glm_params[i:j+1, k, :])
+                else:
+                    idx = np.where(
+                        (np.isnan(np.sum(field_reg[i:j+1, :], axis=0)) == False) &
+                        (np.isnan(field_reg[i-1, :]) == True) &
+                        (np.isnan(field_reg[j+1, :]) == True)
+                    )[0]
+                    for k in idx:
+                        sequences.append(field_reg[i:j+1, k].astype(np.int64))
+                        param_sequences.append(glm_params[i:j+1, k, :])
+                    
+        # Cut the sequence if 0 continuously occurs for 8 times
+        for i in range(len(sequences)-1):
+            num_zero = 0
+            is_split = False
+            split_point = []
+            for j in range(sequences[i].shape[0]):
+                if num_zero == 8:
+                    is_split = True
+                
+                if sequences[i][j] == 0:
+                    num_zero += 1
+                else:
+                    if is_split:
+                        split_point.append(j)
+                        is_split = False
+                    num_zero = 0
+            
+            if len(split_point) != 0:      
+                split_point = [0] + split_point + [sequences[i].shape[0]]
+                for j in range(1, len(split_point)-1):
+                    sequences.append(sequences[i][split_point[j]:split_point[j+1]])
+                    param_sequences.append(param_sequences[i][split_point[j]:split_point[j+1], :])
+                        
+                sequences[i] = sequences[i][split_point[0]:split_point[1]]
+                param_sequences[i] = param_sequences[i][split_point[0]:split_point[1], :]
+        
+        for i in range(len(sequences)-1, -1, -1):
+            if np.sum(sequences[i]) == 0:
+                sequences.pop(i)
+                param_sequences.pop(i)
+                continue
+    
+            for j in range(sequences[i].shape[0]):
+                if sequences[i][j] == 1:
+                    sequences[i] = sequences[i][j:]
+                    param_sequences[i] = param_sequences[i][j:, :]
+
+                    if sequences[i].shape[0] <= 1:
+                        sequences.pop(i)
+                        param_sequences.pop(i)
+                    break
+                
+                
+        seq_lengths = np.array([seq.shape[0] for seq in sequences])
+        idx = np.where(seq_lengths >= least_length)[0]
+        sequences = [sequences[i] for i in idx]
+        param_sequences = [param_sequences[i] for i in idx]
+        
+        if seq_format:
+            for i in range(len(sequences)):
+                param_sequences[i][np.isnan(param_sequences[i])] = 0
+            return sequences, param_sequences
+        
+        for i in range(len(sequences)):
+            attached_column = np.arange(sequences[i].shape[0])
+            param_sequences[i] = np.concatenate([param_sequences[i], attached_column[:, np.newaxis]], axis=1)
+
+        for i in range(len(sequences)):
+            if len(sequences[i]) != param_sequences[i].shape[0]:
+                raise ValueError('Length of sequences and param_sequences are not same.')
+        
+        # Quality Control
+        Y = np.concatenate([seq[1:] for seq in sequences])
+        X = np.concatenate([param_seq[:-1, :] for param_seq in param_sequences], axis=0)
+        
+        sum = np.sum(X, axis=1)
+        idx = np.where(np.isnan(sum) == False)[0]
+    
+        return X[idx, :], Y[idx]
+    
     def calc_P1(self, sequences: list[np.ndarray] = None) -> np.ndarray:
         if sequences is None:
             sequences = self.convert_to_sequence()
@@ -91,6 +323,40 @@ class Tracker2d:
         
         probs = probs[1:, :, 1]/np.sum(probs[1:, :, :], axis=2)
         return probs
+    
+    def calc_P3(self, sequences: list[np.ndarray] = None) -> np.ndarray:
+        if sequences is None:
+            sequences = self.convert_to_sequence()
+
+        max_length = max([len(seq) for seq in sequences])
+
+        probs = np.zeros((max_length, max_length, 2))
+        
+        for seq in sequences:
+            HA, A, I = 0, 1, 0
+            for i in range(seq.shape[0]-1):
+                if seq[i] == 1 and seq[i+1] == 0:
+                    probs[A-1, I, 0] += 1
+                    HA = A
+                    A = 0
+                    I += 1
+                elif seq[i] == 0 and seq[i+1] == 0:
+                    probs[HA-1, I, 0] += 1
+                    I += 1
+                elif seq[i] == 0 and seq[i+1] == 1:
+                    probs[HA-1, I, 1] += 1
+                    A += 1
+                    I = 0
+                    HA = 0
+                elif seq[i] == 1 and seq[i+1] == 1:
+                    probs[A-1, I, 1] += 1
+                    A += 1
+        
+        print(probs)
+        idx = np.where(np.sum(probs, axis=2) <= 5)
+        probs = probs[:, :, 1]/np.sum(probs[:, :, :], axis=2)
+        probs[idx] = np.nan
+        return probs
         
     @staticmethod
     def recovery_prob2d(field_reg: np.ndarray) -> np.ndarray:
@@ -101,7 +367,12 @@ class Tracker2d:
     def get_joint_prob(sequences: list[np.ndarray]) -> np.ndarray:
         tracker = Tracker2d()
         return tracker.calc_P1(sequences)
-        
+    
+    @staticmethod
+    def retained_dur_dependent_prob(sequences: list[np.ndarray]) -> np.ndarray:
+        tracker = Tracker2d()
+        return tracker.calc_P3(sequences)
+    
 if __name__ == "__main__":
     import numpy as np
     import matplotlib.pyplot as plt

@@ -68,6 +68,67 @@ class EqualRateDriftModel:
         return self._loss
 
 
+class TwoProbDriftModel:
+    """
+    This model assumes that the drift rate is equal for retention and recovery.
+    """
+    def __init__(self):
+        self._params = None
+        self._loss = None
+        self.predicted_prob = None
+        
+    @property
+    def params(self):
+        return self._params
+    
+    @property
+    def loss(self):
+        return self._loss
+    
+    def fit(self, sequences):
+        X = np.concatenate([seq[:-1] for seq in sequences])
+        Y = np.concatenate([seq[1:] for seq in sequences])
+        self._params = (
+            np.where((Y==1)&(X==1))[0].shape[0] / np.where(X==1)[0].shape[0],
+            np.where((Y==1)&(X==0))[0].shape[0] / np.where(X==0)[0].shape[0]
+        )
+        
+    def simulate(self, sequences: list[np.ndarray]) -> list[np.ndarray]:
+        simu_seq = []
+        for seq in sequences:
+            simu = [1]
+            for i in range(len(seq)-1):
+                PA = self.params[0] if simu[-1] == 1 else self.params[1]
+                simu_val = np.random.choice([0, 1], p=[1 - PA, PA])
+                simu.append(simu_val)
+            simu_seq.append(np.array(simu))
+    
+        return simu_seq
+    
+    def get_predicted_prob(self, sequences: list[np.ndarray]) -> list[np.ndarray]:
+        if self._params is None:
+            self.fit(sequences)
+        
+        ps = np.array([self.params[1], self.params[0]])
+        self.predicted_prob = [ps[seq][:-1] for seq in sequences]
+        return self.predicted_prob
+    
+    def calc_loss(self, sequences: list[np.ndarray]):
+        if self.predicted_prob is None:
+            self.get_predicted_prob(sequences)
+            
+        loss = 0
+        for i in range(len(self.predicted_prob)):
+            if len(self.predicted_prob[i]) > 0:
+                loss += np.sum(sequences[i][1:] * np.log(self.predicted_prob[i] - 1e-10) + (1 - sequences[i][1:]) * np.log(1 - self.predicted_prob[i] + 1e-10))
+        
+        n_total = np.sum([len(seq)-1 for seq in sequences if len(seq) > 1])
+        self._loss = -loss / n_total
+        print(f"Simple Drift Model:\n"
+              f"  Loss: {self.loss}\n"
+              f"  Parameters: {self.params}.\n")
+        return self._loss
+
 def count(P1: np.ndarray, P2: np.ndarray, sequence: np.ndarray):
     sequence = sequence.astype(np.int64)
     A, I = 1, 0

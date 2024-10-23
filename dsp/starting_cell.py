@@ -52,12 +52,10 @@ def get_initial_traj(trace, limit=10):
     }
 
 class StartingCell:
-    def __init__(self, field_reg: np.ndarray, place_field_all: list[dict]) -> None:
+    def __init__(self, place_field_all: list[dict]) -> None:
         """
         Parameters
         ----------
-        field_reg : np.ndarray
-            A matrix of shape (10, n_fields) that records the status of each place field on each route.
         place_field_all : list[dict]
             A list contains place fields on ten routes for a given neuron, and each of the inside list has k keys,
             where k is the number of fields on that route and the value of keys is the field center.
@@ -75,8 +73,7 @@ class StartingCell:
         self._dis = [self._D[self._SP[i], self._bin[i]] for i in range(10)]
         self._max_dis = np.array([np.max(i) for i in self._dis])
         
-        self._null = self.get_null_hypo(field_reg, place_field_all)
-        self._field_reg = field_reg
+        self._null = self.get_null_hypo(place_field_all)
         self._place_field_all = place_field_all
         self._init_field_range()
     
@@ -85,16 +82,18 @@ class StartingCell:
         return np.min(dis), np.max(dis)
     
     def _init_field_range(self):
-        self._lef_bounds = np.full((10, self._field_reg.shape[1]), np.nan)
-        self._rig_bounds = np.full((10, self._field_reg.shape[1]), np.nan)
+        if len(self._null) <= 1:
+            return
+        
+        max_field = np.max([len(field.keys()) for field in self._place_field_all])
+        self._lef_bounds = np.full((10, max_field), np.nan)
+        self._rig_bounds = np.full((10, max_field), np.nan)
         
         for i in self._null:
-            for j in range(self._field_reg.shape[1]):
-                if self._field_reg[i, j] >= 1:
-                    field_centers = list(self._place_field_all.keys())[j]
-                    lef, rig = self._get_range(self._place_field_all[field_centers], self._SP[i])
-                    self._lef_bounds[i, j] = lef
-                    self._rig_bounds[i, j] = rig
+            for j, k in enumerate(self._place_field_all[i].keys()):
+                lef, rig = self._get_range(self._place_field_all[i][k], self._SP[i])
+                self._lef_bounds[i, j] = lef
+                self._rig_bounds[i, j] = rig
         
         self._lef_bounds = self._lef_bounds[self._null, :]
         self._rig_bounds = self._rig_bounds[self._null, :]
@@ -150,13 +149,18 @@ class StartingCell:
         
         return lef[:, 0], rig[:, 0]
             
-    def update(self, field_reg: np.ndarray, place_field_all: list[dict]):
-        self._field_reg = field_reg
+    def update(self, place_field_all: list[dict]):
         self._place_field_all = place_field_all
-        self._null = self.get_null_hypo(field_reg, place_field_all)
+        self._null = self.get_null_hypo(place_field_all)
         self._init_field_range()
     
     def is_starting_cell(self, n_shuffle=1000, is_return_shuf = False):
+        if self.null.shape[0] <= 1:
+            if is_return_shuf:
+                return np.nan, np.nan, np.full(n_shuffle, np.nan)
+            else:
+                return np.nan, np.nan
+            
         lef_bounds, rig_bounds = self._lef_bounds, self._rig_bounds
         real_oi = self.calc_overlapping(lef_bounds[:, 0], rig_bounds[:, 0])
 
@@ -173,6 +177,12 @@ class StartingCell:
         else:
             return real_oi, P
         
+    def get_field_center(self):
+        try:
+            return np.mean((self._lef_bounds[:, 0] + self._rig_bounds[:, 0])/2)
+        except:
+            return np.nan
+        
     @property
     def null(self):
         return self._null
@@ -187,9 +197,7 @@ class StartingCell:
         file_name: str = None,
         is_show: bool = False
     ):
-        
-        field_reg = trace['field_reg_modi'][:, np.where(trace['field_info'][0, :, 0] == n+1)[0]]
-        cell = StartingCell(field_reg=field_reg, place_field_all=trace['place_field_all'][n])
+        cell = StartingCell(place_field_all=[trace[f"node {k}"]['place_field_all'][n] for k in range(10)])
         overlap, p, shuf_overlap = cell.is_starting_cell(n_shuffle=n_shuffle, is_return_shuf=True)
     
         v_min = np.percentile(shuf_overlap, (100-percent)/2, axis=0)
@@ -224,40 +232,73 @@ class StartingCell:
             plt.close()    
         
     def get_null_hypo(
-        self, field_reg: np.ndarray, 
+        self, 
         place_field_all: list[dict]
     ) -> np.ndarray:
-        assert field_reg.shape[1] == len(place_field_all.keys())
-        field_reg[field_reg > 1] = 1
+        field_center = []
+        relative_pos = []
+        for i in range(10):
+            if len(place_field_all[i].keys()) == 0:
+                field_center.append(-1)
+                relative_pos.append(np.nan)
+            else:
+                center_dis = self._D[np.array(list(place_field_all[i].keys()))-1, self._SP[i]]
+                field_center.append(list(place_field_all[i].keys())[np.argmin(center_dis)])
+                relative_pos.append(np.min(center_dis))
+
+        dis = np.array(relative_pos, dtype=np.float64)
+        if np.where(np.isnan(dis) == False)[0].shape[0] <= 1:
+            return np.array([])
         
-        field_center = np.array(list(place_field_all.keys()))
-        dis = self._D[self._SP, :][:, field_center-1] * field_reg
-        dis[dis == 0] = np.nan
+        ref_center = np.nanargmin(dis)
         
-        nearest = np.nanmin(dis, axis=1)
-        return np.intersect1d(np.where(nearest <= 100)[0], np.array([1, 2, 3, 6, 7, 8]))
+        # Check overlap:
+        candidate = [ref_center]
+        ref_lef, ref_rig = self._get_range(place_field_all[ref_center][int(field_center[ref_center])], self._SP[ref_center])
+        for i in range(10):
+            if i == ref_center:
+                continue
+            
+            if np.isnan(dis[i]):
+                continue
+            else:
+                test_range = place_field_all[i][int(field_center[i])]
+                lef, rig = self._get_range(test_range, self._SP[i])
+                if min(rig - ref_lef, ref_rig - lef) > 0:
+                    candidate.append(i)
+        
+        if len(candidate) == 1 or dis[ref_center] > 100:
+            return np.array([])
+        else:
+            return np.array(sorted(candidate), dtype=np.int64)
     
     @staticmethod
     def classify(trace, n_shuffle=10000, p_thre = 0.01):
         n_neuron = trace['n_neuron']
+        SC_EncodePath = []
         SC_OI = np.zeros(n_neuron)
         SC_P = np.zeros(n_neuron)
         cell = None
+        field_centers = []
         
         for i in tqdm(range(n_neuron)):
-            field_reg = trace['field_reg_modi'][:, np.where(trace['field_info'][0, :, 0] == i+1)[0]]
             if cell is None:
-                cell = StartingCell(field_reg=field_reg, place_field_all=trace['place_field_all'][i])
+                cell = StartingCell(place_field_all=[trace[f"node {k}"]['place_field_all'][i] for k in range(10)])
             else:
-                cell.update(field_reg=field_reg, place_field_all=trace['place_field_all'][i])
+                cell.update(place_field_all=[trace[f"node {k}"]['place_field_all'][i] for k in range(10)])
                 
             SC_OI[i], SC_P[i] = cell.is_starting_cell(n_shuffle=n_shuffle)
+            SC_EncodePath.append(cell.null)
+            field_centers.append(cell.get_field_center())
         
         trace['SC_OI'] = SC_OI
         trace['SC_P'] = SC_P
         trace['SC_P_thre'] = p_thre
         trace['SC_P_shuffle'] = n_shuffle
-        trace['SC'] = np.where(SC_P < p_thre, 1, 0)
+        trace['SC'] = np.where((SC_P < p_thre)&(np.isnan(SC_P) == False), 1, 0)
+        trace['SC_EncodePath'] = SC_EncodePath
+        trace['SC_EncodePath_Num'] = np.array([len(i) for i in SC_EncodePath], np.int64)
+        trace['SC_FieldCenter'] = np.array(field_centers, np.float64)
         
         return trace
             
@@ -270,14 +311,15 @@ if __name__ == '__main__':
     for i in range(len(f2)):
         if i != 26:
             continue
+        
         print(i, f2['MiceID'][i], f2['date'][i])
         
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
         
-        StartingCell.visualize_shuffle_results(
-            trace,
-            n=15-1,
-            is_show=True,
-            n_shuffle=10000
-        )
+        n = 15
+        print(f"Cell {n}:\n"
+              f"  is OI: {trace['SC'][n-1]}\n"
+              f"  OI:    {trace['SC_OI'][n-1]}\n"
+              f"  P:     {trace['SC_P'][n-1]}\n"
+              f"  Encoded Path: {trace['SC_EncodePath'][n-1]+1}")

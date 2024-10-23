@@ -23,6 +23,19 @@ def SessionDuration_Interface(trace: dict, spike_threshold = 30, variable_names 
     
     return np.array([trace['correct_time'][-1]/1000/60], dtype=np.float64)
 
+def Number_Tracked_Fields_Interface(trace, variable_names):
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Num', 'Paradigm'])
+    
+    if trace['paradigm'] == 'CrossMaze':
+        if trace['maze_type'] == 0:
+            return np.array([]), np.array([])
+        
+        maze_type = "MA" if int(trace['maze_type']) == 1 else "MB"
+        return np.array([trace['field_reg'].shape[1]]), np.array([maze_type])
+    else:
+        num_cis, num_trs = trace['cis']['field_reg'].shape[1], trace['trs']['field_reg'].shape[1]
+        return np.array([num_cis, num_trs]), np.array([trace['paradigm'] + " cis", trace['paradigm'] + " trs"])
+
 def TotalPathLength_Interface(trace: dict, spike_threshold = 30, variable_names = None, is_placecell = False):
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Path Length'])
     
@@ -83,8 +96,8 @@ def FieldPeakRateStatistic_Interface(trace = {}, spike_threshold = 10, variable_
 
 # Fig0016&17
 # Generate spatial information map Fig0016
-def SpatialInformation_Interface(trace = {}, spike_threshold = 10, variable_names = None, is_placecell = True):
-    KeyWordErrorCheck(trace, __file__, ['SI_all','is_placecell','is_placecell_isi','Spikes'])
+def SpatialInformation_Interface(trace: dict, spike_threshold = 10, variable_names = None, is_placecell = True):
+    KeyWordErrorCheck(trace, __file__, ['SI'])
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['SI'])
     
     if trace['maze_type'] == 0:
@@ -92,6 +105,96 @@ def SpatialInformation_Interface(trace = {}, spike_threshold = 10, variable_name
     else:
         return np.array([np.mean(trace['LA']['SI_all'][np.where(trace['LA']['is_placecell'] == 1)[0]])])
     
+# Fig0018 Spatial Information Regression Out Speed
+def SI_RegressOut_Speed_Interface(trace: dict, variable_names: list[str]):
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ["SI", "Speed Level"])
+    beg, end = trace['lap beg time'], trace['lap end time']
+    Speed = np.zeros(end.shape[0], np.float64)
+    
+    indices = []
+    
+    for i in range(end.shape[0]):
+        idx = np.where((trace['ms_time_behav'] >= beg[i]) & (trace['ms_time_behav'] <= end[i]))[0]
+        indices.append(idx)
+        behav_idx = np.where((trace['correct_time'] >= beg[i]) & (trace['correct_time'] <= end[i]))[0]
+
+        dx = np.ediff1d(trace['processed_pos_new'][behav_idx, 0])/10
+        dy = np.ediff1d(trace['processed_pos_new'][behav_idx, 1])/10
+        
+        dt = trace['correct_time'][behav_idx[-1]] - trace['correct_time'][behav_idx[0]]
+        Speed[i] = np.sum(np.sqrt(dx**2+dy**2))/dt*1000
+    
+    speed_labels = np.clip((Speed // 10).astype(np.int64), 0, 4)
+    
+    SIs = np.zeros(5, np.float64)
+    for i in range(5):
+        idx = np.where(speed_labels == i)[0]
+        
+        if idx.shape[0] < 3:
+            SIs[i] = np.nan
+            continue
+        
+        ms_indices = np.concatenate([indices[j] for j in idx])
+        idx = ms_indices
+        # Calculate Rate Map
+        occu_time = scipy.stats.binned_statistic(
+            trace['spike_nodes'][idx],
+            trace['dt'][idx],
+            bins=2304,
+            statistic="sum",
+            range=[0, 2304 + 0.0001]
+        )[0]
+        
+        rate_map = calc_ratemap(
+            Spikes = trace['Spikes'][:, idx], 
+            spike_nodes = trace['spike_nodes'][idx],
+            _nbins = 48*48, 
+            occu_time = occu_time, 
+            Ms = trace['Ms'], 
+            is_silent = trace['SilentNeuron']
+        )[0]
+    
+        t_total = np.nansum(occu_time)/1000
+        # time fraction at each spatial bin
+        t_nodes_frac = occu_time / 1000 / (t_total)
+        SI = calc_SI(
+            trace['Spikes'][:, idx],
+            rate_map = rate_map, 
+            t_total = t_total, 
+            t_nodes_frac = t_nodes_frac
+        )
+        SIs[i] = np.nanmean(SI[trace['is_placecell'] == 1])   
+         
+    return SIs, np.arange(5)
+        
+# Fig0019
+def TotalFieldNumber_Interface(
+    trace: dict,
+    variable_names = None
+):
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Field Num'])
+    
+    num = 0
+    for i in np.where(trace['is_placecell'] == 1)[0]:
+        num += len(trace['place_field_all_multiday'][i].keys())
+        
+    return np.array([num])
+
+def TotalFieldNumber_Reverse_Interface(
+    trace: dict,
+    variable_names = None
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Field Num', "Direction"])
+    
+    cis_num = 0
+    for i in np.where(trace['cis']['is_placecell'] == 1)[0]:
+        cis_num += len(trace['cis']['place_field_all_multiday'][i].keys())
+        
+    trs_num = 0
+    for i in np.where(trace['trs']['is_placecell'] == 1)[0]:
+        trs_num += len(trace['trs']['place_field_all_multiday'][i].keys())
+        
+    return np.array([cis_num, trs_num]), np.array(['cis', 'trs'])
 
 # Generate learning curve for cross maze paradigm. Fig0020
 def LearningCurve_Interface(trace: dict, spike_threshold = 30, variable_names = None):
@@ -853,7 +956,6 @@ def AverageVelocity_Interface(
         
         dt = (trace['correct_time'][-1] - trace['correct_time'][0])/1000
         return np.array([dis/dt], np.float64)
-        
         
     try:
         beg, end = LapSplit(trace, trace['paradigm'])
@@ -2767,3 +2869,92 @@ def FieldLifespan_Interface(
                 np.concatenate([lifespan_cis, lifespan_trs]), 
                 np.concatenate([np.repeat(trace['paradigm']+' cis', lifespan_cis.shape[0]), 
                                 np.repeat(trace['paradigm']+' trs', lifespan_trs.shape[0])]))
+
+from mylib.field.tracker_v2 import Tracker2d
+def Retention_Recovery_Interrelation_Interface(
+    trace, 
+    variable_names: list | None = None
+):
+    VariablesInputErrorCheck(
+        input_variable=variable_names,
+        check_variable=['I', 'A', 'P', 'Paradigm'])
+    
+    if trace['paradigm'] == 'CrossMaze':
+        paradigm = 'MA' if int(trace['maze_type']) == 1 else 'MB'
+        field_reg = trace['field_reg']
+        tracker = Tracker2d(field_reg=field_reg)
+        sequences = tracker.convert_to_sequence()
+    
+        P = Tracker2d.retained_dur_dependent_prob(sequences)
+    
+        I, A = np.meshgrid(np.arange(P.shape[1]), np.arange(1, P.shape[0]+1))
+    
+        I, A, P = I.flatten(), A.flatten(), P.flatten()
+    
+        mask = np.where(np.isnan(P) == False)[0]
+        I, A, P = I[mask], A[mask], P[mask]
+    
+        return I, A, P, np.repeat(paradigm, P.shape[0])
+    elif trace['paradigm'] == 'ReverseMaze':
+        
+        field_reg = trace['cis']['field_reg']
+        tracker = Tracker2d(field_reg=field_reg)
+        sequences = tracker.convert_to_sequence()
+    
+        Pf = Tracker2d.retained_dur_dependent_prob(sequences)
+    
+        If, Af = np.meshgrid(np.arange(Pf.shape[1]), np.arange(1, Pf.shape[0]+1))
+    
+        If, Af, Pf = If.flatten(), Af.flatten(), Pf.flatten()
+    
+        mask = np.where(np.isnan(Pf) == False)[0]
+        If, Af, Pf = If[mask], Af[mask], Pf[mask]
+        
+        field_reg = trace['trs']['field_reg']
+        tracker = Tracker2d(field_reg=field_reg)
+        sequences = tracker.convert_to_sequence()
+    
+        Pt = Tracker2d.retained_dur_dependent_prob(sequences)
+    
+        It, At = np.meshgrid(np.arange(Pt.shape[1]), np.arange(1, Pt.shape[0]+1))
+    
+        It, At, Pt = It.flatten(), At.flatten(), Pt.flatten()
+    
+        mask = np.where(np.isnan(Pt) == False)[0]
+        It, At, Pt = It[mask], At[mask], Pt[mask]
+    
+        return (np.concatenate([If, It]), 
+                np.concatenate([Af, At]), 
+                np.concatenate([Pf, Pt]), 
+                np.concatenate([np.repeat('MAf', Pf.shape[0]), np.repeat('MAb', Pt.shape[0])]))
+    elif trace['paradigm'] == 'HairpinMaze':
+        field_reg = trace['cis']['field_reg']
+        tracker = Tracker2d(field_reg=field_reg)
+        sequences = tracker.convert_to_sequence()
+    
+        Pf = Tracker2d.retained_dur_dependent_prob(sequences)
+    
+        If, Af = np.meshgrid(np.arange(Pf.shape[1]), np.arange(1, Pf.shape[0]+1))
+    
+        If, Af, Pf = If.flatten(), Af.flatten(), Pf.flatten()
+    
+        mask = np.where(np.isnan(Pf) == False)[0]
+        If, Af, Pf = If[mask], Af[mask], Pf[mask]
+        
+        field_reg = trace['trs']['field_reg']
+        tracker = Tracker2d(field_reg=field_reg)
+        sequences = tracker.convert_to_sequence()
+    
+        Pt = Tracker2d.retained_dur_dependent_prob(sequences)
+    
+        It, At = np.meshgrid(np.arange(Pt.shape[1]), np.arange(1, Pt.shape[0]+1)) 
+    
+        It, At, Pt = It.flatten(), At.flatten(), Pt.flatten()
+    
+        mask = np.where(np.isnan(Pt) == False)[0]
+        It, At, Pt = It[mask], At[mask], Pt[mask]
+    
+        return (np.concatenate([If, It]), 
+                np.concatenate([Af, At]), 
+                np.concatenate([Pf, Pt]), 
+                np.concatenate([np.repeat('HPf', Pf.shape[0]), np.repeat('HPb', Pt.shape[0])]))

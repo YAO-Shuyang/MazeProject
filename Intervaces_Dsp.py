@@ -701,9 +701,9 @@ def AllocentricFieldProportion_DSP_Interface(trace, variable_names = None):
         allo_field_idx = np.where(
             (field_segs == seg+1) & 
             (
-                (field_reg[0, :] >= 1) |
-                (field_reg[4, :] >= 1) |
-                (field_reg[5, :] >= 1) |
+                (field_reg[0, :] >= 1) &
+                (field_reg[4, :] >= 1) &
+                (field_reg[5, :] >= 1) &
                 (field_reg[9, :] >= 1)
             ) &
             (np.nansum(field_reg[1:4, :], axis=0)+np.nansum(field_reg[6:9, :], axis=0) == seg)
@@ -831,3 +831,221 @@ def Exclusivity_DSP_Interface(trace, variable_names = None):
             p[i, j] = np.where((field_reg[i, :] >= 1) & (field_reg[j, :] >= 1))[0].shape[0] / np.where((field_reg[i, :] >= 1) & (np.isnan(field_reg[j, :]) == False))[0].shape[0]
     
     return x.flatten(), y.flatten(), p.flatten()
+
+def ProportionOfStartingPointTuningCell_Interface(
+    trace, 
+    variable_names: list | None = None
+):
+    VariablesInputErrorCheck(
+        input_variable = variable_names, 
+        check_variable = ["Proportion"]
+    )
+    
+    mask = np.zeros(trace['n_neuron'])
+    for i in range(trace['n_neuron']):
+        if np.intersect1d(trace['SC_EncodePath'][i], np.array([1, 2, 3, 6, 7, 8])).shape[0] > 0:
+            mask[i] = 1
+    return np.array([
+        np.nansum(trace['SC'] * mask) / trace['n_neuron']
+    ])
+
+# Fig0829
+def StartingPointEncodingPath_Interface(
+    trace, 
+    variable_names: list | None = None
+):
+    VariablesInputErrorCheck(
+        input_variable = variable_names, 
+        check_variable = ["Proportion"]
+    )
+    
+    mask = np.zeros(trace['n_neuron'])
+    for i in range(trace['n_neuron']):
+        if np.intersect1d(trace['SC_EncodePath'][i], np.array([1, 2, 3, 6, 7, 8])).shape[0] > 0:
+            mask[i] = 1
+            
+# Fig0830
+def StartingCellEncodedRouteNumberDistribution_DSP_Interface(trace, variable_names = None):
+    VariablesInputErrorCheck(
+        input_variable = variable_names, 
+        check_variable = ["Number Of Routes", "Proportion"]
+    )
+    
+    encoded_num = np.zeros(trace['n_neuron'])
+    for i in range(trace['n_neuron']):
+        if trace['SC_EncodePath'][i].shape[0] == 0:
+            continue
+        other_routes = np.intersect1d(trace['SC_EncodePath'][i], np.array([1, 2, 3, 6, 7, 8]))
+        route1 = np.intersect1d(trace['SC_EncodePath'][i], np.array([0, 4, 5, 9]))
+        encoded_num[i] = other_routes.shape[0] + 1 if route1.shape[0] != 0 else other_routes.shape[0]
+        if trace['SC'][i] == 1:
+            pass
+        else:
+            encoded_num[i] = 0
+    
+    route_num = np.zeros(6)
+    for i in range(6):
+        route_num[i] = np.where(encoded_num == i+2)[0].shape[0] / trace['n_neuron']
+    return np.arange(2, 8), route_num
+
+# Fig0831
+def StartingCellEncodedRouteDensityDistribution_DSP_Interface(trace, variable_names = None):
+    VariablesInputErrorCheck(
+        input_variable = variable_names, 
+        check_variable = ["Route", "Number"]
+    )
+    
+    route_encoded = np.concatenate([trace['SC_EncodePath'][i] for i in np.where(trace['SC'] == 1)[0]]).astype(np.int64)
+    counts = np.histogram(route_encoded, bins=10, range=(-0.5, 9.5), density=True)[0]
+    
+    return np.arange(10), counts
+
+# Fig0832
+def StartingFieldSpatialDistribution_DSP_Interface(trace, variable_names = None):
+    VariablesInputErrorCheck(
+        input_variable = variable_names, 
+        check_variable = ["Relative Pos", "Density"]
+    )
+    
+    pos = trace['SC_FieldCenter'][trace['SC'] == 1]
+    dist = np.histogram(pos, bins=20, range=(0, 66.12), density=True)[0]
+    
+    return np.linspace(2.5, 97.5, 20), dist
+
+# Fig0833
+def  CombinatorialCoding_DSP_Interface(trace, variable_names = None):
+    VariablesInputErrorCheck(
+        input_variable = variable_names, 
+        check_variable = ["Segment", "Route Num", "Proportion"]
+    )
+    
+    segments = trace['field_segs']
+    
+    segs = []
+    n_routes = []
+    n_counts = []
+    
+    _route_indices = [
+        np.array([0, 4, 5, 6, 9]),
+        np.array([0, 1, 4, 5, 6, 9]),
+        np.array([0, 1, 4, 5, 6, 7, 9]),
+        np.array([0, 1, 2, 4, 5, 6, 7, 9]),
+        np.array([0, 1, 2, 4, 5, 6, 7, 9]),
+        np.array([0, 1, 2, 4, 5, 6, 7, 9])
+    ]
+    
+    field_reg = trace['field_reg_modi']
+    field_reg[field_reg > 1] = 1
+    for seg in range(2, 8):
+        idx = np.where(
+            (np.sum(trace['field_reg_modi'][np.array([0, 4, 5, 9]), :], axis=0) == 4) &
+            (segments == seg)
+        )[0]
+        n = _route_indices[seg-2].shape[0]-3
+        segs.append(np.repeat(seg, n))
+        n_route = np.nansum(trace['field_reg_modi'][_route_indices[seg-2], :][:, idx], axis=0) - 3
+        n_count = np.histogram(n_route, bins=n, range=(0.5, n+0.5), density=True)[0]
+        
+        n_routes.append(np.arange(1, n+1))
+        n_counts.append(n_count)
+        
+    segs = np.concatenate(segs)
+    n_routes = np.concatenate(n_routes)
+    n_counts = np.concatenate(n_counts)
+    
+    return segs, n_routes, n_counts
+
+# Fig0834
+def ProportionOfReliableFields_DSP_Interface(trace, variable_names = None):
+    VariablesInputErrorCheck(
+        input_variable = variable_names, 
+        check_variable = ["Proportion", "Field Number"]
+    )
+    
+    field_reg = trace['field_reg_modi']
+    field_reg[field_reg > 1] = 1
+    
+    return np.array([
+        np.where(
+            np.nansum(field_reg[np.array([0, 4, 5, 9]), :], axis=0) == 4
+        )[0].shape[0] / 
+        np.where(
+            np.nansum(field_reg[np.array([0, 4, 5, 9]), :], axis=0) >= 1
+        )[0].shape[0]
+    ]), np.array([np.where(
+            np.nansum(field_reg[np.array([0, 4, 5, 9]), :], axis=0) >= 1
+        )[0].shape[0]])
+    
+# Fig0835
+def AllocentricProportionWithSpatialDistance_DSP_Interface(trace, variable_names = None):
+    VariablesInputErrorCheck(
+        input_variable = variable_names, 
+        check_variable = ["Position", "Field Type"] # Field Type: 0 - Route-modulated; 1 - Route-independent
+    )
+    segments = trace['field_segs']
+    idx = np.where(segments  >= 2)[0]
+    segments = segments[idx]
+    field_reg = trace['field_reg_modi'][:, idx]# field 
+    field_reg[field_reg > 1] = 1
+    field_info = trace['field_info'][:, idx, :]
+
+    idx = np.where(
+        np.nansum(field_reg[np.array([0, 4, 5, 9]), :], axis=0) == 4
+    )[0]
+    
+    centers = field_info[0, idx, 2].astype(np.int64)
+    centers = S2F[centers-1]
+    field_reg = field_reg[:, idx]
+    field_info = field_info[:, idx, :]
+    segments = segments[idx]
+    
+    reordered_centers = np.zeros_like(centers)
+    for i in range(centers.shape[0]):
+        reordered_centers[i] = NRG[1][centers[i]]
+
+    _route_indices = [
+        np.array([0, 4, 5, 6, 9]),
+        np.array([0, 1, 4, 5, 6, 9]),
+        np.array([0, 1, 4, 5, 6, 7, 9]),
+        np.array([0, 1, 2, 4, 5, 6, 7, 9]),
+        np.array([0, 1, 2, 4, 5, 6, 7, 9]),
+        np.array([0, 1, 2, 4, 5, 6, 7, 9])
+    ]
+    
+    is_allocentric = np.zeros(field_reg.shape[1])
+    for seg in range(2, 8):
+        idx = np.where(segments == seg)[0]
+        n_route = np.nansum(field_reg[:, idx][_route_indices[seg-2], :], axis=0) - _route_indices[seg-2].shape[0]
+        
+        is_allocentric[idx] = np.where(n_route >= 0, 1, 0)
+    
+    return reordered_centers, is_allocentric
+
+def ModulatedProportionSpatialDistribution_DSP_Interface(trace, variable_names = None):
+    VariablesInputErrorCheck(variable_names, ["Position", "Type", "Proportion"])
+    
+    _route_indices = [
+        np.array([4]),
+        np.array([4, 6]),
+        np.array([4, 6, 5]),
+        np.array([0, 1, 2, 4, 5, 6, 7, 9]),
+        np.array([0, 1, 2, 4, 5, 6, 7, 9]),
+        np.array([0, 1, 2, 4, 5, 6, 7, 9])
+    ]
+    
+    idx = np.where(np.sum(trace['field_reg_modi'][np.array([0, 4, 5, 9]), :]) == 4)[0]
+    field_reg = trace['field_reg_modi'][:, idx]
+    field_info = trace['field_info'][:, idx, :]
+    field_segs = trace['field_segs'][idx]
+    field_centers = S2F(field_info[0, :, 2].astype(np.int64)-1)
+    
+    
+    route_bins = np.concatenate([seg2, seg3, seg4, seg5, seg6, seg7])
+    seg_ids = np.concatenate([np.repeat(i, seg.shape[0]) for i, seg in enumerate([seg2, seg3, seg4, seg5, seg6, seg7])])
+    
+    proportion = np.full((4, route_bins.shape[0]), np.nan)
+    
+    for n in route_bins:
+        total_n = np.where(field_centers == n)[0]
+        
+        
