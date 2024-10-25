@@ -197,7 +197,7 @@ class Tracker2d:
         return reconstructed_reg
     
     @staticmethod
-    def convert_for_glm(field_reg, glm_params, least_length=5, seq_format=False) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def convert_for_glm(field_reg, glm_params, least_length=5, is_seq_format=False) -> tuple[np.ndarray, np.ndarray]:
         
         sequences = []
         param_sequences = []
@@ -286,7 +286,7 @@ class Tracker2d:
         sequences = [sequences[i] for i in idx]
         param_sequences = [param_sequences[i] for i in idx]
         
-        if seq_format:
+        if is_seq_format:
             for i in range(len(sequences)):
                 param_sequences[i][np.isnan(param_sequences[i])] = 0
             return sequences, param_sequences

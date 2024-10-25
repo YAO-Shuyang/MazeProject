@@ -162,7 +162,22 @@ class ContinuousHiddenStateModel:
               f"  Loss: {self.loss}\n"
               f"  Parameters: {self.params}.\n")
         return self._loss
-    
+
+    def calc_loss_along_seq(self, sequences: list[np.ndarray]) -> float:
+        max_length = max([len(seq) for seq in sequences])
+        predicted_p = self.get_predicted_prob(sequences)
+        padded_p = np.zeros((len(predicted_p), max_length-1)) * np.nan
+        padd_seq = np.zeros((len(predicted_p), max_length-1)) * np.nan
+        for i in range(len(predicted_p)):
+            padded_p[i, :len(predicted_p[i])] = predicted_p[i]
+            padd_seq[i, :len(predicted_p[i])] = sequences[i][1:]
+        
+        dloss = padd_seq * np.log(padded_p + 1e-10) + (1 - padd_seq) * np.log(1 - padded_p + 1e-10)
+        loss = -np.nanmean(dloss, axis=0)
+        print(f"Continuous Hidden State Model with {self.func_name}:\n"
+              f"  Loss: {loss}\n")
+        return loss
+
     @property
     def loss(self):
         return self._loss
@@ -195,7 +210,10 @@ class ContinuousHiddenStateModel:
                 if is_gated:
                     append_reg[:, i:] = self._check_permanent_silent(append_seq)
                 field_reg = np.vstack([field_reg, append_reg])
-                
+        
+        field_identity = np.ones_like(field_reg, np.float64)
+        field_identity[np.isnan(field_reg)] = np.nan                
+        
         # Set as permanent silent neurons
         if is_gated == False:
             return field_reg, field_identity

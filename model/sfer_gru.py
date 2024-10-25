@@ -15,9 +15,9 @@ class SequenceDataset(Dataset):
         Initializes the dataset by storing the sequences.
 
         Parameters:
-            sequences (list of list or np.ndarray): List of sequences.
+            sequences (list of np.ndarray): List of sequences, each of shape (T, 12).
         """
-        self.sequences = [torch.tensor(seq, dtype=torch.float32, device=device) for seq in sequences]
+        self.sequences = [torch.tensor(seq, dtype=torch.float32) for seq in sequences]
 
     def __len__(self):
         return len(self.sequences)
@@ -30,7 +30,7 @@ class SequenceDataset(Dataset):
             idx (int): Index of the sequence to retrieve.
 
         Returns:
-            torch.Tensor: The sequence as a float32 tensor.
+            torch.Tensor: The sequence as a float32 tensor of shape (T, 12).
         """
         return self.sequences[idx]
 
@@ -39,17 +39,19 @@ def collate_fn(batch):
     Pads sequences to the same length within a batch.
 
     Parameters:
-        batch (list of torch.Tensor): List of sequences.
+        batch (list of torch.Tensor): List of sequences, each of shape (T_i, 12).
 
     Returns:
-        tuple: Padded sequences tensor and list of original lengths.
+        tuple:
+            padded_sequences (torch.Tensor): Padded sequences tensor of shape (batch_size, max_seq_len, 12).
+            lengths (list of int): Original lengths of each sequence.
     """
-    sequences = [item for item in batch]
-    lengths = [len(seq) for seq in sequences]
+    sequences = batch  # Each item is already a torch.Tensor of shape (T_i, 12)
+    lengths = [seq.size(0) for seq in sequences]  # Lengths along the time dimension
     padded_sequences = nn.utils.rnn.pad_sequence(sequences, batch_first=True, padding_value=0)
     return padded_sequences, lengths
 
-class ProbabilityRNN(nn.Module):
+class IntegrativeRNN(nn.Module):
     def __init__(self, hidden_size, p0: float = 0.55):
         """
         Initializes the ProbabilityRNN model.
@@ -57,9 +59,9 @@ class ProbabilityRNN(nn.Module):
         Parameters:
             hidden_size (int): Number of features in the hidden state of the GRU.
         """
-        super(ProbabilityRNN, self).__init__()
+        super(IntegrativeRNN, self).__init__()
         self.hidden_size = hidden_size
-        self.rnn = nn.GRU(input_size=2, hidden_size=hidden_size, batch_first=True)
+        self.rnn = nn.GRU(input_size=12, hidden_size=hidden_size, batch_first=True)
         self.fc = nn.Linear(hidden_size, 1)
         self.sigmoid = nn.Sigmoid()
         self.predicted_prob = None
@@ -76,15 +78,15 @@ class ProbabilityRNN(nn.Module):
         Returns:
             torch.Tensor: Predicted probabilities of shape (batch_size, seq_len - 1).
         """
-        batch_size, seq_len = s.size()
+        batch_size, seq_len, input_len = s.size()
         r_i = torch.full((batch_size, 1), self.p0, device=device)
         r_preds = []
 
         for t in range(1, seq_len):
             r_preds.append(r_i)
-            s_i = s[:, t].unsqueeze(-1)  # Shape: (batch_size, 1)
-            input_t = torch.cat([s_i, r_i], dim=-1)  # Shape: (batch_size, 2)
-            input_t = input_t.unsqueeze(1)  # Shape: (batch_size, 1, 2)
+            s_i = s[:, t, :]  # Shape: (batch_size, 11)
+            input_t = torch.cat([s_i, r_i], dim=-1)  # Shape: (batch_size, 12)
+            input_t = input_t.unsqueeze(1)  # Shape: (batch_size, 1, 12)
             output_t, _ = self.rnn(input_t)  # Output shape: (batch_size, 1, hidden_size)
             r_i = self.sigmoid(self.fc(output_t.squeeze(1)))  # Shape: (batch_size, 1)
 
@@ -132,7 +134,7 @@ class ProbabilityRNN(nn.Module):
                 # Forward pass
                 r_pred = self(s_batch, lengths)
                 # Compute loss
-                s_target = s_batch[:, 1:]  # Shifted target
+                s_target = s_batch[:, 1:, 0]  # Shifted target
                 lengths_tensor = torch.tensor(lengths, dtype=torch.long).to(device)
                 mask = (torch.arange(s_target.size(1), device=device).expand(len(lengths_tensor), s_target.size(1)) < (lengths_tensor - 1).unsqueeze(1))
                 loss = criterion(r_pred[mask], s_target[mask])
@@ -220,6 +222,7 @@ class ProbabilityRNN(nn.Module):
             if batch_size == 0:
                 return probabilities_list  # Return empty list if no sequences provided
 
+            max_length = max(lengths)
             # Convert sequences to tensor with padding
             sequences_tensor = [torch.tensor(seq, dtype=torch.float32) for seq in sequences]
             padded_sequences = nn.utils.rnn.pad_sequence(sequences_tensor, batch_first=True, padding_value=0)
@@ -240,7 +243,7 @@ class ProbabilityRNN(nn.Module):
             for i in range(batch_size):
                 seq_length = lengths[i]
                 if seq_length > 1:
-                    prob_seq = r_pred_np[i, :seq_length-1]
+                    prob_seq = r_pred_np[i, :seq_length - 1]
                 else:
                     prob_seq = np.array([])
                 probabilities_list.append(prob_seq)
@@ -292,7 +295,7 @@ class ProbabilityRNN(nn.Module):
         lr: float = 0.001,
         epochs: int = 1000, 
         batch_size: int = 2048
-    ) -> 'ProbabilityRNN':
+    ) -> 'IntegrativeRNN':
         if train_index is None:
             train_idx = np.random.choice(len(sequences), size=int(len(sequences) * split_ratio), replace=False)
             train_sequences = [sequences[i] for i in train_idx]
@@ -308,7 +311,7 @@ class ProbabilityRNN(nn.Module):
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
 
-        model = ProbabilityRNN(hidden_size=hidden_size, p0=p0).to(device)
+        model = IntegrativeRNN(hidden_size=hidden_size, p0=p0).to(device)
         criterion = nn.BCELoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         model.fit(
