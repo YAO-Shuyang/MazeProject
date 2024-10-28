@@ -14,7 +14,14 @@ SpatialMapPalette = ['#D4C9A8', '#8E9F85', '#527C5A', '#C3AED6', '#66C7B4', '#A7
 DSPCorrectTrackPalette = ['#A9CCE3', '#A8DADC', '#9C8FBC', '#D9A6A9']
 DSPIncorrectTrackPalette = ['#A9CCE3', '#F2E2C5', '#647D91', '#C06C84']
 DSPPalette = ['#A9CCE3', '#A8DADC', '#9C8FBC', '#D9A6A9', '#F2E2C5', '#647D91', '#C06C84']
-ModelPalette = sns.color_palette("rocket", 3) + sns.color_palette("Greens", 4) + sns.color_palette("Blues", 4) + sns.color_palette("Purples", 3)
+ModelPalette = (
+    sns.color_palette("rocket", 2) + 
+    sns.color_palette("Greens", 4) + 
+    sns.color_palette("Blues", 4) + 
+    sns.color_palette("Purples", 3) +
+    sns.color_palette("Reds", 4) +
+    sns.color_palette("rainbow", 9)
+)
 
 def star(p:str):
     '''

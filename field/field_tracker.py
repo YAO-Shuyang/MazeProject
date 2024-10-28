@@ -527,7 +527,7 @@ def compute_joint_probability_matrix(
     sessions, mat = [], []
     if sib_field_pairs is None or non_field_pairs is None:
         sib_field_pairs, non_field_pairs = [], []
-        for i in range(len(field_ids)-1):
+        for i in tqdm(range(len(field_ids)-1)):
             for j in range(i+1, len(field_ids)):
                 if field_ids[i] == field_ids[j]:
                     if len(sib_field_pairs) >= 3000000:
@@ -583,6 +583,83 @@ def compute_joint_probability_matrix(
             mat.append(non_sib/np.sum(non_sib)-joint_mat/np.sum(joint_mat))
             
     return np.array(sessions), np.stack(mat)
+    
+
+def CoactivatedFieldsEvolutionIndepts(
+    field_reg: np.ndarray, 
+    field_info: np.ndarray, 
+    dis_mat: list[np.ndarray],
+    field_centers: np.ndarray,
+    maze_type: int = 1,
+    roi_dis_thre: float = 200, # Micron
+    center_interval: int = 30, # cm
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """mat1, mat2 are the roi distance matrix.
+    """
+    sessions, chi2_stat = [], []
+    
+    D = GetDMatrices(maze_type, 48)
+    
+    coa_field_pairs, non_field_pairs = [], []
+    print("1.Initialize Field Pairs:")
+    for i in tqdm(range(field_reg.shape[1]-1)):
+        for j in range(i+1, field_reg.shape[1]):
+            idx = np.where((np.isnan(field_reg[:, i]) == False) & (np.isnan(field_reg[:, j]) == False))[0]
+            cells1 = field_info[idx, i, 0].astype(np.int64)
+            cells2 = field_info[idx, j, 0].astype(np.int64)
+            
+            distances = []
+            for n in range(cells1.shape[0]):
+                distances.append(dis_mat[idx[n]][cells1[n]-1, cells2[n]-1])
+            
+            distances = np.array(distances)
+            if np.mean(distances) <= roi_dis_thre:
+                if D[field_centers[i]-1, field_centers[j]-1] <= center_interval:
+                    coa_field_pairs.append([i, j])
+                    coa_field_pairs.append([j, i])
+                else:
+                    if len(non_field_pairs) >= 150000000:
+                        continue
+                    non_field_pairs.append([i, j])
+                    non_field_pairs.append([j, i])
+                
+    coa_field_pairs = np.array(coa_field_pairs)
+    non_field_pairs = np.array(non_field_pairs)
+    print(coa_field_pairs.shape, non_field_pairs.shape)
+    print(" init size ", coa_field_pairs.shape, non_field_pairs.shape)
+    coa_num, non_num = coa_field_pairs.shape[0], non_field_pairs.shape[0]
+    
+    print("2. Calculate Chi2 Statistics:")
+    for dt in np.arange(2, 3):
+        for i in tqdm(range(field_reg.shape[0]-dt+1)):
+            idx = np.where(np.isnan(np.sum(field_reg[i:i+dt, :], axis=0)) == False)[0]
+                
+            if idx.shape[0] == 0:
+                continue
+
+            real_distribution = get_evolve_event_label(field_reg[i:i+dt, idx])
+            real_distribution = real_distribution[np.where(real_distribution != 0)[0]]
+            
+            evol_event_sib, evol_event_non = get_evolve_event_pairs(
+                i=i,
+                j=i+dt,
+                field_reg=field_reg,
+                sib_field_pairs=coa_field_pairs,
+                non_field_pairs=non_field_pairs
+            )
+      
+            chi_stat_sib, chi_stat_non, n_pair_stat, _ = indept_field_evolution_chi2(
+                real_distribution=real_distribution,
+                X_pairs=evol_event_sib,
+                Y_pairs=evol_event_non
+            )
+
+            sessions = sessions + [i+1, i+1]
+            chi2_stat = chi2_stat + [chi_stat_sib, chi_stat_non]
+    
+    print("\n\n\n")
+    return np.array(sessions), np.array(chi2_stat)
+
 
 if __name__ == '__main__':
     pass

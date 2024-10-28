@@ -2958,3 +2958,253 @@ def Retention_Recovery_Interrelation_Interface(
                 np.concatenate([Af, At]), 
                 np.concatenate([Pf, Pt]), 
                 np.concatenate([np.repeat('HPf', Pf.shape[0]), np.repeat('HPb', Pt.shape[0])]))
+        
+        
+from mylib.field.field_tracker import CoactivatedFieldsEvolutionIndepts
+def FieldSamePosition_Evolution_Interface(
+    trace: dict,
+    variable_names: list | None = None
+):
+    VariablesInputErrorCheck(
+        input_variable=variable_names,
+        check_variable=['Training Session', 'Chi-Square Statistic', 'Paradigm'])
+    
+    if trace['paradigm'] == 'CrossMaze':
+        paradigm = "MA" if int(trace['maze_type']) == 1 else "MB"
+        start_session, chi_stat = CoactivatedFieldsEvolutionIndepts(
+            trace['field_reg'],
+            trace['field_info'],
+            dis_mat=trace['ROI_Distance'],
+            maze_type=trace['maze_type'],
+            field_centers=trace['field_centers'].astype(np.int64),
+            roi_dis_thre=200,
+            center_interval=30
+        )
+        return start_session, chi_stat, np.repeat(paradigm, chi_stat.shape[0])
+        
+    else:
+        if trace['paradigm'] == 'ReverseMaze':
+            paradigm1 = "MAf"
+            paradigm2 = "MAb"
+        else:
+            paradigm1 = "HPf"
+            paradigm2 = "HPb"
+            
+        start_session_cis, chi_stat_cis = CoactivatedFieldsEvolutionIndepts(
+                trace['cis']['field_reg'],
+                trace['cis']['field_info'],
+                dis_mat=trace['ROI_Distance'],
+                maze_type=trace['maze_type'],
+                field_centers=trace['cis']['field_centers'].astype(np.int64),
+                roi_dis_thre=200,
+                center_interval=30
+        )
+        start_session_trs, chi_stat_trs = CoactivatedFieldsEvolutionIndepts(
+                trace['trs']['field_reg'],
+                trace['trs']['field_info'],
+                dis_mat=trace['ROI_Distance'],
+                maze_type=trace['maze_type'],
+                field_centers=trace['trs']['field_centers'].astype(np.int64),
+                roi_dis_thre=200,
+                center_interval=30
+        )
+    
+        return (
+            np.concatenate([start_session_cis, start_session_trs]),
+            np.concatenate([chi_stat_cis, chi_stat_trs]),
+            np.concatenate([
+                np.repeat(paradigm1, start_session_cis.shape[0]),
+                np.repeat(paradigm2, start_session_trs.shape[0])
+            ])
+        )
+        
+        
+def compute_coordination_on_position_Interface(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
+    return_item: str = "sib",
+    dis_thre: float = 1
+):
+    VariablesInputErrorCheck(
+        input_variable=variable_names,
+        check_variable=['Training Session', 'delta-P', 'Pair Type',
+                        'Paradigm', 'X'])
+    
+    start_session = np.array([])
+    dP = np.array([])
+    dims = np.array([])
+    axis = np.array([])
+    xs = np.array([])
+    pair_types = np.array([])
+    direction = np.array([])
+    roi_dis_thre = 200
+    center_interval = 30
+    
+    D = GetDMatrices(trace['maze_type'], 48)
+    thre = dis_thre if trace['maze_type'] != 0 else 0.4
+    if trace['paradigm'] == 'CrossMaze':
+        sib_field_pairs, non_field_pairs = [], []
+        print("1.Initialize Field Pairs:")
+        field_reg = trace['field_reg']
+        field_info = trace['field_info']
+        field_centers = trace['field_centers'].astype(np.int64)
+        dis_mat = trace['ROI_Distance']
+        for i in tqdm(range(field_reg.shape[1]-1)):
+            for j in range(i+1, field_reg.shape[1]):
+                idx = np.where((np.isnan(field_reg[:, i]) == False) & (np.isnan(field_reg[:, j]) == False))[0]
+                cells1 = field_info[idx, i, 0].astype(np.int64)
+                cells2 = field_info[idx, j, 0].astype(np.int64)
+            
+                distances = []
+                for n in range(cells1.shape[0]):
+                    distances.append(dis_mat[idx[n]][cells1[n]-1, cells2[n]-1])
+            
+                distances = np.array(distances)
+                if np.mean(distances) <= roi_dis_thre:
+                    if D[field_centers[i]-1, field_centers[j]-1] <= center_interval:
+                        sib_field_pairs.append([i, j])
+                        sib_field_pairs.append([j, i])
+                    else:
+                        if len(non_field_pairs) >= 150000000:
+                            continue
+                        non_field_pairs.append([i, j])
+                        non_field_pairs.append([j, i])
+        paradigm = "MA" if int(trace['maze_type']) == 1 else "MB"
+        
+        sib_field_pairs = np.array(sib_field_pairs)
+        non_field_pairs = np.array(non_field_pairs)
+        
+        for dim in range(2, 3):
+            
+            session, mat = compute_joint_probability_matrix(
+                trace['field_reg'],
+                trace['field_ids'],
+                dim=dim,
+                return_item='sib',
+                sib_field_pairs=sib_field_pairs,
+                non_field_pairs=non_field_pairs
+            )
+            size = mat.shape[1]
+            
+            sessions = np.concatenate([np.arange(1, session.shape[0]+1) for i in range(size)])
+            detP = np.concatenate([mat[:, i, i] for i in range(size)])
+            dimen = np.repeat(dim, sessions.shape[0])
+            ax = np.repeat("IP axis", sessions.shape[0])
+            x = np.concatenate([np.repeat(i+1, session.shape[0]) for i in range(size)])
+            
+            start_session = np.concatenate([start_session, sessions])
+            dP = np.concatenate([dP, detP])
+            dims = np.concatenate([dims, dimen])
+            xs = np.concatenate([xs, x])
+            axis = np.concatenate([axis, ax])
+            pair_types = np.concatenate([pair_types, np.repeat('Sibling', sessions.shape[0])])
+
+            session, mat = compute_joint_probability_matrix(
+                trace['field_reg'],
+                trace['field_ids'],
+                dim=dim,
+                return_item='non',
+                sib_field_pairs=sib_field_pairs,
+                non_field_pairs=non_field_pairs
+            )
+            
+            sessions = np.concatenate([np.arange(1, session.shape[0]+1) for i in range(size)])
+            detP = np.concatenate([mat[:, i, i] for i in range(size)])
+            dimen = np.repeat(dim, sessions.shape[0])
+            ax = np.repeat("IP axis", sessions.shape[0])
+            x = np.concatenate([np.repeat(i+1, session.shape[0]) for i in range(size)])
+            
+            start_session = np.concatenate([start_session, sessions])
+            dP = np.concatenate([dP, detP])
+            dims = np.concatenate([dims, dimen])
+            xs = np.concatenate([xs, x])
+            axis = np.concatenate([axis, ax])
+            pair_types = np.concatenate([pair_types, np.repeat('Non-sibling', sessions.shape[0])])
+    
+        return start_session, dP, pair_types, np.repeat(paradigm, xs.shape[0]), xs
+    else:
+        for k in ['cis', 'trs']:
+            sib_field_pairs, non_field_pairs = [], []
+            field_reg = trace[k]['field_reg']
+            field_info = trace[k]['field_info']
+            field_centers = trace[k]['field_centers'].astype(np.int64)
+            dis_mat = trace['ROI_Distance']
+            for i in tqdm(range(field_reg.shape[1]-1)):
+                for j in range(i+1, field_reg.shape[1]):
+                    idx = np.where((np.isnan(field_reg[:, i]) == False) & (np.isnan(field_reg[:, j]) == False))[0]
+                    cells1 = field_info[idx, i, 0].astype(np.int64)
+                    cells2 = field_info[idx, j, 0].astype(np.int64)
+            
+                    distances = []
+                    for n in range(cells1.shape[0]):
+                        distances.append(dis_mat[idx[n]][cells1[n]-1, cells2[n]-1])
+            
+                    distances = np.array(distances)
+                    if np.mean(distances) <= roi_dis_thre:
+                        if D[field_centers[i]-1, field_centers[j]-1] <= center_interval:
+                            sib_field_pairs.append([i, j])
+                            sib_field_pairs.append([j, i])
+                        else:
+                            if len(non_field_pairs) >= 150000000:
+                                continue
+                            non_field_pairs.append([i, j])
+                            non_field_pairs.append([j, i])
+                            
+            if trace['paradigm'] == 'ReverseMaze':
+                paradigm = "MAf" if k == 'cis' else "MAb"
+            else:
+                paradigm = "HPf" if k == 'cis' else "HPb"
+                
+            sib_field_pairs = np.array(sib_field_pairs)
+            non_field_pairs = np.array(non_field_pairs)
+            for dim in range(2, 3):
+            
+                session, mat = compute_joint_probability_matrix(
+                    trace[k]['field_reg'],
+                    trace[k]['field_ids'],
+                    dim=dim,
+                    return_item='sib',
+                    sib_field_pairs=sib_field_pairs,
+                    non_field_pairs=non_field_pairs
+                )
+                size = mat.shape[1]
+            
+                sessions = np.concatenate([np.arange(1, session.shape[0]+1) for i in range(size)])
+                detP = np.concatenate([mat[:, i, i] for i in range(size)])
+                dimen = np.repeat(dim, sessions.shape[0])
+                ax = np.repeat("IP axis", sessions.shape[0])
+                x = np.concatenate([np.repeat(i+1, session.shape[0]) for i in range(size)])
+            
+                start_session = np.concatenate([start_session, sessions])
+                dP = np.concatenate([dP, detP])
+                dims = np.concatenate([dims, dimen])
+                xs = np.concatenate([xs, x])
+                axis = np.concatenate([axis, ax])
+                pair_types = np.concatenate([pair_types, np.repeat('Sibling', sessions.shape[0])])
+                direction = np.concatenate([direction, np.repeat(paradigm, sessions.shape[0])])
+
+                session, mat = compute_joint_probability_matrix(
+                    trace[k]['field_reg'],
+                    trace[k]['field_ids'],
+                    dim=dim,
+                    return_item='non',
+                    sib_field_pairs=sib_field_pairs,
+                    non_field_pairs=non_field_pairs
+                )
+            
+                sessions = np.concatenate([np.arange(1, session.shape[0]+1) for i in range(size)])
+                detP = np.concatenate([mat[:, i, i] for i in range(size)])
+                dimen = np.repeat(dim, sessions.shape[0])
+                ax = np.repeat("IP axis", sessions.shape[0])
+                x = np.concatenate([np.repeat(i+1, session.shape[0]) for i in range(size)])
+            
+                start_session = np.concatenate([start_session, sessions])
+                dP = np.concatenate([dP, detP])
+                dims = np.concatenate([dims, dimen])
+                xs = np.concatenate([xs, x])
+                axis = np.concatenate([axis, ax])
+                pair_types = np.concatenate([pair_types, np.repeat('Non-sibling', sessions.shape[0])])
+                direction = np.concatenate([direction, np.repeat(paradigm, sessions.shape[0])])
+            
+        return start_session, dP, pair_types, direction, xs

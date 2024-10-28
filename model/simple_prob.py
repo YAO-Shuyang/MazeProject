@@ -67,6 +67,21 @@ class EqualRateDriftModel:
               f"  Parameters: {self.params}.\n")
         return self._loss
 
+    def calc_loss_along_seq(self, sequences: list[np.ndarray]):
+        max_length = max([len(seq) for seq in sequences])
+        predicted_p = self.get_predicted_prob(sequences)
+        padded_p = np.zeros((len(predicted_p), max_length-1)) * np.nan
+        padd_seq = np.zeros((len(predicted_p), max_length-1)) * np.nan
+        for i in range(len(predicted_p)):
+            padded_p[i, :len(predicted_p[i])] = predicted_p[i]
+            padd_seq[i, :len(predicted_p[i])] = sequences[i][1:]
+        
+        dloss = padd_seq * np.log(padded_p + 1e-10) + (1 - padd_seq) * np.log(1 - padded_p + 1e-10)
+        loss = -np.nanmean(dloss, axis=0)
+        print(f"Simple Drift Model:\n"
+              f"  Loss: {loss}\n"
+              f"  Parameters: {self.params}.\n")
+        return loss
 
 class TwoProbDriftModel:
     """
@@ -124,10 +139,26 @@ class TwoProbDriftModel:
         
         n_total = np.sum([len(seq)-1 for seq in sequences if len(seq) > 1])
         self._loss = -loss / n_total
-        print(f"Simple Drift Model:\n"
+        print(f"Two Probability Drift Model:\n"
               f"  Loss: {self.loss}\n"
               f"  Parameters: {self.params}.\n")
         return self._loss
+
+    def calc_loss_along_seq(self, sequences: list[np.ndarray]):
+        max_length = max([len(seq) for seq in sequences])
+        predicted_p = self.get_predicted_prob(sequences)
+        padded_p = np.zeros((len(predicted_p), max_length-1)) * np.nan
+        padd_seq = np.zeros((len(predicted_p), max_length-1)) * np.nan
+        for i in range(len(predicted_p)):
+            padded_p[i, :len(predicted_p[i])] = predicted_p[i]
+            padd_seq[i, :len(predicted_p[i])] = sequences[i][1:]
+        
+        dloss = padd_seq * np.log(padded_p + 1e-10) + (1 - padd_seq) * np.log(1 - padded_p + 1e-10)
+        loss = -np.nanmean(dloss, axis=0)
+        print(f"Two Probability Drift Model:\n"
+              f"  Loss: {loss}\n"
+              f"  Parameters: {self.params}.\n")
+        return loss
 
 def count(P1: np.ndarray, P2: np.ndarray, sequence: np.ndarray):
     sequence = sequence.astype(np.int64)
@@ -247,7 +278,24 @@ class TwoProbabilityIndependentModel:
               f"  Retention Parameters: {self.params_retention}\n"
               f"  Recovery Parameters: {self.params_recovery}.\n")
         return self._loss
-    
+
+    def calc_loss_along_seq(self, sequences: list[np.ndarray]):
+        max_length = max([len(seq) for seq in sequences])
+        predicted_p = self.get_predicted_prob(sequences)
+        padded_p = np.zeros((len(predicted_p), max_length-1)) * np.nan
+        padd_seq = np.zeros((len(predicted_p), max_length-1)) * np.nan
+        for i in range(len(predicted_p)):
+            padded_p[i, :len(predicted_p[i])] = predicted_p[i]
+            padd_seq[i, :len(predicted_p[i])] = sequences[i][1:]
+        
+        dloss = padd_seq * np.log(padded_p + 1e-10) + (1 - padd_seq) * np.log(1 - padded_p + 1e-10)
+        loss = -np.nanmean(dloss, axis=0)
+        print(f"Retention + Recovery Model:\n"
+              f"  Loss: {loss}\n"
+              f"  Retention Parameters: {self.params_retention}\n"
+              f"  Recovery Parameters: {self.params_recovery}.\n")
+        return loss
+        
     @property
     def loss(self):
         return self._loss
@@ -347,6 +395,22 @@ class JointProbabilityModel:
               f"  Loss: {self.loss}\n"
               f"  Parameters: {self.params}.\n")
         return self._loss
+
+    def calc_loss_along_seq(self, sequences: list[np.ndarray]):
+        max_length = max([len(seq) for seq in sequences])
+        predicted_p = self.get_predicted_prob(sequences)
+        padded_p = np.zeros((len(predicted_p), max_length-1)) * np.nan
+        padd_seq = np.zeros((len(predicted_p), max_length-1)) * np.nan
+        for i in range(len(predicted_p)):
+            padded_p[i, :len(predicted_p[i])] = predicted_p[i]
+            padd_seq[i, :len(predicted_p[i])] = sequences[i][1:]
+        
+        dloss = padd_seq * np.log(padded_p + 1e-10) + (1 - padd_seq) * np.log(1 - padded_p + 1e-10)
+        loss = -np.nanmean(dloss, axis=0)
+        print(f"Joint Probability Model:\n"
+              f"  Loss: {loss}\n"
+              f"  Parameters: {self.params}.\n")
+        return loss
     
     @property
     def loss(self):
