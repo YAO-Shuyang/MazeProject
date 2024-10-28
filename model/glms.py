@@ -286,7 +286,7 @@ class GLMParameters:
         field_reg = self._trace_m['field_reg']
         field_info = self._trace_m['field_info']
         
-        field_dims = np.full((field_reg.shape[0], field_reg.shape[1], 8), np.nan, np.float64)
+        field_dims = np.full((field_reg.shape[0], field_reg.shape[1], 7), np.nan, np.float64)
         
         # Time Spent Within Each Field
         print(f"C. Register Field Properties.")
@@ -318,6 +318,13 @@ class GLMParameters:
                             y = self._traces[i]['smooth_map_sec'][cell-1, field_area-1],
                         )[0]
                     
+                    # Transient Peak
+                    ms_idx = np.where(np.isin(self._traces[i]['spike_nodes_original'], field_area))[0]
+                    if ms_idx.shape[0] == 0:
+                        continue
+                    peak_transient = np.nanmax(self._traces[i]['RawTraces'][cell-1, ms_idx])
+                    field_dims[i, j, 5] = peak_transient
+                                        
                     # Formation Lap
                     n_events = np.zeros(self._traces[i]['smooth_map_lap'].shape[2])
                     begs, ends = self._traces[i]['ms_beg'], self._traces[i]['ms_end']
@@ -330,58 +337,39 @@ class GLMParameters:
                     
                     with_event_laps = np.where(n_events != 0)[0]
                     # If with event laps < 4
-                    if with_event_laps.shape[0] < 3:
+                    if with_event_laps.shape[0] < 1:
                         continue
-                    field_dims[i, j, 4] = with_event_laps[0]
-                    
-                    # First Transient vs Later Transient Peak
-                    ms_begs = np.array([np.where(
-                        (self._traces[i]['ms_time'] >= self._traces[i]['lap beg time'][k]) &
-                        (self._traces[i]['ms_time'] <= self._traces[i]['lap end time'][k])
-                    )[0][0] for k in range(n_events.shape[0])])
-                    ms_ends = np.array([np.where(
-                        (self._traces[i]['ms_time'] >= self._traces[i]['lap beg time'][k]) &
-                        (self._traces[i]['ms_time'] <= self._traces[i]['lap end time'][k])
-                    )[0][-1] for k in range(n_events.shape[0])])
-                    peak_transient = np.zeros(n_events.shape[0]) * np.nan
-                    for k in range(n_events.shape[0]):
-                        if k not in with_event_laps:
-                            continue
-                        beg, end = ms_begs[k], ms_ends[k]
+                    elif with_event_laps.shape[0] >=1 and with_event_laps[0] < 4:
+                        field_dims[i, j, 4] = with_event_laps[0]
+                        continue
+                    else:
+                        field_dims[i, j, 4] = with_event_laps[0]
                         
-                        aidx = np.where(
-                            (np.isin(self._traces[i]['spike_nodes_original'][beg:end+1], field_area))
-                        )[0]
-                        
-                        if aidx.shape[0] == 0:
-                            continue
-                        else:
-                            peak_transient[k] = np.max(self._traces[i]['RawTraces'][cell-1, aidx])
-                    
-                    fir_transient = peak_transient[with_event_laps[0]]
-                    later_transient = peak_transient[with_event_laps[1:]]
-                    
-                    field_dims[i, j, 5] = fir_transient / np.nanmean(later_transient)
-                    
-                    # First Position vs Later positions
-                    peak_centers = np.argmax(
-                        self._traces[i]['smooth_map_lap'][cell-1, field_area-1, :][:, with_event_laps],
-                        axis = 0
-                    )
-                    dis = self.D[peak_centers, 0]
-                    field_dims[i, j, 6] = dis[0] - np.mean(dis[1:])
-                    
                     # Fluctuation
-                    field_dims[i, j, 7] = np.std(dis)
+                    peak = np.argmax(self._traces[i]['smooth_map_lap'][cell-1, field_area-1][:, with_event_laps], axis=0)
+                    dis = self.D[peak-1, 0]
+                    field_dims[i, j, 6] = np.nanstd(dis)
+                        
                 elif field_reg[i, j] == 0:
                     # Field States
                     field_dims[i, j, 0] = 0
-            
                     if field_area is not None:
                         if prev_session_with_field is None:
                             assert False
                         
-                        field_dims[i, j, 1:] = field_dims[prev_session_with_field, j, 1:]
+                        field_dims[i, j, 1] = np.nansum(self._traces[i]['occu_time_spf'][field_area-1])/1000
+                        
+                        # Peak Rate
+                        field_dims[i, j, 2] = np.nanmax(self._traces[i]['smooth_map_all'][cell-1, field_area-1])
+                        field_dims[i, j, 6] = field_dims[prev_session_with_field, j, 6]
+                        
+                        # Transient Peak
+                        ms_idx = np.where(np.isin(self._traces[i]['spike_nodes_original'], field_area))[0]
+                        if ms_idx.shape[0] == 0:
+                            continue
+                        peak_transient = np.nanmax(self._traces[i]['RawTraces'][cell-1, ms_idx])
+                        field_dims[i, j, 5] = peak_transient
+                        
         return field_dims
     
     @staticmethod
@@ -427,15 +415,25 @@ import matplotlib.pyplot as plt
 import pickle
 
 class GLM:
-    def __init__(self):
+    def __init__(self, family: str = 'binomial'):
         self.model = None
         self.results = None
         self.intercept = None
+        if family == 'binomial':
+            self.family = sm.families.Binomial()
+        elif family == 'poisson':
+            self.family = sm.families.Poisson()
+        elif family == 'gamma':
+            self.family = sm.families.Gamma()
+        elif family == 'gaussian':
+            self.family = sm.families.Gaussian()
+            
+        self._family = family
     
     def fit(self, X_train: np.ndarray, Y_train: np.ndarray):
         X_train_with_const = np.hstack([np.ones(X_train.shape[0])[:, np.newaxis], X_train])       
         # Fit the GLM model using a binomial family
-        self.model = sm.GLM(Y_train, X_train_with_const, family=sm.families.Binomial())
+        self.model = sm.GLM(Y_train, X_train_with_const, family=self.family)
         self.results = self.model.fit()
         self.intercept = self.results.params[0]
 
@@ -456,7 +454,7 @@ class GLM:
 
     def calc_loss(self, glm_params: list[np.ndarray], sequences: list[np.ndarray]) -> float:
         predicted_p = self.get_predicted_prob(glm_params)
-
+        
         # Compute the log-likelihood
         loss = 0
         for i in range(len(predicted_p)):
@@ -473,15 +471,21 @@ class GLM:
     def loss(self):
         return self._loss
     
-    def calc_loss_along_seq(self, glm_params: list[np.ndarray], sequences: list[np.ndarray]) -> float:
+    def calc_loss_along_seq(self, glm_params: list[np.ndarray], sequences: list[np.ndarray], p=None) -> float:
         max_length = max([len(seq) for seq in sequences])
         predicted_p = self.get_predicted_prob(glm_params)
+        
+        if self._family == 'gaussian':
+            for i in range(len(predicted_p)):
+                predicted_p[i] += p[i]
+                predicted_p[i] = np.clip(predicted_p[i], 0, 1)
+                
         padded_p = np.zeros((len(predicted_p), max_length-1)) * np.nan
         padd_seq = np.zeros((len(predicted_p), max_length-1)) * np.nan
         for i in range(len(predicted_p)):
             padded_p[i, :len(predicted_p[i])] = predicted_p[i]
             padd_seq[i, :len(predicted_p[i])] = sequences[i][1:]
-        
+
         dloss = padd_seq * np.log(padded_p + 1e-10) + (1 - padd_seq) * np.log(1 - padded_p + 1e-10)
         loss = -np.nanmean(dloss, axis=0)
         print(f"Generalized Linear Model:\n"
