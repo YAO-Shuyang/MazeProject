@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 def reci_func(x, r, L0, b0, L1, b1):
     return np.clip(
-        x * (1 - L0 / (r + b0 + L0)) + (1-x) * L1 / (1 - r + b1 + L1), 
+        x * (L0 * r + b0) + (1-x) * (L1 * (1-r) + b1), 
         0, 1
     )
 
@@ -41,7 +41,7 @@ class ContinuousHiddenStateModel:
             
         self._params = None
         if func == 'reci':
-            self.init_guess = [0.6, 0.01, 0.6, 0.01]
+            self.init_guess = [0.6, 0.4, -0.6, 0.6]
             self._func = reci_func
         elif func == 'logistic':
             self.init_guess = [0.6, 0.01, 0.6, 0.01]
