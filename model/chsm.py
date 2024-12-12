@@ -85,13 +85,13 @@ class ContinuousHiddenStateModel:
 
             # Update r_{t+1}
             r_next = func(s_t, r_t, *params)
-            r_next = np.clip(r_next, 1e-10, 1 - 1e-10)
+            r_next = np.clip(r_next, 0, 1)
             r[:, t + 1] = r_next
 
             # Compute log-likelihood only where mask is True
             valid = mask[:, t]
             total_log_likelihood += np.sum(
-                s_t[valid] * np.log(r_t[valid]) + (1 - s_t[valid]) * np.log(1 - r_t[valid])
+                s_t[valid] * np.log(r_t[valid] + 1e-10) + (1 - s_t[valid]) * np.log(1 - r_t[valid] + 1e-10)
             )
 
         self.loss_tracker.append(-total_log_likelihood / total_n)
@@ -197,29 +197,50 @@ class ContinuousHiddenStateModel:
         return field_reg
     
     def simulate_across_day(self, n_step: int = 26, n_fields: int = 10000, is_noise: bool = False, is_gated: bool = True):
-        field_reg = np.vstack(self.simulate([np.arange(n_step) for _ in range(n_fields)], is_noise))
-        if is_gated: 
-            # Gate mechanism to permanently set silent fields
-            field_reg = self._check_permanent_silent(field_reg)
+        field_reg = np.zeros((np.sum(n_fields), n_step), np.float64) * np.nan
+        field_reg[:, 0] = 1
+        p = np.zeros_like(field_reg, np.float64)*np.nan
+        p[:, 0] = np.repeat(self.p0, field_reg.shape[0])
         
-        for i in tqdm(range(1, n_step)):
-            dn = n_fields - int(np.nansum(field_reg[:, i]))
-            if dn > 0:
-                append_reg = np.zeros((dn, n_step), np.float64) * np.nan
-                append_seq = np.vstack(self.simulate([np.arange(n_step-i) for _ in range(dn)], is_noise))
-                if is_gated:
-                    append_reg[:, i:] = self._check_permanent_silent(append_seq)
-                field_reg = np.vstack([field_reg, append_reg])
-        
-        field_identity = np.ones_like(field_reg, np.float64)
-        field_identity[np.isnan(field_reg)] = np.nan                
-        
-        # Set as permanent silent neurons
-        if is_gated == False:
-            return field_reg, field_identity
-        
+        is_permanent_silent = np.zeros(field_reg.shape[0], np.int64)
+        for i in tqdm(range(1, n_step)):        
+            
+            if is_noise:
+                p[:, i-1] += np.random.normal(0, 0.01, p.shape[0])
+                p[:, i-1] = np.clip(p[:, i-1], 0, 1)
+            # Generate State
+            for j in range(p.shape[0]):
+                if is_permanent_silent[j] < 8 or is_gated == False:
+                    field_reg[j, i] = np.random.choice([0, 1], p=[1 - p[j, i-1], p[j, i-1]])
+            # Predict p
+            p[:, i] = self.predict(field_reg[:, i], p[:, i-1])
+            
+            # Update Field State
+            is_permanent_silent[field_reg[:, i] == 0] += 1
+            is_permanent_silent[field_reg[:, i] == 1] = 0
+            
+            # Append new field
+            df = int(np.nansum(field_reg[:, i-1]) - np.nansum(field_reg[:, i]))
+            
+            if df <= 0:
+                continue
+            
+            append_reg = np.zeros((df, n_step), np.float64) * np.nan
+            append_reg[:, i] = 1
+            
+            field_reg = np.vstack([field_reg, append_reg])
+            is_permanent_silent = np.concatenate([is_permanent_silent, np.zeros(df)])
+            
+            append_p = np.full((df, n_step), np.nan)
+            append_p[:, i] = self.p0
+            p = np.vstack([p, append_p])
+
         field_identity = np.ones_like(field_reg, np.float64)
         field_identity[np.isnan(field_reg)] = np.nan
+        # Set as permanent silent neurons
+        if is_gated == False:
+            return field_reg, field_identity, p
+
         for i in range(field_reg.shape[0]):
             I = 0
             for j in range(field_reg.shape[1]):
@@ -232,8 +253,9 @@ class ContinuousHiddenStateModel:
                     field_reg[i, j:] = 0
                     field_identity[i, j:] = np.nan
                     break
-                
-        return field_reg, field_identity
+            
+        p[np.isnan(field_identity)] = np.nan
+        return field_reg, field_identity, p
             
     
 if __name__ == "__main__":

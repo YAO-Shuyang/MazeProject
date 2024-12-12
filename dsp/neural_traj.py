@@ -8,8 +8,8 @@ from tqdm import tqdm
 from sklearn.decomposition import PCA
 from sklearn.decomposition import FactorAnalysis as FA
 from sklearn.manifold import Isomap
-#from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
-from mylib.dsp._lda_m import LinearDiscriminantAnalysis_Regularized as LDA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+#from mylib.dsp._lda_m import LinearDiscriminantAnalysis_Regularized as LDA
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
@@ -776,6 +776,8 @@ if __name__ == '__main__':
         trace = pickle.load(handle)
     
     for i in range(len(f2)):
+        if i != 10232:
+            continue
         print(f2['Trace File'][i])
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)

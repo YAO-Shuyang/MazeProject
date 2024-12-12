@@ -470,9 +470,12 @@ if __name__ == '__main__':
             trace = pickle.load(handle)
             
         #trace = field_register_dsp(trace, overlap_thre=0.6)
-        trace['place_field_all'] = place_field_dsp(
-            trace, thre_type=2, parameter=0.4, events_num_crit=10, need_events_num=True, split_thre=0.2, reactivate_num=5
-        )
+        #trace['place_field_all'] = place_field_dsp(
+        #    trace, thre_type=2, parameter=0.4, events_num_crit=10, need_events_num=True, split_thre=0.2, reactivate_num=5
+        #)
+        
+        for n in range(10):
+            trace[f'node {n}'] = OldMap(trace[f'node {n}'], isDraw=False)
         
         with open(f2['Trace File'][i], 'wb') as handle:
             pickle.dump(trace, handle)
