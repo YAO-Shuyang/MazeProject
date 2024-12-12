@@ -97,21 +97,12 @@ def LearningCurveBehavioralScore_DSP_Interface(trace: dict, variable_names: list
     behav_nodes = spike_nodes_transform(trace['correct_nodes'], 12)
     behav_time = cp.deepcopy(trace['correct_time'])
     beg_idx, end_idx = LapSplit(trace, trace['paradigm'])
-    routes = classify_lap(spike_nodes_transform(trace['correct_nodes'], 12), beg_idx, trace['start_from'])
-    routes[routes == 4] = 0
-    
-    if trace['start_from'] == 'correct':
-        routes_id = np.array(["Route "+str(i+1) for i in routes])
-        routes_used = routes
-    else:
-        routes[np.where(routes != 0)[0]] += 3
-        routes_id = np.array(["Route "+str(i+1) for i in routes])
-        routes_used = routes
+    routes = classify_lap(spike_nodes_transform(trace['correct_nodes'], 12), beg_idx)
     
     correct_rates, pass_nums, err_nums, pureguess = [], [], [], []
     
-    for i in np.unique(routes_used):
-        idx = np.where(routes_used == i)[0]
+    for i in range(7):
+        idx = np.where(routes == i)[0]
         
         err_num, pass_num, std_err = calc_behavioral_score_dsp(
             route=i,
@@ -124,8 +115,56 @@ def LearningCurveBehavioralScore_DSP_Interface(trace: dict, variable_names: list
         pass_nums.append(pass_num)
         pureguess.append(1-std_err)
     
-    return np.unique(routes_id), np.array(correct_rates, np.float64), np.array(pass_nums, np.int64), np.array(err_nums, np.int64), np.array(pureguess, np.float64)
+    return np.unique(routes), np.array(correct_rates, np.float64), np.array(pass_nums, np.int64), np.array(err_nums, np.int64), np.array(pureguess, np.float64)
 
+# Fig0807 Running Speed
+def RunningSpeed_DSP_Interface(trace: dict, variable_names = None):
+    KeyWordErrorCheck(trace, __file__, ['correct_time', 'correct_nodes', 'maze_type'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Route', 'Lap', 'Position', 'Speed'])
+    
+    D = GetDMatrices(1, 48)
+    
+    beg_idx, end_idx = LapSplit(trace, trace['paradigm'])
+    routes = classify_lap(spike_nodes_transform(trace['correct_nodes'], 12), beg_idx)
+
+    beg_time_ori, end_time_ori = trace['lap beg time'], trace['lap end time']
+    speed = []
+    poses = []
+    lap = []
+    route = []
+    
+    for i in range(beg_time_ori.shape[0]):
+        idx = np.where(
+            (trace['correct_time'] >= beg_time_ori[i]) & 
+            (trace['correct_time'] <= end_time_ori[i])
+        )[0]
+        smoothed_speed = trace['correct_speed'][idx]
+        
+        CP = CP_DSP[routes[i]]
+        
+        behav_nodes = trace['correct_nodes'][idx].astype(np.int64)
+        old_nodes = spike_nodes_transform(behav_nodes, 12)
+        
+        idx = np.where(np.isin(old_nodes, CP))[0]
+        dist = D[behav_nodes-1, 0] / (np.max(D)+1) * 111
+        dist = (dist // 1).astype(np.int64)
+        
+        smoothed_speed = smoothed_speed[idx]
+        dist = dist[idx]
+        
+        speed_mean = np.full(111, np.nan)
+        for j in range(111):
+            speed_mean[j] = np.nanmean(smoothed_speed[np.where(dist == j)[0]])
+        
+        speed.append(speed_mean)
+        poses.append(np.arange(111))
+        lap.append(np.repeat(i, 111))
+        route.append(np.repeat(routes[i], 111))
+    
+    return np.concatenate(route), np.concatenate(lap), np.concatenate(poses), np.concatenate(speed)
+    
+    
+    
 def MazeSegmentsPVC_DSP_Interface(trace: dict, variable_names = None):
     KeyWordErrorCheck(trace, __file__, ['segments_pvc'])
     VariablesInputErrorCheck(

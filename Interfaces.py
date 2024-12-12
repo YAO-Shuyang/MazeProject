@@ -104,7 +104,7 @@ def SpatialInformation_Interface(trace: dict, spike_threshold = 10, variable_nam
         return np.array([np.mean(trace['SI_all'][np.where(trace['is_placecell'] == 1)[0]])])
     else:
         return np.array([np.mean(trace['LA']['SI_all'][np.where(trace['LA']['is_placecell'] == 1)[0]])])
-    
+
 # Fig0018 Spatial Information Regression Out Speed
 def SI_RegressOut_Speed_Interface(trace: dict, variable_names: list[str]):
     VariablesInputErrorCheck(input_variable = variable_names, check_variable = ["SI", "Speed Level"])
@@ -3208,3 +3208,14 @@ def compute_coordination_on_position_Interface(
                 direction = np.concatenate([direction, np.repeat(paradigm, sessions.shape[0])])
             
         return start_session, dP, pair_types, direction, xs
+   
+# Test0001 
+def KandellCorrelation_Interface(
+    trace,
+    variable_names: list = None
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=['Tau'])
+    
+    tau = np.nanmean(trace['Kendall_Tau'])
+    return np.array([tau])
+    

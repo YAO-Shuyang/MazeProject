@@ -83,8 +83,6 @@ def field_register_dsp(trace, corr_thre: float = 0.3):
     This method was similar to Chen, Yao et al., 2024
     
     Using overlaping of place fields to track and match place fields across routes.
-    
-    Now it is deprecated. 9/8/2024
     """
     corrs = np.zeros((trace['n_neuron'], 2))
 
@@ -236,10 +234,11 @@ if __name__ == '__main__':
     from mylib.calcium.field_criteria import place_field_dsp
     from mylib.maze_utils3 import SmoothMatrix
     
-    for i in range(18, len(f2)):
+    for i in range(28, len(f2)):
         print(i, f2['MiceID'][i], f2['date'][i])   
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
+
         """
         trace['place_field_all'] = place_field_dsp(
             trace=trace,
@@ -249,8 +248,8 @@ if __name__ == '__main__':
             split_thre=0.6
         )
         """
-        #trace = field_register_dsp(trace, corr_thre=0.3)
-        #trace = proofread(trace, min_reactivate_num=4, min_spike_num=4)
-        #with open(f2['Trace File'][i], 'wb') as handle:
-        #    pickle.dump(trace, handle)
+        trace = field_register_dsp(trace, corr_thre=0.3)
+        trace = proofread(trace, min_reactivate_num=4, min_spike_num=4)
+        with open(f2['Trace File'][i], 'wb') as handle:
+            pickle.dump(trace, handle)
         #LocTimeCurve_with_Field(trace)

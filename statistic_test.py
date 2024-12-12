@@ -13,7 +13,7 @@ CONVERGE_MODEL_COLOR, EQUALRATE_MODEL_COLOR = '#D9A6A9', '#9C8FBC'
 SpatialMapPalette = ['#D4C9A8', '#8E9F85', '#527C5A', '#C3AED6', '#66C7B4', '#A7D8DE']
 DSPCorrectTrackPalette = ['#A9CCE3', '#A8DADC', '#9C8FBC', '#D9A6A9']
 DSPIncorrectTrackPalette = ['#A9CCE3', '#F2E2C5', '#647D91', '#C06C84']
-DSPPalette = ['#A9CCE3', '#A8DADC', '#9C8FBC', '#D9A6A9', '#F2E2C5', '#647D91', '#C06C84']
+DSPPalette = ['#A9CCE3', '#A8DADC', '#9C8FBC', '#D9A6A9', '#F2E2C5', '#647D91', '#C06C84']#['#873D38', "#C67E32", "#BFA834", "#7DB27A", "#6376B1", "#764271", "#647D91"]
 ModelPalette = (
     sns.color_palette("rocket", 2) + 
     sns.color_palette("Greens", 4) + 

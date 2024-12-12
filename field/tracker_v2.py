@@ -27,7 +27,7 @@ class Tracker2d:
     def field_reg(self):
         return self._field_reg
     
-    def convert_to_sequence(self):
+    def convert_to_sequence(self, is_gate: bool = True):
         """
         convert field_reg and related structure to sequences.
         """
@@ -67,29 +67,31 @@ class Tracker2d:
                         sequences.append(field_reg[i:j+1, k].astype(np.int64))
                     
         # Cut the sequence if 0 continuously occurs for 8 times
-        for i in range(len(sequences)-1):
-            num_zero = 0
-            is_split = False
-            split_point = []
-            for j in range(sequences[i].shape[0]):
-                if num_zero == 8:
-                    is_split = True
+        if is_gate:
+            for i in range(len(sequences)-1):
+                num_zero = 0
+                is_split = False
+                split_point = []
+                for j in range(sequences[i].shape[0]):
+                    if num_zero == 8:
+                        is_split = True
                 
-                if sequences[i][j] == 0:
-                    num_zero += 1
-                else:
-                    if is_split:
-                        split_point.append(j)
-                        is_split = False
-                    num_zero = 0
+                    if sequences[i][j] == 0:
+                        num_zero += 1
+                    else:
+                        if is_split:
+                            split_point.append(j)
+                            is_split = False
+                        num_zero = 0
             
-            if len(split_point) != 0:      
-                split_point = [0] + split_point + [sequences[i].shape[0]]
-                for j in range(1, len(split_point)-1):
-                    sequences.append(sequences[i][split_point[j]:split_point[j+1]])
+                if len(split_point) != 0:      
+                    split_point = [0] + split_point + [sequences[i].shape[0]]
+                    for j in range(1, len(split_point)-1):
+                        sequences.append(sequences[i][split_point[j]:split_point[j+1]])
                         
-                sequences[i] = sequences[i][split_point[0]:split_point[1]]
+                    sequences[i] = sequences[i][split_point[0]:split_point[1]]
         
+        # Ensure every sequence has a length of at least 2, starting from 1.
         for i in range(len(sequences)-1, -1, -1):
             if np.sum(sequences[i]) == 0:
                 sequences.pop(i)
@@ -197,7 +199,7 @@ class Tracker2d:
         return reconstructed_reg
     
     @staticmethod
-    def convert_for_glm(field_reg, glm_params, least_length=5, is_seq_format=False) -> tuple[np.ndarray, np.ndarray]:
+    def convert_for_glm(field_reg, glm_params, least_length=5, is_seq_format=False, is_gate=True) -> tuple[np.ndarray, np.ndarray]:
         
         sequences = []
         param_sequences = []
@@ -239,30 +241,31 @@ class Tracker2d:
                         param_sequences.append(glm_params[i:j+1, k, :])
                     
         # Cut the sequence if 0 continuously occurs for 8 times
-        for i in range(len(sequences)-1):
-            num_zero = 0
-            is_split = False
-            split_point = []
-            for j in range(sequences[i].shape[0]):
-                if num_zero == 8:
-                    is_split = True
+        if is_gate:
+            for i in range(len(sequences)-1):
+                num_zero = 0
+                is_split = False
+                split_point = []
+                for j in range(sequences[i].shape[0]):
+                    if num_zero == 8:
+                        is_split = True
                 
-                if sequences[i][j] == 0:
-                    num_zero += 1
-                else:
-                    if is_split:
-                        split_point.append(j)
-                        is_split = False
-                    num_zero = 0
+                    if sequences[i][j] == 0:
+                        num_zero += 1
+                    else:
+                        if is_split:
+                            split_point.append(j)
+                            is_split = False
+                        num_zero = 0
             
-            if len(split_point) != 0:      
-                split_point = [0] + split_point + [sequences[i].shape[0]]
-                for j in range(1, len(split_point)-1):
-                    sequences.append(sequences[i][split_point[j]:split_point[j+1]])
-                    param_sequences.append(param_sequences[i][split_point[j]:split_point[j+1], :])
+                if len(split_point) != 0:
+                    split_point = [0] + split_point + [sequences[i].shape[0]]
+                    for j in range(1, len(split_point)-1):
+                        sequences.append(sequences[i][split_point[j]:split_point[j+1]])
+                        param_sequences.append(param_sequences[i][split_point[j]:split_point[j+1], :])
                         
-                sequences[i] = sequences[i][split_point[0]:split_point[1]]
-                param_sequences[i] = param_sequences[i][split_point[0]:split_point[1], :]
+                    sequences[i] = sequences[i][split_point[0]:split_point[1]]
+                    param_sequences[i] = param_sequences[i][split_point[0]:split_point[1], :]
         
         for i in range(len(sequences)-1, -1, -1):
             if np.sum(sequences[i]) == 0:
