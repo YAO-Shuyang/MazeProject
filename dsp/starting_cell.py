@@ -309,13 +309,18 @@ if __name__ == '__main__':
     from mylib.local_path import f2
     
     for i in range(len(f2)):
-        if i != 26:
+        if i <= 27:
             continue
         
         print(i, f2['MiceID'][i], f2['date'][i])
         
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
+            
+        trace = StartingCell.classify(trace)
+        
+        with open(f2['Trace File'][i], 'wb') as handle:
+            pickle.dump(trace, handle)
         
         n = 15
         print(f"Cell {n}:\n"

@@ -286,7 +286,7 @@ def FastDistance(start, goal, maze_type = 1, nx = 12) -> int:
 
 # Smooth
 # Define a Gaussian-based smooth method -------------------------------------------------------------------------------------------
-def Gaussian(x=0, sigma=2, pi=3.1416, nx = 48):
+def Gaussian(x=0, sigma=2, pi=np.pi, nx = 48):
     x = x * (48 / nx)
     return 1 / (sigma * np.sqrt(pi * 2)) * np.exp(- x * x / (sigma * sigma * 2))
 

@@ -267,10 +267,10 @@ def SegmentedCorrelationAcrossRoutes_Egocentric_DSP_Interface(trace: dict, varia
             
             PVC = np.zeros(idx1.shape[0], np.float64)
             for k in range(idx1.shape[0]):
-                PVC[k], _ = pearsonr(
+                PVC[k] = np.corrcoef(
                     trace[f'node {j}']['smooth_map_all'][pc_idx, son_bins1[idx1[k]]-1],
                     trace[f'node {i}']['smooth_map_all'][pc_idx, son_bins2[idx2[k]]-1]
-                )
+                )[0, 1]
                 
             n_len = CP_DSP[trace[f'node {j}']['Route']].shape[0]
             dist = D1[idx1]
@@ -296,10 +296,10 @@ def SegmentedCorrelationAcrossRoutes_Egocentric_DSP_Interface(trace: dict, varia
                 
                 PVC = np.zeros(idx1.shape[0], np.float64)
                 for k in range(idx1.shape[0]):
-                    PVC[k], _ = pearsonr(
+                    PVC[k] = np.corrcoef(
                         trace[f'node {i}']['smooth_map_all'][pc_idx, son_bins1[idx1[k]]-1],
                         trace[f'node {m}']['smooth_map_all'][pc_idx, son_bins2[idx2[k]]-1]
-                    )
+                    )[0, 1]
                         
                 n_len = CP_DSP[trace[f'node {j}']['Route']].shape[0]
                 dist = D1[idx1]
@@ -317,6 +317,86 @@ def SegmentedCorrelationAcrossRoutes_Egocentric_DSP_Interface(trace: dict, varia
                 control_for_route.append(np.repeat(trace[f'node {j}']['Route'], n_len)) 
  
     return np.concatenate(segment_pieces), np.concatenate(segment_pvc), np.concatenate(groups), np.concatenate(routes), np.concatenate(control_for_route)
+
+def SegmentedCorrelationAcrossRoutes_Egocentric_DSP_Interface2(trace: dict, variable_names = None):
+    VariablesInputErrorCheck(
+        input_variable = variable_names, 
+        check_variable = ['Segments', 'Mean PVC', 'Compare Groups', 'Control For Route']
+    )
+    segment_pieces = []
+    segment_pvc = []
+    groups = []
+    routes = []
+    control_for_route = []
+    seg_temp = np.concatenate([[0], segs])
+    
+    D = GetDMatrices(1, 48)
+    
+    seg_temp = np.array([seg_temp[0], seg_temp[2], seg_temp[4], seg_temp[6], seg_temp[1], seg_temp[3], seg_temp[5], seg_temp[7]])
+    for u, i in enumerate([6, 1, 7, 2, 8, 3]):
+        for v, j in enumerate([6, 1, 7, 2, 8, 3]):
+            if u >= v:
+                continue
+            
+            son_bins1 = get_son_area(CP_DSP[trace[f'node {j}']['Route']])
+            son_bins2 = get_son_area(CP_DSP[trace[f'node {i}']['Route']])
+            
+            D1 = D[son_bins1-1, SP_DSP[trace[f'node {j}']['Route']]-1]
+            D2 = D[son_bins2-1, SP_DSP[trace[f'node {i}']['Route']]-1]
+            
+            idx1 = np.argsort(D1)
+            idx2 = np.argsort(D2)[:idx1.shape[0]]
+            
+            pc_idx = np.where(
+                (trace[f'node {i}']['is_placecell'] == 1) |
+                (trace[f'node {j}']['is_placecell'] == 1)
+            )[0]
+            
+            PVC = np.zeros(idx1.shape[0], np.float64)
+            for k in range(idx1.shape[0]):
+                PVC[k] = np.corrcoef(
+                    trace[f'node {j}']['smooth_map_all'][pc_idx, son_bins1[idx1[k]]-1],
+                    trace[f'node {i}']['smooth_map_all'][pc_idx, son_bins2[idx2[k]]-1]
+                )[0, 1]
+                
+            n_len = CP_DSP[trace[f'node {j}']['Route']].shape[0]
+            dist = D1[idx1]
+            dist = dist / (np.max(dist) + 0.0001) * n_len
+            dist = (dist // 1).astype(np.int64)
+            
+            pvc_norm = np.zeros(n_len)
+            for k in range(n_len):
+                pvc_norm[k] = np.nanmean(PVC[dist == k])
+            
+            segment_pieces.append(np.arange(0, n_len))
+            segment_pvc.append(pvc_norm)
+            groups.append(np.repeat(f'{i}-{j}', n_len))
+            control_for_route.append(np.repeat('Real', n_len))    
+            
+            # Control
+                
+            PVC = np.zeros(idx1.shape[0], np.float64)
+            for k in range(idx1.shape[0]):
+                PVC[k] = np.corrcoef(
+                    trace[f'node {i}']['smooth_map_all'][pc_idx, son_bins1[idx1[k]]-1],
+                    trace[f'node {i}']['smooth_map_all'][pc_idx, son_bins2[idx2[k]]-1]
+                )[0, 1]
+                        
+            n_len = CP_DSP[trace[f'node {j}']['Route']].shape[0]
+            dist = D1[idx1]
+            dist = dist / (np.max(dist) + 0.0001) * n_len
+            dist = (dist // 1).astype(np.int64)
+                    
+            pvc_norm = np.zeros(n_len)
+            for k in range(n_len):
+                pvc_norm[k] = np.nanmean(PVC[dist == k])
+                    
+            segment_pieces.append(np.arange(0, n_len))
+            segment_pvc.append(pvc_norm)
+            groups.append(np.repeat(f'{i}-{j}', n_len))
+            control_for_route.append(np.repeat('Control', n_len)) 
+ 
+    return np.concatenate(segment_pieces), np.concatenate(segment_pvc), np.concatenate(groups), np.concatenate(control_for_route)
 
 def SegmentedTrajectoryDistance_DSP_Interface(
     trace, 
@@ -912,7 +992,7 @@ def StartingCellEncodedRouteNumberDistribution_DSP_Interface(trace, variable_nam
     
     encoded_num = np.zeros(trace['n_neuron'])
     for i in range(trace['n_neuron']):
-        if trace['SC_EncodePath'][i].shape[0] == 0:
+        if trace['SC_EncodePath'][i].shape[0] <= 1:
             continue
         other_routes = np.intersect1d(trace['SC_EncodePath'][i], np.array([1, 2, 3, 6, 7, 8]))
         route1 = np.intersect1d(trace['SC_EncodePath'][i], np.array([0, 4, 5, 9]))
@@ -924,7 +1004,7 @@ def StartingCellEncodedRouteNumberDistribution_DSP_Interface(trace, variable_nam
     
     route_num = np.zeros(6)
     for i in range(6):
-        route_num[i] = np.where(encoded_num == i+2)[0].shape[0] / trace['n_neuron']
+        route_num[i] = np.where(encoded_num == i+2)[0].shape[0] / np.where(encoded_num >= 2)[0].shape[0]
     return np.arange(2, 8), route_num
 
 # Fig0831
@@ -1086,5 +1166,90 @@ def ModulatedProportionSpatialDistribution_DSP_Interface(trace, variable_names =
     
     for n in route_bins:
         total_n = np.where(field_centers == n)[0]
+    
+# Fig0839 - Behavioral reasons for remapping - initial speed
+def InitSpeedForRemapping_DSP_Interface(trace, variable_names = None):
+    VariablesInputErrorCheck(variable_names, ['Speed', 'Map Type', 'Time', 'Corr'])
+    
+    thres = {10212: 0.114, 10224: 0.0815, 10227: 0.0751, 10232: 0.0956}
+    corr_thre = thres[int(trace['MiceID'])]
+    
+    beg, end = LapSplit(trace, trace['paradigm'])
+    route_ids = classify_lap(spike_nodes_transform(trace['correct_nodes'], 12), beg)
+    
+    speeds, map_types, times, corrs = [], [], [], []
+    for i in np.where(route_ids == 6)[0]:
+        if trace['is_perfect'][i] == 0:
+            continue
         
+        idx = np.where(
+            (trace['correct_time'] >= trace['correct_time'][beg[i]]) & 
+            (trace['correct_time'] <= trace['correct_time'][beg[i]] + 2000)
+        )[0]
         
+        dt = np.ediff1d(trace['correct_time'])
+        x, y = trace['correct_pos'][:, 0]/10, trace['correct_pos'][:, 1]/10
+        dx, dy = np.ediff1d(x), np.ediff1d(y)
+        dis = np.sqrt(dx**2 + dy**2)
+        speed = dis/dt*1000
+        smoothed_speed = np.convolve(speed, np.ones(5)/5, mode='same')[idx[:-1]]
+        
+        t = trace['correct_time'][idx[:-1]] - trace['correct_time'][idx[0]]
+        corr = np.repeat(trace['lapwise_corr'][i], t.shape[0])
+        map_type = np.repeat(1, t.shape[0]) if corr[0] < corr_thre else np.repeat(2, t.shape[0])
+        
+        speeds.append(smoothed_speed)
+        map_types.append(map_type)
+        times.append(t)
+        corrs.append(corr)
+    
+    return np.concatenate(speeds), np.concatenate(map_types), np.concatenate(times), np.concatenate(corrs)
+
+# Fig0839 - Behavioral reasons for remapping - cumulative distances
+def InitCumulativeDistanceForRemapping_DSP_Interface(trace, variable_names = None):
+    VariablesInputErrorCheck(variable_names, ['Distance', 'Map Type', 'Corr', 'Time'])
+    
+    thres = {10212: 0.114, 10224: 0.0815, 10227: 0.0751, 10232: 0.0956}
+    corr_thre = thres[int(trace['MiceID'])]
+    
+    beg, end = LapSplit(trace, trace['paradigm'])
+    route_ids = classify_lap(spike_nodes_transform(trace['correct_nodes'], 12), beg)
+    
+    dists, map_types, corrs = [], [], []
+    times = []
+    for i in np.where(route_ids == 6)[0]:
+        idx = np.where(
+            (trace['correct_time'] >= trace['correct_time'][beg[i]]) &
+            (trace['correct_time'] <= trace['correct_time'][beg[i]] + 2000)
+        )[0]
+        
+        x, y = trace['correct_pos'][idx, 0]/10, trace['correct_pos'][idx, 1]/10
+        dx, dy = np.ediff1d(x), np.ediff1d(y)
+        dis = np.nansum(np.sqrt(dx**2 + dy**2))
+        
+        corr = trace['lapwise_corr'][i]
+        map_type = 1 if corr < corr_thre else 2
+        
+        dists.append(dis)
+        map_types.append(map_type)
+        corrs.append(corr)
+        times.append('2s')
+
+        idx = np.where(
+            (trace['correct_time'] >= trace['correct_time'][beg[i]]) &
+            (trace['correct_time'] <= trace['correct_time'][beg[i]] + 1000)
+        )[0]
+        
+        x, y = trace['correct_pos'][idx, 0]/10, trace['correct_pos'][idx, 1]/10
+        dx, dy = np.ediff1d(x), np.ediff1d(y)
+        dis = np.nansum(np.sqrt(dx**2 + dy**2))
+        
+        corr = trace['lapwise_corr'][i]
+        map_type = 1 if corr < corr_thre else 2
+        
+        dists.append(dis)
+        map_types.append(map_type)
+        corrs.append(corr)
+        times.append('1s')
+        
+    return np.array(dists), np.array(map_types), np.array(corrs), np.array(times)
