@@ -1115,6 +1115,9 @@ class TrackerDsp(object):
         shuf_rate_all = np.zeros((field_reg.shape[1], n_shuffle, 10), np.float64)
         for i in range(field_reg.shape[1]):
             shuf_rate_all[i, :, :] = shuf_rate_accu[i]
+        
+        if os.path.exists(trace['p']) == False:
+            os.mkdir(trace['p'])
             
         with open(os.path.join(trace['p'], "field_shuffle.pkl"), 'wb') as handle:
             pickle.dump(shuf_rate_all, handle)

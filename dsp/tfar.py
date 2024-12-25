@@ -124,7 +124,7 @@ def field_register_dsp(trace, corr_thre: float = 0.3):
     field_segs = np.zeros(field_reg.shape[1])
     field_centers = field_info[0, :, 2].astype(np.int64)
     
-    for i in tqdm(range(field_segs.shape[0])):
+    for i in tqdm(range(len(segment_bins))):
         field_segs[np.isin(field_centers, segment_bins[i])] = i+1
         
     trace['field_segs'] = field_segs
@@ -145,7 +145,7 @@ def proofread(trace, min_reactivate_num: int = 5, min_spike_num: int = 5):
     field_reg = trace['field_reg']
     field_info = trace['field_info']
     
-    for i in range(field_reg.shape[1]):
+    for i in tqdm(range(field_reg.shape[1])):
         for j in range(field_reg.shape[0]):
             # Check if the field satisfies the criteria.
             cell = int(field_info[j, i, 0])
@@ -234,7 +234,7 @@ if __name__ == '__main__':
     from mylib.calcium.field_criteria import place_field_dsp
     from mylib.maze_utils3 import SmoothMatrix
     
-    for i in range(28, len(f2)):
+    for i in range(29, len(f2)):
         print(i, f2['MiceID'][i], f2['date'][i])   
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
@@ -252,4 +252,4 @@ if __name__ == '__main__':
         trace = proofread(trace, min_reactivate_num=4, min_spike_num=4)
         with open(f2['Trace File'][i], 'wb') as handle:
             pickle.dump(trace, handle)
-        #LocTimeCurve_with_Field(trace)
+        LocTimeCurve_with_Field(trace)

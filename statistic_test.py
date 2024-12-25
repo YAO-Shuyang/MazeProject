@@ -3,7 +3,7 @@ from mylib.preprocessing_ms import *
 from mylib.Interfaces import *
 import seaborn as sns
 import scipy.io
-from scipy.stats import ttest_1samp, ttest_ind, levene
+from scipy.stats import ttest_1samp, ttest_ind, levene, f_oneway
 from mylib.local_path import *
 from scipy.stats import linregress, pearsonr
 from matplotlib.gridspec import GridSpec
@@ -22,6 +22,7 @@ ModelPalette = (
     sns.color_palette("Reds", 4) +
     sns.color_palette("rainbow", 9)
 )
+RemappingPalette = ['#8591c9' , '#359C9E']
 
 def star(p:str):
     '''
