@@ -302,7 +302,7 @@ class StartingCell:
         
         return trace
             
-        
+
 
 if __name__ == '__main__':
     import pickle
