@@ -162,8 +162,28 @@ def RunningSpeed_DSP_Interface(trace: dict, variable_names = None):
         route.append(np.repeat(routes[i], 111))
     
     return np.concatenate(route), np.concatenate(lap), np.concatenate(poses), np.concatenate(speed)
+
+# Fig0809
+def LapwiseTimeImprovement_DSP_Interface(trace: dict, variable_names = None):
+    KeyWordErrorCheck(trace, __file__, ['correct_time', 'correct_nodes', 'maze_type'])
+    VariablesInputErrorCheck(input_variable = variable_names, check_variable = ['Route', 'Lap', 'Time'])
     
+    beg, end = LapSplit(trace, trace['paradigm'])
+    routes = classify_lap(spike_nodes_transform(trace['correct_nodes'], 12), beg)
     
+    R = np.vstack([np.repeat(i, 10) for i in range(7)])
+    L = np.hstack([np.repeat(i, 7)[:, np.newaxis] for i in range(10)])
+    T = np.zeros((7, 10))
+    
+    for i in range(7):
+        idx = np.where(routes == i)[0]
+        if len(idx) < 10:
+            T[i, :len(idx)] = trace['lap end time'][idx] - trace['lap beg time'][idx]
+            T[i, len(idx):] = np.nan
+        else:
+            T[i, :] = trace['lap end time'][idx[:10]] - trace['lap beg time'][idx[:10]]
+    
+    return R.flatten(), L.flatten(), T.flatten()
     
 def MazeSegmentsPVC_DSP_Interface(trace: dict, variable_names = None):
     KeyWordErrorCheck(trace, __file__, ['segments_pvc'])
@@ -213,10 +233,10 @@ def SegmentedCorrelationAcrossRoutes_DSP_Interface(trace: dict, variable_names =
             
             pvc = np.zeros(bins.shape[0], np.float64)
             for k in range(bins.shape[0]):
-                pvc[k], _ = pearsonr(
+                pvc[k] = np.corrcoef(
                     trace[f'node {i}']['smooth_map_all'][pc_idx, bins[k]],
                     trace[f'node {j}']['smooth_map_all'][pc_idx, bins[k]]
-                )
+                )[0, 1]
                 
             dist = D[bins, 0]
             dist = dist / (np.max(dist) + 0.0001) *111
