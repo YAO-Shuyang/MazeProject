@@ -22,7 +22,32 @@ ModelPalette = (
     sns.color_palette("Reds", 4) +
     sns.color_palette("rainbow", 9)
 )
-RemappingPalette = ['#8591c9' , '#359C9E']
+RemappingPalette = ['#333766', '#A4C096']
+MicePaletteDSP = ['#F2E8D4', '#8E9F85', '#C3AED6', '#A7D8DE']
+
+def hex_to_rgba(hex_color):
+    """
+    Convert a hex color (#RRGGBB or #RRGGBBAA) to RGBA format (0-255).
+    """
+    hex_color = hex_color.lstrip('#')  # Remove '#' if present
+    if len(hex_color) == 6:
+        r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+        a = 255  # Default alpha
+    elif len(hex_color) == 8:
+        r, g, b, a = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16), int(hex_color[6:8], 16)
+    else:
+        raise ValueError("Invalid hex color format. Use #RRGGBB or #RRGGBBAA.")
+    return r, g, b, a
+
+def hex_to_rgba_normalized(hex_color):
+    """
+    Convert a hex color (#RRGGBB or #RRGGBBAA) to RGBA format (0-1).
+    """
+    r, g, b, a = hex_to_rgba(hex_color)
+    return np.array([r / 255, g / 255, b / 255, a / 255])
+
+DSPPaletteRGBA = np.vstack([hex_to_rgba_normalized(c) for c in DSPPalette])
+MAPPaletteRGBA = np.vstack([hex_to_rgba_normalized(c) for c in ['#333766', '#A4C096']])
 
 def star(p:str):
     '''

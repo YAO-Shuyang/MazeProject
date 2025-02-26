@@ -49,12 +49,32 @@ def field_register_dsp_old(trace, overlap_thre: float, maze_type: int = 1, is_sh
     
     n_neuron = trace['n_neuron']
     index_map = np.meshgrid(np.arange(1, n_neuron+1), np.arange(10))[0]
-    place_field_all = [[trace[f'node {i}']['place_field_all'][k] for i in range(10)] for k in range(n_neuron)]
-    is_placecell = np.vstack([trace[f'node {i}']['is_placecell'] for i in range(10)])
-
-    smooth_map_all = np.full((10, n_neuron, 2304), np.nan)
-    for i in range(10):
-        smooth_map_all[i, :, :] = trace[f'node {i}']['smooth_map_all']
+    if is_shuffle == False:
+        place_field_all = [[trace[f'node {i}']['place_field_all'][k] for i in range(10)] for k in range(n_neuron)]
+        is_placecell = np.vstack([trace[f'node {i}']['is_placecell'] for i in range(10)])
+        smooth_map_all = np.full((10, n_neuron, 2304), np.nan)
+        for i in range(10):
+            smooth_map_all[i, :, :] = trace[f'node {i}']['smooth_map_all']
+    else:
+        cell_orders = [
+            qualified_cell,
+            np.random.permutation(qualified_cell),
+            np.random.permutation(qualified_cell),
+            np.random.permutation(qualified_cell),
+            qualified_cell,
+            qualified_cell,
+            np.random.permutation(qualified_cell),
+            np.random.permutation(qualified_cell),
+            np.random.permutation(qualified_cell),
+            qualified_cell
+        ]
+        place_field_all = [
+            [trace[f'node {i}']['place_field_all'][cell_orders[i][k]] for i in range(10)] for k in range(len(qualified_cell))
+        ]
+        is_placecell = np.ones((10, len(qualified_cell)), np.int64)
+        smooth_map_all = np.full((10, len(qualified_cell), 2304), np.nan)
+        for i in range(10):
+            smooth_map_all[i, :, :] = trace[f'node {i}']['smooth_map_all'][cell_orders[i], :]
     
     print(f"Registering {n_neuron} neurons")
     field_reg, field_info, place_field_all = Tracker.field_register(
@@ -64,9 +84,12 @@ def field_register_dsp_old(trace, overlap_thre: float, maze_type: int = 1, is_sh
         overlap_thre=overlap_thre,
         maze_type=maze_type,
         smooth_map_all=smooth_map_all,
-        is_shuffle = is_shuffle
+        is_shuffle = False
     )
     field_ids = get_field_ids(field_info)
+    
+    if is_shuffle:
+        return field_reg, field_info
     
     qualified_field = np.isin(field_info[0, :, 0].astype(np.int64), qualified_cell+1)
     
@@ -234,12 +257,11 @@ if __name__ == '__main__':
     from mylib.calcium.field_criteria import place_field_dsp
     from mylib.maze_utils3 import SmoothMatrix
     
-    for i in range(29, len(f2)):
+    for i in range(len(f2)):
         print(i, f2['MiceID'][i], f2['date'][i])   
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
 
-        """
         trace['place_field_all'] = place_field_dsp(
             trace=trace,
             thre_type=2,
@@ -247,9 +269,8 @@ if __name__ == '__main__':
             events_num_crit=5,
             split_thre=0.6
         )
-        """
-        trace = field_register_dsp(trace, corr_thre=0.3)
-        trace = proofread(trace, min_reactivate_num=4, min_spike_num=4)
+        trace = field_register_dsp_old(trace, overlap_thre=0.6)
+        #trace = proofread(trace, min_reactivate_num=4, min_spike_num=4)
         with open(f2['Trace File'][i], 'wb') as handle:
             pickle.dump(trace, handle)
-        LocTimeCurve_with_Field(trace)
+        #LocTimeCurve_with_Field(trace)
