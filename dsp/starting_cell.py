@@ -12,6 +12,9 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import os
 
+from mylib.maze_graph import S2F, CP_DSP, DSP_NRG
+from mylib.field.tracker import Tracker, get_field_ids
+
 def get_son_area(area: np.ndarray):
     return np.concatenate([Father2SonGraph[i] for i in area])
 
@@ -51,6 +54,12 @@ def get_initial_traj(trace, limit=10):
         "Spikes": trace['Spikes'][:, include_indices],
     }
 
+def _statistical_counts(index_map):
+    pass
+    
+
+    
+'''
 class StartingCell:
     def __init__(self, place_field_all: list[dict]) -> None:
         """
@@ -301,7 +310,7 @@ class StartingCell:
         trace['SC_FieldCenter'] = np.array(field_centers, np.float64)
         
         return trace
-            
+'''        
 
 
 if __name__ == '__main__':
