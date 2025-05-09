@@ -350,6 +350,7 @@ def concat_trace_behav(oripath1: str, oripath2: str, save_dir: None = None):
         'maze_type': 1,
         'nx': 48, 'ny': 48,
         'body_parts': trace1['body_parts'],
+        'dlc_position': {k: np.concatenate([trace1['dlc_position'][k], trace2['dlc_position'][k]], axis=0) for k in trace1['dlc_position'].keys()},
         'behav_position_original': np.concatenate([trace1['behav_position_original'], trace2['behav_position_original']], axis=0),
         'behav_time_original': np.concatenate([trace1['behav_time_original'], trace2['behav_time_original'] + add_time]),
         'lap beg time': np.concatenate([trace1['lap beg time'], trace2['lap beg time'] + add_time]),
@@ -372,7 +373,7 @@ def concat_trace_behav(oripath1: str, oripath2: str, save_dir: None = None):
     print("    ",os.path.join(save_dir, 'trace_behav.pkl')," has been saved successfully!")
 
 if __name__ == '__main__':
-    from mylib.local_path import f2_ori
+    from mylib.local_path import f2_ori, f2
     """
     f = pd.read_excel(r"G:\YSY\Dsp_maze\dsp_maze_paradigm.xlsx", sheet_name='behavior')
     work_flow = "G:\YSY\Dsp_maze"
@@ -386,9 +387,24 @@ if __name__ == '__main__':
     
         print("Done.", end='\n\n\n')
     """
-    
+    """
     for i in range(int(len(f2_ori) / 2)):
         oripath1 = f2_ori['Trace Behav File'][i*2]
         oripath2 = f2_ori['Trace Behav File'][i*2+1]
 
         concat_trace_behav(oripath1, oripath2)
+    """
+    
+    for i in range(len(f2)):
+        with open(f2['Trace Behav File'][i], 'rb') as handle:
+            trace_behav = pickle.load(handle)
+            
+        with open(f2['Trace File'][i], 'rb') as handle:
+            trace = pickle.load(handle)
+            
+        trace['dlc_position'] = trace_behav['dlc_position']
+        
+        with open(f2['Trace File'][i], 'wb') as handle:
+            pickle.dump(trace, handle)
+            
+        print(i, f2['MiceID'][i], [trace['dlc_position'][k].shape for k in trace['dlc_position'].keys()], trace['behav_position_original'].shape, trace['behav_time_original'].shape)
