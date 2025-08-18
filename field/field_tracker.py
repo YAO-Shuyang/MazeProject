@@ -231,8 +231,8 @@ class RegisteredField(object):
             return Reg.report_with_position(thre=thre, seg_range=seg_range, maze_type=maze_type)
     
     @staticmethod
-    def get_field_lifespans(field_reg: np.ndarray):
-        Reg = RegisteredField(field_reg)
+    def get_field_lifespans(field_reg: np.ndarray, field_info: dict):
+        Reg = RegisteredField(field_reg, field_info=field_info)
         return Reg.count_lifespan()
 
 '''    

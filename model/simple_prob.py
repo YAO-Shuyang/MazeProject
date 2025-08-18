@@ -209,12 +209,24 @@ class TwoProbabilityIndependentModel:
         P1 = P1[:, 1] / np.sum(P1, axis=1)
         P2 = P2[:, 1] / np.sum(P2, axis=1)
         
+        non_inf_idx1 = np.where(
+            (np.isnan(P1) == False) & (np.isinf(P1) == False)
+        )[0]
+        X1 = np.arange(1, P1.shape[0]+1)[non_inf_idx1]
+        P1 = P1[non_inf_idx1]
+        
+        non_inf_idx2 = np.where(
+            (np.isnan(P2) == False) & (np.isinf(P2) == False)
+        )[0]
+        X2 = np.arange(1, P2.shape[0]+1)[non_inf_idx2]
+        P2 = P2[non_inf_idx2]
+
         self._params_retention = curve_fit(
-            retention_func, np.arange(1, P1.shape[0]+1), P1, p0=[0.5, 0.5]
+            retention_func, X1, P1, p0=[0.5, 0.5]
         )[0]
         
         self._params_recovery = curve_fit(
-            recovery_func, np.arange(1, P2.shape[0]+1), P2, p0=[0.5, 0.5]
+            recovery_func, X2, P2, p0=[0.5, 0.5]
         )[0]
 
         self.p0 = retention_func(1, *self.params_retention)
