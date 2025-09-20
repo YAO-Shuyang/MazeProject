@@ -372,7 +372,7 @@ def GetMultidayIndexmap(
     session: int = None,
     i: int = None,
     occu_num: int = None,
-    f: pd.DataFrame | None = None
+    f: pd.DataFrame | None = f_CellReg_modi
 ):  
     if f is None:
         f = f_CellReg_day

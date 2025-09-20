@@ -6,6 +6,8 @@ import scipy.stats
 import numpy as np
 from numba import jit
 import time
+from mazepy.datastruc.neuact import SpikeTrain
+from mazepy.datastruc.variables import VariableBin
 
 @jit(nopython=True)
 def _generate_tuning_curve(
@@ -38,6 +40,7 @@ def _get_post_prob(Spikes_test: np.ndarray, pext: np.ndarray, pext_A: np.ndarray
         
     return P
 
+from mylib.decoder.calc_p import compute_P
 class NaiveBayesDecoder(object):
     '''
     version: 1.3
@@ -164,6 +167,16 @@ class NaiveBayesDecoder(object):
         n_neuron = self.Spikes_train.shape[0]
         maze_type = self.maze_type
         
+        t1 = time.time()
+        
+        spike_train = SpikeTrain(
+            activity=self.Spikes_train,
+            time=np.arange(self.Spikes_train.shape[1])*1000,
+            variable=VariableBin(self.MazeID_train.astype(np.int64))-1
+        )
+        pext = spike_train.calc_tuning_curve(nbins=self.res**2, is_remove_nan=True)
+        print(f"    Tuning curve generation time: {time.time() - t1} s")
+        """
         spike_freq_all = np.zeros([n_neuron,_nbins], dtype = np.float64)
         count_freq = np.zeros(_nbins, dtype = np.float64)
         for i in range(n_neuron):
@@ -184,6 +197,7 @@ class NaiveBayesDecoder(object):
         count_freq[count_freq < 1] = 1  # 1/25
         pext = spike_freq_all / count_freq
         t2 = time.time()
+        """
         #pext = _generate_tuning_curve(self.Spikes_train, self.MazeID_train, self.res)
         peak = np.nanmax(pext, axis=1)
 
@@ -208,8 +222,9 @@ class NaiveBayesDecoder(object):
         else:
             smooth_pext = pext
 
+        count_freq = spike_train.calc_occu_time(nbins=self.res**2)
         pext_A = count_freq / np.nansum(count_freq)
-        
+
         smooth_pext[np.where(smooth_pext < 0.000001)] = 0.000001
         smooth_pext[np.where(smooth_pext > 0.999999)] = 0.999999
         
@@ -247,12 +262,16 @@ class NaiveBayesDecoder(object):
   
         # generate P matrix.
         print("    Generating P matirx...")
+        t1 = time.time()
+        P = compute_P(Spikes_test.astype(np.int64), pext.astype(np.float64), pext_A.astype(np.float64))
+        print(f"    P matrix generation time: {time.time() - t1} s")
+        """
         for t in tqdm(range(T_test)):
             spike_idx = np.where(Spikes_test[:,t]==1)[0]
             nonspike_idx = np.where(Spikes_test[:,t]==0)[0]
             p = np.concatenate((pext[spike_idx,:],(1-pext[nonspike_idx,:])),axis=0)
             P[:,t] = np.nanprod(p, axis = 0) * pext_A
-        """   
+        """"""   
         P = _get_post_prob(Spikes_test, pext, pext_A, self.res) 
         """
         self.P = P

@@ -6,6 +6,7 @@ from mylib.maze_utils3 import GetDMatrices
 import copy as cp
 from mylib.maze_graph import correct_paths as CPs
 from mylib.maze_utils3 import spike_nodes_transform
+from typing import Callable
 
 class RegisteredField(object):
     def __init__(self, field_reg: np.ndarray, field_info: np.ndarray) -> None:
@@ -194,6 +195,128 @@ class RegisteredField(object):
 
         return duration, segment_id.flatten(), retained_prob.flatten(), conditional_recover_prob.flatten(), np.sum(on_next_prob, axis=1).flatten(), np.sum(off_next_prob, axis=1).flatten()
     
+    def report_with_provided_labels(
+        self,
+        labeled_matrix: np.ndarray,
+        n_labels: int,
+        process: Callable[[np.ndarray], int],
+        thre: int = 4
+    ):
+        """Report the probability of field samples with provided labels.
+
+        Parameters
+        ----------
+        labeled_matrix : np.ndarray
+            The labeled matrix to process. It should have the same shape as the 
+            field registration matrix.
+        n_labels : int
+        process : Callable[[np.ndarray], int]
+            A processing function to apply to the inputed labeled matrix and return a label
+            for input samples.
+            
+        Examples
+        --------
+        def process_func(x: np.ndarray) -> int:
+            if x.ndim == 1:
+                return np.digitize(np.array([np.nanmean(x)]), bins=np.array([0, 0.5, 1])) - 1
+            elif x.ndim == 2:
+                return np.digitize(np.nanmean(x, axis=0), bins=np.array([0, 0.5, 1]))
+                
+        Notes
+        -----
+        Please ensure that the range of process_func should be [0, 1, ..., n_labels - 1].
+        """
+        assert labeled_matrix.shape == self._content.shape, "The shape of labeled matrix should be the same as the field registration matrix."
+        field_reg = self._content
+        duration = np.arange(field_reg.shape[0]+1)  # Retained duration, silent duration, not detected duration
+        on_next_prob = np.zeros((field_reg.shape[0]+1, 2, n_labels), dtype=np.int64) # State ON with duration t -> State ON/OFF/NOT DETECTED on the next sessions
+        off_next_prob = np.zeros((field_reg.shape[0]+1, 2, n_labels), dtype=np.int64) # State OFF on Session t -> State ON DETECTED on Session t+1
+        label_val_on = {
+            (j, i): [] for i in range(n_labels) for j in range(field_reg.shape[0]+1)
+        }
+        label_val_off = {
+            (j, i): [] for i in range(n_labels) for j in range(field_reg.shape[0]+1)
+        }
+        silent_num = np.zeros(n_labels, dtype=np.int64)
+
+        for i in range(field_reg.shape[0]-1):
+            for j in range(i+1, field_reg.shape[0]):
+                if i == 0:
+
+                    base_num = np.where((np.sum(field_reg[i:j, :], axis=0)==j-i)&(field_reg[j, :] == 0))[0]
+                    active_num = np.where(np.sum(field_reg[i:j+1, :], axis=0)==j-i+1)[0]
+
+                    base_label = process(labeled_matrix[i:j, :][:, base_num])
+                    active_label = process(labeled_matrix[i:j, :][:, active_num])
+                    on_next_prob[j-i, 0, :] += np.histogram(active_label, bins=n_labels, range=(-0.5, n_labels-0.5))[0]
+                    on_next_prob[j-i, 1, :] += np.histogram(base_label, bins=n_labels, range=(-0.5, n_labels-0.5))[0]
+                    for l in range(n_labels):
+                        label_val_on[(j-i, l)].append(np.nanmean(labeled_matrix[i:j, :][:, base_num[base_label == l]], axis=0))
+                        label_val_on[(j-i, l)].append(np.nanmean(labeled_matrix[i:j, :][:, active_num[active_label == l]], axis=0))
+
+                elif i == 1:
+                    base_num = np.where((np.sum(field_reg[i:j, :], axis=0)==j-i)&(field_reg[j, :] == 0)&(field_reg[i-1, :] != 1))[0]
+                    active_num = np.where((np.sum(field_reg[i:j+1, :], axis=0)==j-i+1)&(field_reg[i-1, :] != 1))[0]
+                    
+                    base_label = process(labeled_matrix[i:j, :][:, base_num])
+                    active_label = process(labeled_matrix[i:j, :][:, active_num])
+                    on_next_prob[j-i, 0, :] += np.histogram(active_label, bins=n_labels, range=(-0.5, n_labels-0.5))[0]
+                    on_next_prob[j-i, 1, :] += np.histogram(base_label, bins=n_labels, range=(-0.5, n_labels-0.5))[0]
+                    for l in range(n_labels):
+                        label_val_on[(j-i, l)].append(np.nanmean(labeled_matrix[i:j, :][:, base_num[base_label == l]], axis=0))
+                        label_val_on[(j-i, l)].append(np.nanmean(labeled_matrix[i:j, :][:, active_num[active_label == l]], axis=0))
+
+                else:
+                    base_num = np.where((np.sum(field_reg[i:j, :], axis=0)==j-i)&(field_reg[j, :] == 0)&
+                                        ((field_reg[i-1, :] == 0)|((np.isnan(field_reg[i-1, :]))&
+                                                                     (field_reg[i-2, :] != 1))))[0]
+                    active_num = np.where((np.sum(field_reg[i:j+1, :], axis=0)==j-i+1)&
+                                          ((field_reg[i-1, :] == 0)|((np.isnan(field_reg[i-1, :]))&
+                                                                     (field_reg[i-2, :] != 1))))[0]
+                    base_label = process(labeled_matrix[i:j, :][:, base_num])
+                    active_label = process(labeled_matrix[i:j, :][:, active_num])
+                    
+                    on_next_prob[j-i, 0, :] += np.histogram(active_label, bins=n_labels, range=(-0.5, n_labels-0.5))[0]
+                    on_next_prob[j-i, 1, :] += np.histogram(base_label, bins=n_labels, range=(-0.5, n_labels-0.5))[0]
+                    for l in range(n_labels):
+                        label_val_on[(j-i, l)].append(np.nanmean(labeled_matrix[i:j, :][:, base_num[base_label == l]], axis=0))
+                        label_val_on[(j-i, l)].append(np.nanmean(labeled_matrix[i:j, :][:, active_num[active_label == l]], axis=0))
+
+                if j == i + 1:
+                    continue
+                     
+                recover_num = np.where((np.sum(field_reg[i+1:j, :], axis=0)==0)&(field_reg[i, :] == 1)&(field_reg[j, :] == 1))[0]
+                non_recover_num = np.where((np.nansum(field_reg[i+1:j, :], axis=0)==0)&(field_reg[i, :] == 1)&(field_reg[j, :] == 0))[0]
+
+                recover_label = process(labeled_matrix[i:j, :][:, recover_num])
+                non_recover_label = process(labeled_matrix[i:j, :][:, non_recover_num])
+                off_next_prob[j-i-1, 0, :] += np.histogram(recover_label, bins=n_labels, range=(-0.5, n_labels-0.5))[0]
+                off_next_prob[j-i-1, 1, :] += np.histogram(non_recover_label, bins=n_labels, range=(-0.5, n_labels-0.5))[0]
+                for l in range(n_labels):
+                    label_val_off[(j-i-1, l)].append(np.nanmean(labeled_matrix[i:j, :][:, recover_num[recover_label == l]], axis=0))
+                    label_val_off[(j-i-1, l)].append(np.nanmean(labeled_matrix[i:j, :][:, non_recover_num[non_recover_label == l]], axis=0))
+
+        retained_prob = on_next_prob[:, 0, :] / np.sum(on_next_prob, axis=1)
+        conditional_recover_prob = off_next_prob[:, 0, :] / np.sum(off_next_prob, axis=1)
+
+        retained_prob[np.where(np.sum(on_next_prob, axis=1) <= thre)] = np.nan
+        conditional_recover_prob[np.where(np.sum(off_next_prob, axis=1) <= thre)] = np.nan
+        
+        labels = np.tile(np.arange(n_labels), (retained_prob.shape[0], 1)).flatten()
+        duration = np.tile(duration[:, np.newaxis], (1, n_labels)).flatten()
+        
+        avg_label_val_on = np.zeros((retained_prob.shape[0], n_labels), dtype=np.float64) * np.nan
+        avg_label_val_off = np.zeros((conditional_recover_prob.shape[0], n_labels), dtype=np.float64) * np.nan
+        for i in range(n_labels):
+            for j in range(retained_prob.shape[0]):
+                if len(label_val_on[(j, i)]) > 0:
+                    avg_label_val_on[j, i] = np.nanmean(np.concatenate(label_val_on[(j, i)]))
+
+                if len(label_val_off[(j, i)]) > 0:
+                    avg_label_val_off[j, i] = np.nanmean(np.concatenate(label_val_off[(j, i)]))
+
+        return duration, labels, avg_label_val_on.flatten(), avg_label_val_off.flatten(), retained_prob.flatten(), conditional_recover_prob.flatten()
+
     def count_lifespan(self):
         field_reg = self._content
         life_span = np.zeros(field_reg.shape[0], dtype=np.int64) # State ON with duration t -> State ON/OFF/NOT DETECTED on the next sessions
@@ -218,10 +341,59 @@ class RegisteredField(object):
         return np.arange(1, field_reg.shape[0]+1), life_span
     
     @staticmethod
-    def conditional_prob(field_reg, field_info, thre: int = 4, category: str = 'all', seg_range: int = 8, maze_type: int = 1):
+    def conditional_prob(
+        field_reg, 
+        field_info, 
+        thre: int = 4, 
+        category: str = 'all', 
+        seg_range: int = 8, 
+        maze_type: int = 1, 
+        **kwargs
+    ):
+        """Compute the conditional probabilities for the given field registration data.
+
+        Parameters
+        ----------
+        field_reg : np.ndarray, (nsession, nfield)
+            The field registration data.
+        field_info : np.ndarray, (nsession, nfield, nfeature=4)
+            Information about the field.
+        thre : int, optional
+            The minimum denominator for probabilities, by default 4
+        category : str, optional
+            The category of the report, by default 'all'. Options are:
+            - 'all': Report overall conditional probabilities.
+            - 'time': Report conditional probabilities based on time (field formation or disappearance session).
+            - 'position': Report conditional probabilities based on position.
+            - 'label': Report conditional probabilities based on label.
+        seg_range : int, optional
+            The segmentation range for position-based reports, by default 8
+        maze_type : int, optional
+            The type of maze, by default 1
+        **kwargs : dict
+            Additional keyword arguments for label-based reports. Required keys:
+            - 'labeled_matrix': np.ndarray, The labeled matrix to process.
+            - 'n_labels': int, The number of unique labels.
+            - 'process': Callable[[np.ndarray], int], A callable function to process the labeled matrix and return labels.
+
+        Notes
+        -----
+        'process' should be a function that takes a numpy array as input and returns an integer label.
+          - Examples:
+            >>> def process_func(x: np.ndarray) -> int:
+            ...     return np.digitize(np.nanmean(x), bins=np.array([0, 0.5, 1]))
+        
+        'n_labels' should be an integer representing the number of unique labels. Please coordinate with 
+        the 'process' function to ensure the output labels are in the range [0, 1, ..., n_labels - 1].
+
+        Returns
+        -------
+        tuple(np.ndarray, ...) depending on the category.
+        """
+        
         Reg = RegisteredField(field_reg, field_info)
         
-        assert category in ['all', 'time', 'position']
+        assert category in ['all', 'time', 'position', 'label']
         
         if category == 'all':
             return Reg.report(thre=thre)
@@ -229,7 +401,9 @@ class RegisteredField(object):
             return Reg.report_with_initial_session(thre=thre, max_init_n=field_reg.shape[0] - 2)
         elif category == 'position':
             return Reg.report_with_position(thre=thre, seg_range=seg_range, maze_type=maze_type)
-    
+        elif category == 'label':
+            return Reg.report_with_provided_labels(**kwargs)
+
     @staticmethod
     def get_field_lifespans(field_reg: np.ndarray, field_info: dict):
         Reg = RegisteredField(field_reg, field_info=field_info)

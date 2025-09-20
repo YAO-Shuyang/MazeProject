@@ -452,7 +452,7 @@ class GLM:
         
         return predicted_prob
 
-    def calc_loss(self, glm_params: list[np.ndarray], sequences: list[np.ndarray]) -> float:
+    def calc_loss(self, glm_params: list[np.ndarray], sequences: list[np.ndarray], is_report: bool = False) -> float:
         predicted_p = self.get_predicted_prob(glm_params)
         
         # Compute the log-likelihood
@@ -463,15 +463,16 @@ class GLM:
         
         n_total = np.sum([len(seq)-1 for seq in sequences if len(seq) > 1])
         self._loss = -loss / n_total
-        print(f"Generalized Linear Model:\n"
-              f"  Loss: {self.loss}\n")
+        if is_report:
+            print(f"Generalized Linear Model:\n"
+                  f"  Loss: {self.loss}\n")
         return self._loss
     
     @property
     def loss(self):
         return self._loss
     
-    def calc_loss_along_seq(self, glm_params: list[np.ndarray], sequences: list[np.ndarray], p=None) -> float:
+    def calc_loss_along_seq(self, glm_params: list[np.ndarray], sequences: list[np.ndarray], p=None, is_report: bool = False) -> float:
         max_length = max([len(seq) for seq in sequences])
         predicted_p = self.get_predicted_prob(glm_params)
         
@@ -488,8 +489,9 @@ class GLM:
 
         dloss = padd_seq * np.log(padded_p + 1e-10) + (1 - padd_seq) * np.log(1 - padded_p + 1e-10)
         loss = -np.nanmean(dloss, axis=0)
-        print(f"Generalized Linear Model:\n"
-              f"  Loss: {loss}\n")
+        if is_report:
+            print(f"Generalized Linear Model:\n"
+                f"  Loss: {loss}\n")
         return loss
     
 

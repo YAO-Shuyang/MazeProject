@@ -213,7 +213,7 @@ class HMM:
         sequence_lengths = sequence_lengths.to(device)
         return padded_sequences, sequence_lengths
 
-    def calc_loss(self, sequences: list[np.ndarray]):
+    def calc_loss(self, sequences: list[np.ndarray], is_report: bool = False):
         """Calculate negative log likelihood loss"""
         predicted_prob = self.get_predicted_prob(sequences)
 
@@ -225,11 +225,12 @@ class HMM:
 
         n_total = np.sum([len(seq)-1 for seq in sequences if len(seq) > 1])
         self._loss = -loss / n_total
-        print(f"Hidden Markov Model with {self.N} hidden states:\n"
-              f"  Loss: {self.loss}\n")
+        if is_report:
+            print(f"Hidden Markov Model with {self.N} hidden states:\n"
+                  f"  Loss: {self.loss}\n")
         return self._loss
 
-    def calc_loss_along_seq(self, sequences: list[np.ndarray]):
+    def calc_loss_along_seq(self, sequences: list[np.ndarray], is_report: bool = False):
         max_length = max([len(seq) for seq in sequences])
         predicted_p = self.get_predicted_prob(sequences)
         padded_p = np.zeros((len(predicted_p), max_length-1)) * np.nan
@@ -240,8 +241,9 @@ class HMM:
         
         dloss = padd_seq * np.log(padded_p + 1e-10) + (1 - padd_seq) * np.log(1 - padded_p + 1e-10)
         loss = -np.nanmean(dloss, axis=0)
-        print(f"Hidden Markov Model with {self.N} hidden states:\n"
-              f"  Loss: {loss}\n")
+        if is_report:
+            print(f"Hidden Markov Model with {self.N} hidden states:\n"
+                  f"  Loss: {loss}\n")
         return loss
 
     @property
