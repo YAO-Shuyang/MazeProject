@@ -561,7 +561,7 @@ def SpikeType(Transients = None, threshold = 3):
     for i in range(Spikes.shape[0]):
         Spikes[i,:] = np.where(Transients[i,:] >= threshold * std[i], 1, 0)
 
-    return Spikes
+    return Spikes.astype(np.int64)
 
 def SpikeNodes(Spikes = None, ms_time = None, behav_time = None, behav_nodes = None):
     if behav_nodes.shape[0] != behav_time.shape[0]:

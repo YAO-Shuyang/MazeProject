@@ -637,6 +637,7 @@ def main(
     maze_type: int | None = None,
     behavior_paradigm: str | None = None,
     is_shuffle: bool = False,
+    save_dir: str = None,
     prefix: str = 'trace_mdays_conc'
 ):
     if index_map is None:
@@ -644,6 +645,7 @@ def main(
             return f
         line = i
         cellreg_dir = f['cellreg_folder'][i]
+        save_dir = os.path.dirname(cellreg_dir) if save_dir is None else save_dir
         mouse = int(f['MiceID'][i])
         stage = f['Stage'][i]
         session = int(f['session'][i])
@@ -666,7 +668,8 @@ def main(
         assert maze_type is not None
         assert behavior_paradigm is not None
         assert cellreg_dir is not None
-        direction = None if behavior_paradigm == 'CrossMaze' else 'cis'
+    
+    direction = None if behavior_paradigm == 'CrossMaze' else 'cis'
         
     if behavior_paradigm == 'CrossMaze':
         fdata = f1
@@ -737,8 +740,8 @@ def main(
              "index_map": index_map.astype(np.int64)}
 
     appendix = '' if is_shuffle == False else '_shuffle'
-    with open(os.path.join(os.path.dirname(cellreg_dir), prefix+appendix+".pkl"), 'wb') as handle:
-        print(os.path.join(os.path.dirname(cellreg_dir), prefix+appendix+".pkl"))
+    with open(os.path.join(save_dir, prefix+appendix+".pkl"), 'wb') as handle:
+        print(os.path.join(save_dir, prefix+appendix+".pkl"))
         pickle.dump(trace, handle)
         
     del res
@@ -795,8 +798,8 @@ def main(
     
     DATA['trs'] = {"is_placecell": is_placecell, "place_field_all": place_field_all, "field_reg": field_reg, "field_info": field_info, 'field_ids': field_ids,
                    "field_centers": get_field_centers(field_info, maze_type)}
-    with open(os.path.join(os.path.dirname(cellreg_dir), prefix+appendix+".pkl"), 'wb') as handle:
-        print(os.path.join(os.path.dirname(cellreg_dir), prefix+appendix+".pkl"))
+    with open(os.path.join(save_dir, prefix+appendix+".pkl"), 'wb') as handle:
+        print(os.path.join(save_dir, prefix+appendix+".pkl"))
         pickle.dump(DATA, handle)
     
 def stellar(p_value: float):
@@ -1126,7 +1129,7 @@ class TrackerDsp(object):
 if __name__ == '__main__':
     from mylib.local_path import f2
     import pickle
-    
+    """
     for i in range(len(f2)):
         with open(f2['Trace File'][i], 'rb') as handle:
             trace = pickle.load(handle)
@@ -1138,3 +1141,32 @@ if __name__ == '__main__':
         
         with open(f2['Trace File'][i], 'wb') as handle:
             pickle.dump(trace, handle)
+    """
+    from mylib.local_path import f_CellReg_modi
+    from mylib.maze_utils3 import DateTime
+    save_dir = r'D:\Data\FinalResults\0355 - Field Centroid Distribution\Diff_Threshold'
+    if os.path.exists(save_dir) == False:
+        os.mkdir(save_dir)
+        
+    for i in range(len(f_CellReg_modi)):
+        if f_CellReg_modi['Type'][i] != 'Real':
+            continue
+        
+        mouse = int(f_CellReg_modi['MiceID'][i])
+        
+        if f_CellReg_modi['paradigm'][i] == 'CrossMaze':
+            paradm = 'MA' if f_CellReg_modi['maze_type'][i] == 1 else 'MB'
+            for thre in [0.5, 0.6, 0.8]:
+                print(f"{i}, {mouse}, {paradm}, THRE: {thre}    - {DateTime()}")
+                main(
+                    i, f=f_CellReg_modi, overlap_thre=thre, is_shuffle=False, save_dir=save_dir, prefix=f'THRE_{thre}_{i}_{mouse}_{paradm}'
+                )
+        else:
+            paradm = 'MAf or MAb' if f_CellReg_modi['paradigm'][i] == 'ReverseMaze' else 'HPf or HPb'
+            for thre in [0.5, 0.6, 0.8]:
+                print(f"{i}, {mouse}, {paradm}, THRE: {thre}    - {DateTime()}")
+                main(
+                    i, f=f_CellReg_modi, overlap_thre=thre, is_shuffle=False, save_dir=save_dir, prefix=f'THRE_{thre}_{i}_{mouse}_{paradm}'
+                )
+        
+            

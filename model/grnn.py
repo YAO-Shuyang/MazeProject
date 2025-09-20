@@ -247,8 +247,8 @@ class ProbabilityRNN(nn.Module):
 
         self.predicted_prob = probabilities_list
         return probabilities_list
-    
-    def calc_loss(self, sequences: list[np.ndarray]) -> float:
+
+    def calc_loss(self, sequences: list[np.ndarray], is_report: bool = False) -> float:
         """Calculate negative log likelihood loss"""
         predicted_prob = self.get_predicted_prob(sequences)
 
@@ -260,11 +260,12 @@ class ProbabilityRNN(nn.Module):
 
         n_total = np.sum([len(seq)-1 for seq in sequences if len(seq) > 1])
         self._loss = -loss / n_total
-        print(f"Recurrent Neural Network Model with hidden size {self.hidden_size}:\n"
-              f"  Loss: {self.loss}\n")
+        if is_report:
+            print(f"Recurrent Neural Network Model with hidden size {self.hidden_size}:\n"
+                  f"  Loss: {self.loss}\n")
         return self._loss
-    
-    def calc_loss_along_seq(self, sequences: list[np.ndarray]) -> float:
+
+    def calc_loss_along_seq(self, sequences: list[np.ndarray], is_report: bool = False) -> float:
         max_length = max([len(seq) for seq in sequences])
         predicted_p = self.get_predicted_prob(sequences)
         padded_p = np.zeros((len(predicted_p), max_length-1)) * np.nan
@@ -275,8 +276,9 @@ class ProbabilityRNN(nn.Module):
         
         dloss = padd_seq * np.log(padded_p + 1e-10) + (1 - padd_seq) * np.log(1 - padded_p + 1e-10)
         loss = -np.nanmean(dloss, axis=0)
-        print(f"Recurrent Neural Network Model with hidden size {self.hidden_size}:\n"
-              f"  Loss: {loss}\n")
+        if is_report:
+            print(f"Recurrent Neural Network Model with hidden size {self.hidden_size}:\n"
+                  f"  Loss: {loss}\n")
         return loss
     
     @property
