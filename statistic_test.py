@@ -11,9 +11,9 @@ import gc
 
 CONVERGE_MODEL_COLOR, EQUALRATE_MODEL_COLOR = '#D9A6A9', '#9C8FBC'
 SpatialMapPalette = ['#D4C9A8', '#8E9F85', '#527C5A', '#C3AED6', '#66C7B4', '#A7D8DE']
-DSPCorrectTrackPalette = ['#A9CCE3', '#A8DADC', '#9C8FBC', '#D9A6A9']
+DSPCorrectTrackPalette = ['#A9CCE3', '#82C3C5', '#9C8FBC', '#D9A6A9', "#007a8c"]
 DSPIncorrectTrackPalette = ['#A9CCE3', '#F2E2C5', '#647D91', '#C06C84']
-DSPPalette = ['#A9CCE3', '#A8DADC', '#9C8FBC', '#D9A6A9', '#F2E2C5', '#647D91', '#C06C84']#['#873D38', "#C67E32", "#BFA834", "#7DB27A", "#6376B1", "#764271", "#647D91"]
+DSPPalette = ["#A9CCE3", "#82C3C5", '#9C8FBC', "#D9A6A9", "#DCC8A4", '#647D91', "#C06C84", "#007a8c"]#['#873D38', "#C67E32", "#BFA834", "#7DB27A", "#6376B1", "#764271", "#647D91"]
 MazePalette = sns.color_palette("rocket", 3)
 ModelPalette = (
     sns.color_palette("rocket", 2) + 
@@ -24,8 +24,7 @@ ModelPalette = (
     sns.color_palette("rainbow", 9)
 )
 RemappingPalette = ['#333766', '#A4C096']
-MicePaletteDSP = ['#F2E8D4', '#8E9F85', '#C3AED6', '#A7D8DE']
-
+MicePaletteDSP = ['#4A90E2', '#8E9F85', '#C3AED6', '#A7D8DE']
 def hex_to_rgba(hex_color):
     """
     Convert a hex color (#RRGGBB or #RRGGBBAA) to RGBA format (0-255).

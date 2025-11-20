@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import numpy as np
 from mylib.maze_utils3 import Clear_Axes
-from mylib.maze_graph import NRG, correct_paths
+from mylib.maze_graph import NRGs, correct_paths
 
 def LocTimeCurveAxes(
     ax: Axes,
@@ -20,7 +20,7 @@ def LocTimeCurveAxes(
     is_dotted_line: bool = False,
     is_include_incorrect_paths: bool = False,
     is_ego: bool = False,
-    NRG: dict = NRG,
+    NRG: dict = NRGs
 ) -> tuple[Axes, list, list]:
 
     ax = Clear_Axes(axes=ax, close_spines=['top', 'right'], ifxticks=True, ifyticks=True)
@@ -32,8 +32,9 @@ def LocTimeCurveAxes(
         graph = NRG[int(maze_type)] if is_ego == False else NRG
 
         try:
-            for i in range(behav_nodes.shape[0]):
-                linearized_x[i] = graph[int(behav_nodes[i])]
+            linearized_x = graph[behav_nodes.astype(np.int64) - 1]
+            #for i in range(behav_nodes.shape[0]):
+            #    linearized_x[i] = graph[int(behav_nodes[i])]
         except:
             print(behav_nodes.shape)
             
