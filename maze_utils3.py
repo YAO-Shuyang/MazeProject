@@ -21,6 +21,7 @@ from os.path import exists, join
 from mylib.AssertError import KeyWordErrorCheck, VariablesInputErrorCheck, ReportErrorLoc, ValueErrorCheck
 import warnings
 from mylib.calcium.smooth.gaussian import gaussian_smooth_matrix1d
+from typing import Union, Optional
 
 figpath = 'F:\YSY\FinalResults'
 figdata = 'F:\YSY\FigData'
@@ -89,7 +90,7 @@ def WallMatrix(maze_type: int):
     for i in range(1,145):
         if i == 1 and maze_type != 0:
             vertical_walls[0,0] = 0
-        if i == 144 and maze_type in [1, 2]:
+        if i == 144 and maze_type in [1, 2, 4]:
             vertical_walls[11, 12] = 0
         elif i == 133 and maze_type in [3]:
             pass
@@ -139,7 +140,7 @@ def DrawMazeProfile(maze_type = 1,axes: Axes = None, color = 'white',linewidth =
 
 def MazeSegments(maze_type: int, path_type: str = 'cp'):
     maze_seg = {}
-    assert maze_type in [1, 2, 3]
+    assert maze_type in [1, 2, 3, 4]
 
     DP = DPs[maze_type]
     
@@ -149,7 +150,7 @@ def MazeSegments(maze_type: int, path_type: str = 'cp'):
         Path = cp.deepcopy(DP)
         if DP[0] != 1:
             Path = np.concatenate([np.array([1]), Path])
-        if DP[-1] != 144 and maze_type in [1, 2]:
+        if DP[-1] != 144 and maze_type in [1, 2, 4]:
             Path = np.concatenate([Path, np.array([144])])
         if DP[-1] != 133 and maze_type == 3:
             Path = np.concatenate([Path, np.array([133])])
@@ -359,7 +360,7 @@ def Norm_ratemap(rate_map_all):
     return rate_map_all_norm
 
 def DateTime(is_print:bool = False):
-    '''
+    """
     Author: YAO Shuyang
     Date: Jan 26, 2023
     Note: to return current time with certain format: e.g. 2022-09-16 13:50:42
@@ -373,7 +374,7 @@ def DateTime(is_print:bool = False):
     ------
     str
         the current time with certain form.
-    '''
+    """
     if is_print:
         t1 = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
         print(t1)
@@ -381,32 +382,60 @@ def DateTime(is_print:bool = False):
     else:
         return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
 
-def Clear_Axes(axes: Axes = None,close_spines:list = ['top','bottom','left','right'],
-               xticks:list|np.ndarray = [], yticks:list|np.ndarray = [], ifxticks:bool = False, ifyticks:bool = False) -> Axes:
-    '''
+def Clear_Axes(
+    axes: Axes = None,
+    close_spines: list[str] = ['top','bottom','left','right'],
+    xticks: list | np.ndarray = [], 
+    yticks: list | np.ndarray = [], 
+    ifxticks: bool = False, 
+    ifyticks: bool = False
+) -> Axes:
+    """
     Author: YAO Shuyang
     Date: Jan 25th, 2022 (Modified) 21:44 UTC +8
     Note: This funciton is to clear the axes and edges of the figure (set them invisible).
 
     Parameter
     ---------
-    - axes: <class 'matplotlib.axes._subplots.AxesSubplot'>, input the canvas axes object whose edges and axes should be cleared.
-    - close_spines: list, contains str objects and only 'top', 'bottom','left' and 'right' are valid values. The input edge(s) will be cleared, for example, if input ['top','right'], Only the top and right edges will be cleared and the bottom and left edges will be maintained.
-    - xticks: list or numpy.ndarray object. The default value is an empty list and it means no tick of x axis will be shown on the figure. 
-        - If you input a list, the number in this list will be shown as x ticks on the figure.
-    - yticks: list or numpy.ndarray object. Similar as xticks. The default value is an empty list and it means no tick of y axis will be shown on the figure. 
-        - If you input a list, the number in this list will be shown as y ticks on the figure.
-    - ifxticks: bool and The default value is False. 
-        - If it is False, the xticks will not shown unless the parameter xticks is not an empty list. 
-        - If it is ture, the xticks will shown automatically. So if you want to manually set the value of x ticks, you remain this parameter as False and input the xticks list or np.ndarray object that you want to set as xticks through parameter 'xticks'.
-    - ifyticks: bool and The default value is False. 
-        - If it is False, the yticks will not shown unless the parameter yticks is not an empty list. 
-        - If it is ture, the yticks will shown automatically. So if you want to manually set the value of y ticks, you remain this parameter as False and input the yticks list or np.ndarray object that you want to set as yticks through parameter 'yticks'.
-
+    axes:  'matplotlib.axes._subplots.AxesSubplot'
+        The input canvas axes object whose edges and axes should be cleared.
+    close_spines: list[str]
+        Contains str objects and only 'top', 'bottom','left' and 'right' are 
+        valid values. The input edge(s) will be cleared, for example, if input 
+        ['top','right'], Only the top and right edges will be cleared and the 
+        bottom and left edges will be maintained.
+    xticks: list or numpy.ndarray
+        The default value is an empty list and it means no tick of x axis will 
+        be shown on the figure.
+        - If you input a list, the number in this list will be shown as x ticks 
+          on the figure.
+    yticks: list or numpy.ndarray
+        Similar as xticks. The default value is an empty list and it means no   
+        tick of y axis will be shown on the figure. 
+        - If you input a list, the number in this list will be shown as y ticks
+            on the figure.
+    ifxticks: bool
+        The default value is False.
+        - If it is False, the xticks will not shown unless the parameter xticks 
+          is not an empty list.
+        - If it is ture, the xticks will shown automatically. So if you want to 
+          manually set the value of x ticks, you remain this parameter as False
+            and input the xticks list or np.ndarray object that you want to set as
+            xticks through parameter 'xticks'.
+    ifyticks: bool
+        The default value is False.
+        - If it is False, the yticks will not shown unless the parameter yticks 
+          is not an empty list.
+        - If it is ture, the yticks will shown automatically. So if you want to 
+          manually set the value of y ticks, you remain this parameter as False
+            and input the yticks list or np.ndarray object that you want to set as
+            yticks through parameter 'yticks'.
+            
     Returns
     -------
-    - axes: <class 'matplotlib.axes._subplots.AxesSubplot'>. Return the axes object after clearing.
-    '''
+    axes: 'matplotlib.axes._subplots.AxesSubplot'
+        The cleared axes object.
+    """
     axes.spines['bottom'].set_linewidth(0.5)
     axes.spines['left'].set_linewidth(0.5)
     axes.spines['right'].set_linewidth(0.5)
@@ -423,136 +452,6 @@ def Clear_Axes(axes: Axes = None,close_spines:list = ['top','bottom','left','rig
         axes.set_yticks(yticks)
     
     return axes
-
-
-def images_to_video(path, length = 1, name = 'Frame'):
-    img_array = []
-    
-    print("    Read in PNGs.")
-    for k in tqdm(range(1,length+1)):
-        file_name = os.path.join(path, f'{name} '+str(k)+'.png')
-        if os.path.exists(file_name) == False:
-            print("    "+file_name + " is error!")
-        else:
-            img = cv2.imread(file_name)
-            img_array.append(img)
- 
-    size = (2400,2400)
-    fps = 22.6
-    out = cv2.VideoWriter(os.path.join(path,'Prediction0.avi'), cv2.VideoWriter_fourcc(*"MJPG"), fps, size,True)
-    # ('P', 'I', 'M', 'I'),('I', '4', '2', '0')
-    
-    print("    Write video prediction.avi")
-    for i in tqdm(range(len(img_array))):
-        out.write(img_array[i])
-    out.release()
-
-def LocDecodingMovie(y_pred, y_test, maze_type = 1, loc = 'G:\YSY\Cross_maze\11095\20220817\session 2\decoding\decodes_frames'):
-    mkdir(loc)
-    plt.figure(figsize = (6,6))
-    ax = Clear_Axes(plt.axes())
-    DrawMazeProfile(axes = ax, maze_type = maze_type, color = 'black', linewidth = 2)
-    x_pred, y_pred = idx_to_loc(y_pred, nx = 48, ny = 48)
-    x_pred += np.random.rand(y_pred.shape[0]) - 0.5
-    y_pred += np.random.rand(y_pred.shape[0]) - 0.5
-    x_test, y_test = idx_to_loc(y_test, nx = 48, ny = 48)
-    x_test += np.random.rand(y_pred.shape[0]) - 0.5
-    y_test += np.random.rand(y_pred.shape[0]) - 0.5
-    
-    for i in tqdm(range(y_pred.shape[0])):
-        a = ax.plot(x_pred[i],y_pred[i], 'o', color = 'cornflowerblue',label = 'Predicted location')
-        b = ax.plot(x_test[i],y_test[i], 'o', color = 'red',label = 'Actual location')
-        ax.legend(bbox_to_anchor = (0.08,0.98), edgecolor = 'white', facecolor = 'white', ncol = 2)
-        plt.savefig(os.path.join(loc,'Frame '+str(i+1)+'.svg'), dpi = 300)
-        for j in a:
-            j.remove()
-        for j in b:
-            j.remove()
-    
-    images_to_video(loc, length = y_pred.shape[0])
-    print(os.path.join(loc,'Prediction.avi'),'is successfully generated!')
-
-
-# Structure similarity between submazes
-def rotate(m):
-    shapes = m.shape
-    n = np.zeros((shapes[1],shapes[0]),dtype = np.int64)
-    for i in range(shapes[0]):
-        n[:,i] = m[i,:]
-    return n
-
-def cover_index(v1,h1,v2,h2):
-    walls = (np.sum(v1)+np.sum(v2)+np.sum(h1)+np.sum(h2))/2
-    cover_walls = np.sum((v1&v2)) + np.sum((h1&h2))
-
-    ratios = np.zeros(4, np.float64)
-    ratios[0] = cover_walls / walls
-    for i in range(3):
-        c = h1
-        h1 = rotate(v1)
-        v1 = rotate(h1)
-        ratios[i+1] = (np.sum((v1&v2)) + np.sum((h1&h2))) / walls
-    return np.nanmax(ratios)
-
-def calc_CIs(maze_type = 1):
-    vs, hs = SubMazes(maze_type = maze_type)
-
-    CIs = np.ones((100,100), dtype = np.float64)
-
-    for i in range(99):
-        for j in range(i+1, 100):
-            CIs[i,j] = cover_index(vs[i],hs[i],vs[j],hs[j])
-            CIs[j,i] = cover_index(vs[i],hs[i],vs[j],hs[j])
-    return CIs
-
-def SubMazes(maze_type = 1):
-    
-    v, h = WallMatrix(maze_type = maze_type)
-    vs = np.zeros((100,3,4), dtype = np.int64)
-    hs = np.zeros((100,4,3), dtype = np.int64)
-    for i in range(10):
-        for j in range(10):
-            k = j + i * 10
-            vs[k] = v[i:i+3,j:j+4]
-            hs[k] = h[i:i+4,j:j+3]
-
-    return vs, hs
-
-def Draw_SubMazes(maze_type = 1):
-    totalpath = 'G:\YSY\Cross_maze'
-    loc = os.path.join(totalpath,'Analysis_Results')
-    mkdir(loc)
-    
-    vs, hs = SubMazes(maze_type = maze_type)
-    
-    fig, axes = plt.subplots(9,12, figsize = (48,36))
-    for i in tqdm(range(9)):
-        for j in range(12):
-            ax = Clear_Axes(axes = axes[i,j])
-            k = i * 12 + j
-            if k > 99:
-                continue
-            DrawMazeProfile(axes = ax, color = 'black', maze_type = maze_type, v = vs[k], h = hs[k], linewidth = 3)
-    plt.savefig(os.path.join(loc, 'SubMaze'+str(maze_type)+'.svg'),dpi = 600)
-
-def SelfCorrelation(smooth_map):
-    smooth_map_2d = np.reshape(smooth_map,[48,48])
-    submaps = np.zeros((100,12,12), dtype = np.float64)
-
-    for i in range(10):
-        for j in range(10):
-            k = i * 10 + j
-            submaps[k] = smooth_map_2d[i*4:(i+3)*4,j*4:(j+3)*4]
-    
-    # Self-Correlation Map
-    SCM = np.ones((100,100), dtype = np.float64)
-    for i in range(99):
-        for j in range(i+1,100):
-            r, _ = pearsonr(np.reshape(submaps[i],[144,]),np.reshape(submaps[j],[144,]))
-            SCM[i,j] = r
-            SCM[j,i] = r
-    
-    return submaps, SCM
 
 def SpikeType(Transients = None, threshold = 3):
     
@@ -591,31 +490,57 @@ def SpikeNodes(Spikes = None, ms_time = None, behav_time = None, behav_nodes = N
                 spike_nodes[i] = np.nan
     return spike_nodes
 
-def GetDMatrices(maze_type:int, nx:int):
-    '''
+def GetDMatrices(maze_type:int, nx: int) -> np.ndarray:
+    """
+    Get the distance matrix of given maze and given bin number.
+    YAO Shuyang, Feb 10, 2023
+    
     Note
     ----
     To return the distance matrix of given maze and given bin number.
 
     Parameter
     ---------
-    - maze_type:int, only 0,1,2 are valid or it will raise an error.
-    - nx:int, only, 12,24,48 are valid or it will raise an error.
+    maze_type: int
+        The maze type. only 0, 1, 2, and 4 are valid, otherwise it will raise 
+        an error.
+    nx: int
+        The number of bin per direciton (squared box assumed).
+        Only 12, 24, and 48 are valid, otherwise it will raise an error.
 
-    YAO Shuyang, Feb 10, 2023
-    '''
-    ValueErrorCheck(nx, [12,24,48])
-    ValueErrorCheck(maze_type, [1,2,3,0])
+    Raises
+    ------
+    ValueError
+        If the input maze_type is not one of [0, 1, 2, 3, 4], it will raise an 
+        error.  
+        If the input nx is not one of [12, 24, 48], it will raise an error.
+        
+    Examples
+    --------
+    >>> D = GetDMatrices(maze_type=1, nx=48)
+    >>> print(D.shape)  
+    (2304, 2304)
+
+    Returns
+    -------
+    np.ndarray
+        The distance matrix of shape (nx*nx, nx*nx).
+        Squared and symmetrical matrix.
+    """
+    if nx not in [12, 24, 48]:
+        raise ValueError(f"nx must be one of [12, 24, 48], instead of {nx}")
+    if maze_type not in [0, 1, 2, 3, 4]:
+        raise ValueError(f"maze_type must be one of [1, 2, 3, 4, 0], instead of {maze_type}")
     
     from mylib.local_path import DMatrixPath
     PATH = os.path.join(DMatrixPath, f"D{nx}_{maze_type}.pkl")
-    try:
-        with open(PATH, 'rb') as handle:
-            D_Matrice = pickle.load(handle)
-            return D_Matrice
-    except:
-        raise ValueError(f'{PATH} is not exist!')
+    
+    with open(PATH, 'rb') as handle:
+        D_Matrice = pickle.load(handle)
+        return D_Matrice
 
+    # Presumably deprecated code
+    """
     if nx == 12:
         D = D_Matrice[8+maze_type] / nx * 12
     elif nx == 24:
@@ -625,10 +550,10 @@ def GetDMatrices(maze_type:int, nx:int):
         D = D_Matrice[maze_type] / nx * 12
         #S2FGraph = Son2FatherGraph
     else:
-        print("nx value error! Report by Decoding ChanceLevel, maze_utils3.")
-        assert False
+        raise NotImplementedError(f"Only 12,24,48 are valid for parameter nx, instead of {nx}.")
     return D
-
+    """
+    
 def RevisedLinearizedPositionScaler(maze_type: int):
     from mylib.local_path import DMatrixPath
     if os.path.exists(os.path.join(DMatrixPath, f'maze{int(maze_type)}_rev.pkl')):
@@ -1069,7 +994,7 @@ def Generate_Venn3_Subset(Group_A, Group_B, Group_C):
 
 # Get a colorbar ticks or y axis ticks according to peak value.
 def ColorBarsTicks(peak_rate:float = 10, intervals:float = 1, is_auto:bool = False, tick_number:int = 8):
-    '''
+    """
     Author: YAO Shuyang
     Date: Sept 1st, 2022
     Note: This funciton is to set ticks for figures, including xticks/yticks for figure and ticks of colorbars (in ratemap). Although usually the ticks could automatically be set by matplotlib package itself, it cannot show the peak value of plotted data. So I develop this method to return a vector with peak rate and other ticks value automatically.
@@ -1082,7 +1007,7 @@ def ColorBarsTicks(peak_rate:float = 10, intervals:float = 1, is_auto:bool = Fal
 
     Output:
     - <class 'numpy.ndarray'>
-    '''
+    """
     if np.isnan(peak_rate):
         return []
     
@@ -1366,6 +1291,49 @@ def calc_pearsonr(rate_map_all1:np.ndarray, rate_map_all2:np.ndarray = None):
 
     return PearsonC
 
+def calc_speed_with_smooth(
+    behav_positions: np.ndarray,
+    behav_time: np.ndarray,
+    smooth_window: int = 5
+) -> np.ndarray:
+    """Compute smoothed speed.
+
+    Parameters
+    ----------
+    behav_positions : np.ndarray, (n_frames, 2)
+        The x,y positions of animal.
+        Unit: centimeters (cm).
+    behav_time : np.ndarray, (n_frames,)
+        The time stamps corresponding to each position.
+        Unit: milliseconds (ms).
+    smooth_window : int, optional
+        The window size for smoothing, by default 5.
+        If smooth_window = 1, no smoothing is applied.
+
+    Returns
+    -------
+    np.ndarray, (n_frames,)
+        The smoothed speed of animal.
+        Unit: centimeters per second (cm/s).
+    """
+    # Do not delete NAN value! to keep the same vector length with behav_positions_original and behav_time_original
+    # behav_positions, behav_time = Delete_NAN(behav_positions = behav_positions, behav_time = behav_time)
+    dx = np.append(np.ediff1d(behav_positions[:,0]),0)
+    dy = np.append(np.ediff1d(behav_positions[:,1]),0)
+    dt = np.append(np.ediff1d(behav_time),33)
+    dl = np.sqrt(dx**2+dy**2)
+
+    # Smooth speed
+    smoothed_speed = np.convolve(
+        dl, np.ones(smooth_window)
+    ) / np.convolve(
+        dt, np.ones(smooth_window)
+    ) * 1000
+    
+    smoothed_speed[dt > 1000] = np.nan  # if dt > 1000 ms, set speed to nan
+    return smoothed_speed
+
+# Deprecated at 11/19/2025
 # Calculating behavior speed if it is not exist in behav_new.mat
 def calc_speed(behav_positions = None, behav_time = None):
     # Do not delete NAN value! to keep the same vector length with behav_positions_original and behav_time_original
@@ -1763,3 +1731,27 @@ def field_reallocate(field: dict, maze_type: int, centers_pool: np.ndarray|None 
         field_area = np.intersect1d(field_area, shuffle_field[CENTER])
     return shuffle_field
 
+def mapping_nodes_to_routes(maze_type: int, node: int) -> int:
+    """
+    The different-starting-point (DSP) paradigm separates the neural activities
+    into 10 or 11 nodes, which correpond to 7 or 8 different routes. This function
+    maps the node ID to route ID.
+
+    Parameters
+    ----------
+    maze_type : int
+        maze type
+    nodes : np.ndarray
+        trace node ID
+
+    Returns
+    -------
+    int
+        route ID
+    """
+    mapper = {
+        1: np.array([0, 1, 2, 3, 0, 0, 4, 5, 6, 0]),
+        2: np.array([0, 1, 2, 3, 0, 0, 4, 5, 6, 0]),
+        4: np.array([0, 1, 2, 3, 7, 0, 0, 4, 5, 6, 0])
+    }
+    return mapper[maze_type][node]
