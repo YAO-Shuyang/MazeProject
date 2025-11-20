@@ -16,10 +16,10 @@ import pandas as pd
 from matplotlib.axes import Axes
 import seaborn as sns
 from mylib.behavior.behavevents import BehavEvents
-from mylib.maze_graph import correct_paths, NRG, Father2SonGraph, CP_DSP
+from mylib.maze_graph import correct_paths, NRGs, Father2SonGraph, CP_DSPs
 from mylib.maze_utils3 import Clear_Axes, DrawMazeProfile, clear_NAN, mkdir, SpikeNodes, SpikeType, GetDMatrices
 from mylib.maze_utils3 import plot_trajactory, spike_nodes_transform, SmoothMatrix, occu_time_transform
-from mylib.preprocessing_ms import coverage_curve, calc_speed, uniform_smooth_speed, calc_ratemap, place_field_dsp
+from mylib.preprocessing_ms import coverage_curve, calc_speed_with_smooth, calc_ratemap, place_field_dsp
 from mylib.preprocessing_ms import plot_spike_monitor, calc_ms_speed
 from mylib.preprocessing_ms import calc_SI
 from mylib.divide_laps.lap_split import LapSplit
@@ -30,18 +30,79 @@ from mylib import RateMapAxes, TraceMapAxes, PeakCurveAxes, LocTimeCurveAxes
 from mylib.calcium.firing_rate import calc_rate_map_properties
 from mylib.dsp.neural_traj import get_neural_trajectory, segmented_neural_trajectory
 
+# 11/20/25, 准备新增两个实验。
 # 我们将correct/incorrect imaging videos合在一起重新跑了CNMF-E。从而，代码需要随之修改。
+DSPPalette = ["#A9CCE3", "#82C3C5", '#9C8FBC', "#D9A6A9", "#DCC8A4", '#647D91', "#C06C84", "#007a8c"]
 
-def classify_lap(behav_nodes: np.ndarray, beg_idx: np.ndarray):
-    route_class = {
-        0: [1, 2, 13, 14, 25, 26],
-        1: [23, 22, 34, 33],
-        2: [66, 65, 64, 63],
-        3: [99, 87, 88, 76],
-        4: [8, 7, 6, 18],
-        5: [93, 105, 106, 94],
-        6: [135, 134, 133, 121]
-    }
+def classify_lap(
+    behav_nodes: np.ndarray, 
+    beg_idx: np.ndarray, 
+    maze_type: int
+):
+    """Classify which route the given laps correspond to.
+
+    Parameters
+    ----------
+    behav_nodes : np.ndarray
+        The position bins of a given route
+    beg_idx : np.ndarray, (n_laps,)
+        The starting indices of each lap    
+    maze_type : int
+        The type of maze. 1: Maze A; 2: Maze B; 4: Maze A modified.
+
+    Returns
+    -------
+    lap_type : np.ndarray (n_laps,)
+        The classified route type for each lap.
+        
+    Examples
+    --------
+    >>> lap_type = classify_lap(behav_nodes, beg_idx, maze_type=1)
+    >>> print(lap_type)
+    array([0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 0, 0, 0, 0, 0, 0, 4, 4, 4, 5, 5, 6, 6, 6, 0, 0])
+    
+    Raises
+    ------
+    NotImplementedError
+        If the maze type is not supported.
+    ValueError
+        If a lap's starting node cannot be identified in the classification set.
+    """
+    if maze_type == 1:
+        route_class = {
+            0: [1, 2, 13, 14, 25, 26],
+            1: [23, 22, 34, 33],
+            2: [66, 65, 64, 63],
+            3: [99, 87, 88, 76],
+            4: [8, 7, 6, 18],
+            5: [93, 105, 106, 94],
+            6: [135, 134, 133, 121]
+        }
+    elif maze_type == 2:
+        route_class = {
+            0: [1, 2, 14, 13, 3, 15],
+            1: [7, 19, 18, 30, 31],
+            2: [23, 24, 22, 34],
+            3: [105, 106, 94, 82],
+            4: [113, 112, 124, 125],
+            5: [62, 50, 38, 51, 39, 52],
+            6: [139, 127, 128, 140]
+        }
+    elif maze_type == 4:
+        route_class = {
+            0: [1, 2, 13, 14, 25, 26],
+            1: [23, 22, 34, 33],
+            2: [66, 65, 64, 63],
+            3: [99, 87, 88, 76],
+            4: [8, 7, 6, 18],
+            5: [93, 105, 106, 94],
+            6: [135, 134, 133, 121],
+            7: [138, 126, 127, 115]
+        }
+    else:
+        raise NotImplementedError(
+            f"Maze type {maze_type} is not implemented for lap classification!"
+        )
 
     lap_type = np.zeros_like(beg_idx, np.int64) 
     laps = beg_idx.shape[0]
@@ -101,6 +162,7 @@ def split_calcium_data(
 
     return idx 
 
+"""
 def LocTimeCurve(trace: dict) -> dict:
     maze_type = trace['maze_type']
     save_loc = join(trace['p'], 'LocTimeCurve')
@@ -147,16 +209,18 @@ def LocTimeCurve(trace: dict) -> dict:
             j.remove()
     
     return trace
-
+"""
 def get_son_area(area: np.ndarray):
     return np.concatenate([Father2SonGraph[i] for i in area])
 
 def RoutewiseCorrelation(trace: dict):
-    CPs = cp.deepcopy(CP_DSP)
-    corr_mat = np.ones((10, 10), np.float64)
+    maze_type = trace['maze_type']
+    CPs = CP_DSPs[maze_type]
+    n_nodes = 10 if maze_type != 4 else 11
+    corr_mat = np.ones((n_nodes, n_nodes), np.float64)
     
-    for i in range(9):
-        for j in range(i+1, 10):
+    for i in range(n_nodes - 1):
+        for j in range(i+1, n_nodes):
             corr = np.zeros(trace['n_neuron'], np.float64) * np.nan
             
             idx = np.where(
@@ -170,9 +234,10 @@ def RoutewiseCorrelation(trace: dict):
             )) - 1
             
             for k in idx:
-                corr[k], _ = pearsonr(
+                corr[k] = np.corrcoef(
                     trace['node '+str(i)]['smooth_map_all'][k, bins], 
-                    trace['node '+str(j)]['smooth_map_all'][k, bins])
+                    trace['node '+str(j)]['smooth_map_all'][k, bins]
+                )[0,1]
             
             corr_mat[i, j] = corr_mat[j, i] = np.nanmean(corr)
     
@@ -183,7 +248,7 @@ def calc_pvc(ratemap1, ratemap2, bins):
     corr = np.zeros(bins.shape[0])
     
     for i in range(bins.shape[0]):
-        corr[i], _ = pearsonr(ratemap1[:, bins[i]], ratemap2[:, bins[i]])
+        corr[i] = np.corrcoef(ratemap1[:, bins[i]], ratemap2[:, bins[i]])[0,1]
     
     return np.nanmean(corr)
 
@@ -243,8 +308,67 @@ def MazeSegmentsPVCorrelation(trace: dict):
     trace['segments_x'] = D[son_segments-1, 0]
     return trace
 
-def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, 
-                     v_thre: float = 2.5, cam_degree = 0, speed_sm_args = {}):#p = None, folder = None, behavior_paradigm = 'CrossMaze'):
+# New version on 11/20/25
+def LocTimeCurve(trace: dict) -> dict:
+    mouse = trace['MiceID'],
+    date = trace['date']
+    maze_type = trace['maze_type']
+    cell_list = range(trace['n_neuron'])
+    save_loc = join(trace['p'], 'LocTimeCurve')
+        
+    mkdir(save_loc)   
+    colors, n_nodes_all = ([
+        DSPPalette[0], DSPPalette[1], DSPPalette[2], DSPPalette[3], DSPPalette[0],
+        DSPPalette[0], DSPPalette[4], DSPPalette[5], DSPPalette[6], DSPPalette[0]
+    ], 10) if 'node 10' not in trace.keys() else ([
+        DSPPalette[0], DSPPalette[1], DSPPalette[2], DSPPalette[3], DSPPalette[7], DSPPalette[0],
+        DSPPalette[0], DSPPalette[4], DSPPalette[5], DSPPalette[6], DSPPalette[0]
+    ], 11)
+    
+    fig = plt.figure(figsize=(3, 4))
+    ax = Clear_Axes(plt.axes(), close_spines=['top', 'right'], ifxticks=True, ifyticks=True)      
+    linearized_xs = [
+        NRGs[maze_type][spike_nodes_transform(trace[f'node {_i}']['spike_nodes'], 12).astype(np.int64) - 1] + 
+        np.random.rand(trace[f'node {_i}']['spike_nodes'].shape[0]) - 0.5
+        for _i in range(n_nodes_all)
+    ]
+    
+    for cell in tqdm(cell_list):
+        clear_items = []
+        for i in range(n_nodes_all):
+            ax, a, b = LocTimeCurveAxes(
+                ax,
+                behav_time=trace[f'node {i}']['ms_time_behav'],
+                given_x=linearized_xs[i],
+                spikes=trace[f'node {i}']['Spikes'][cell, :],
+                spike_time=trace[f'node {i}']['ms_time_behav'],
+                maze_type=maze_type,
+                line_kwargs={'linewidth': 0.4, 'color': colors[i]},
+                bar_kwargs={'markeredgewidth': 0.5, 'markersize': 2, 'color': 'k'},
+                is_include_incorrect_paths=True
+            )
+            clear_items = clear_items + a + b
+            
+        t1 = trace['node 4']['ms_time_behav'][-1]/1000 if n_nodes_all == 10 else trace['node 5']['ms_time_behav'][-1]/1000
+        t2 = trace['node 5']['ms_time_behav'][0]/1000 if n_nodes_all == 10 else trace['node 6']['ms_time_behav'][0]/1000
+        t3 = trace['node 9']['ms_time_behav'][-1]/1000 if n_nodes_all == 10 else trace['node 10']['ms_time_behav'][-1]/1000
+        ax.set_yticks([0, t1, t2, t3], [0, t1, 0, t3-t2])
+        
+        plt.savefig(os.path.join(save_loc, f'Cell {cell+1}.png'), dpi=600)
+        plt.savefig(os.path.join(save_loc, f'Cell {cell+1}.svg'), dpi=600)
+        for items in clear_items:
+            items.remove()
+    
+    plt.close()
+
+def run_all_mice_DLC(
+    i: int, 
+    f: pd.DataFrame, 
+    work_flow: str, 
+    v_thre: float = 2.5, 
+    cam_degree = 0, 
+    speed_sm_args = {}
+):
     t1 = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
 
     date = int(f['date'][i])
@@ -292,8 +416,8 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
             ms_time = np.array(ms_mat['time'],dtype = np.int64)[0,]
     
     #plot_split_trajectory(trace)
-    beg, end = LapSplit(trace, trace['paradigm'])
-    lap_type = classify_lap(spike_nodes_transform(trace['correct_nodes'], 12), beg)
+    beg, end = LapSplit(trace, trace['paradigm']) 
+    lap_type = classify_lap(spike_nodes_transform(trace['correct_nodes'], 12), beg, maze_type=maze_type)
     print(lap_type)
     
     print("    B. Calculate putative spikes and correlated location from deconvolved signal traces. Delete spikes that evoked at interlaps gap and those spikes that cannot find it's clear locations.")
@@ -305,12 +429,23 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
                 behav_time = trace['correct_time'], behav_nodes = trace['correct_nodes'])
 
     # Filter the speed
-    if 'smooth_speed' not in trace.keys():
-        behav_speed = calc_speed(behav_positions = trace['correct_pos']/10, behav_time = trace['correct_time'])
-        trace['smooth_speed'] = uniform_smooth_speed(behav_speed, **speed_sm_args)
+    behav_speed = calc_speed_with_smooth(
+        behav_positions = trace['correct_pos']/10, 
+        behav_time = trace['correct_time'], 
+        smooth_window=5 # frames
+    )
+    trace['correct_speed_smoothed'] = behav_speed
+    trace['correct_speed_raw'] = calc_speed_with_smooth(
+        behav_positions = trace['correct_pos']/10, 
+        behav_time = trace['correct_time'], 
+        smooth_window=1
+    )
 
-    ms_speed = calc_ms_speed(behav_speed=trace['smooth_speed'], behav_time=trace['correct_time'], 
-                             ms_time=ms_time)
+    ms_speed = calc_ms_speed(
+        behav_speed=trace['correct_speed_smoothed'], 
+        behav_time=trace['correct_time'], 
+        ms_time=ms_time
+    )
 
     # Delete NAN value in spike nodes
     print("      - Delete NAN values in data.")
@@ -349,27 +484,34 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
         (d_type != 0) |
         ((d_type == 0) & (lap_type[:-1] == 0) & (lap_intervals > 99000))
     )[0]
-    if idx.shape[0] != 9:
-        warnings.warn(
-            f"Breakpoints should be 9 but {idx.shape[0]} were found! "
-            f"Automatedly set the second value as the division of route 1b and 1c."
-            f"Note that this would potentially result in erroneous division of route categories."
-        )
-        idx = np.where(d_type != 0)[0] # Between routes
-        # Between route 1b and 1c
-        idx_0 = np.where((d_type == 0) & (lap_type[:-1] == 0) & (lap_intervals > 99000))[0]
-        # There should be 9 breakpoints to separate all the laps into 10 groups.
-        # 这里主要是两个异常值的处理，仅限于截止至2024年8月1日的10224/27 2023-10-11 session 1
-        # (correct session) 中route 1b存在两个lap之间时间超过了99s，从而使得我们上述的判别
-        # route 1b 1c之间的breakpoints无法辨别具体的位置。考虑到这两处异常均位于session 1，我们
-        # 直接去除所找到的第一个值，保留第二个值作为1b1c的gap。
-        # 因此对于任何新的数据，如果两个lap之间的时间间隔超过了99s，并且位于session 2，此处仍会
-        # 报错并错误的分类，需注意！
-        idx = np.insert(idx, 4, idx_0[1])
-        
+    if maze_type != 4:
+        if idx.shape[0] != 9:
+            warnings.warn(
+                f"Breakpoints should be 9 but {idx.shape[0]} were found! "
+                f"Automatedly set the second value as the division of route 1b and 1c."
+                f"Note that this would potentially result in erroneous division of route categories."
+            )
+            idx = np.where(d_type != 0)[0] # Between routes
+            # Between route 1b and 1c
+            idx_0 = np.where((d_type == 0) & (lap_type[:-1] == 0) & (lap_intervals > 99000))[0]
+            # There should be 9 breakpoints to separate all the laps into 10 groups.
+            # 这里主要是两个异常值的处理，仅限于截止至2024年8月1日的10224/27 2023-10-11 session 1
+            # (correct session) 中route 1b存在两个lap之间时间超过了99s，从而使得我们上述的判别
+            # route 1b 1c之间的breakpoints无法辨别具体的位置。考虑到这两处异常均位于session 1，我们
+            # 直接去除所找到的第一个值，保留第二个值作为1b1c的gap。
+            # 因此对于任何新的数据，如果两个lap之间的时间间隔超过了99s，并且位于session 2，此处仍会
+            # 报错并错误的分类，需注意！
+            idx = np.insert(idx, 4, idx_0[1])
+    else:
+        if idx.shape[0] != 10:
+            raise ValueError(
+                f"Breakpoints should be 10 for Maze 1 modified but {idx.shape[0]} were found! "
+            )
+            
     seg_beg, seg_end = np.concatenate([[0], idx+1]), np.concatenate([idx, [d_type.shape[0]-1]])
     trace['n_neuron'] = n_neuron
-    for n in range(10):
+    n_nodes_total = 10 if maze_type != 4 else 11
+    for n in range(n_nodes_total):
         print(f"        Node {n} -----------------------------------------------------------")
         lap_idx = np.arange(seg_beg[n], seg_end[n] + 1)
         idx = split_calcium_data(lap_idx=lap_idx, trace=trace, ms_time=ms_time_behav)
@@ -418,21 +560,21 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
 
     print("    Plotting:")
     print("      1. Old Maps")
-    for n in range(10):
+    for n in range(n_nodes_total):
         trace[f'node {n}'] = OldMap(trace[f'node {n}'], isDraw=False)
         
-    print("      2. Neural Trajectory")
-    trace = get_neural_trajectory(trace)
-    trace = segmented_neural_trajectory(trace)
+    print("      2. Neural Trajectory (Deprecated)")
+    #trace = get_neural_trajectory(trace)
+    #trace = segmented_neural_trajectory(trace)
     
-    print("      5. Routewise Correlation")
+    print("      3. Routewise Correlation")
     trace = RoutewiseCorrelation(trace)
     
-    print("      6. Loc-time curve")
+    print("      4. Loc-time curve")
     trace = LocTimeCurve(trace)
 
-    print("      7. Population Vector Correlation")
-    MazeSegmentsPVCorrelation(trace)
+    print("      5. Population Vector Correlation (Deprecated)")
+    #MazeSegmentsPVCorrelation(trace)
 
     trace['processing_time'] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
     path = os.path.join(trace['p'],"trace.pkl")
@@ -445,40 +587,14 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     print(t1,'\n',t2)
 
 if __name__ == '__main__':
-    #with open(r"G:\YSY\Dsp_maze\10209\20230601\session 1\trace.pkl", 'rb') as handle:
-    #    trace = pickle.load(handle)
     from mylib.local_path import f2
-    #LocTimeCurve(trace)
-    """
-    for i in range(len(f2)):
-        f2.loc[i, 'recording_folder'] = os.path.join(
-            r"H:\CC_Data\MAZE_1_Combined",
-            str(int(f2['MiceID'][i])),
-            str(int(f2['date'][i])),
-            'My_V4_Miniscope'
-        )
-        
-    f2.to_excel(r"E:\Data\Dsp_maze\dsp_maze_paradigm_output.xlsx", index=False)
-    """
     
-    #f2.loc[20, 'recording_folder'] = r"E:\Data\Dsp_maze\10224\20231012"
-    #run_all_mice_DLC(20, f2, work_flow=r"E:\Data\Dsp_maze")
-    from mylib.dlc_ms import OldMap
-    for i in range(len(f2)):
-        print(f2['Trace File'][i])
-        with open(f2['Trace File'][i], 'rb') as handle:
-            trace = pickle.load(handle)
-            
-        #trace = field_register_dsp(trace, overlap_thre=0.6)
-        #trace['place_field_all'] = place_field_dsp(
-        #    trace, thre_type=2, parameter=0.4, events_num_crit=10, need_events_num=True, split_thre=0.2, reactivate_num=5
-        #)
-        
-        for n in range(10):
-            trace[f'node {n}'] = OldMap(trace[f'node {n}'], isDraw=False)
-        
-        with open(f2['Trace File'][i], 'wb') as handle:
-            pickle.dump(trace, handle)
+    with open(f2['Trace File'][34], 'rb') as handle:
+        trace = pickle.load(handle)
+    
+    trace['p'] = join(r"D:\Data\Dsp_maze", str(int(trace['MiceID'])), str(int(trace['date'])))
+    LocTimeCurve(trace)
+    
             
             
     

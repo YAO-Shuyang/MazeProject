@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from mylib.maze_utils3 import Clear_Axes, Gaussian
-from mylib.maze_graph import NRG, correct_paths, incorrect_paths
+from mylib.maze_graph import correct_paths, incorrect_paths
 from mylib.calcium.smooth.gaussian import gaussian_smooth_matrix1d, gaussian
 from mylib.calcium.smooth.interpolation import interpolated_smooth
 
