@@ -347,7 +347,7 @@ def concat_trace_behav(oripath1: str, oripath2: str, save_dir: None = None):
         'paradigm': trace1['paradigm'],
         'session_path': save_dir, 'p': save_dir,
         'former_path': [trace1['session_path'], trace2['session_path']],
-        'maze_type': 1,
+        'maze_type': trace1['maze_type'],
         'nx': 48, 'ny': 48,
         'body_parts': trace1['body_parts'],
         'dlc_position': {k: np.concatenate([trace1['dlc_position'][k], trace2['dlc_position'][k]], axis=0) for k in trace1['dlc_position'].keys()},

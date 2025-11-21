@@ -1,6 +1,6 @@
 from mylib.maze_utils3 import spike_nodes_transform, GetDMatrices
 from mylib.divide_laps.lap_split import LapSplit
-from mylib.maze_graph import DPs, correct_paths, StartPoints, EndPoints, maze_graphs, DP_DSP, CP_DSP
+from mylib.maze_graph import DPs, correct_paths, StartPoints, EndPoints, maze_graphs, DP_DSPs, CP_DSPs
 import numpy as np
 import copy as cp
 from tqdm import tqdm
@@ -185,14 +185,15 @@ def calc_behavioral_score_trs(trace: dict) -> tuple[int, int]:
 def calc_behavioral_score_dsp(
     route: int,
     behav_nodes, 
-    behav_time
+    behav_time,
+    maze_type: int
 ) -> tuple[int, int]:
     # DSP is confined to Maze A (maze 1)
     assert behav_nodes is not None
     assert behav_time is not None
     
-    DP = cp.deepcopy(DP_DSP[route])
-    CP = cp.deepcopy(CP_DSP[route])
+    DP = cp.deepcopy(DP_DSPs[maze_type][route])
+    CP = cp.deepcopy(CP_DSPs[maze_type][route])
     G = cp.deepcopy(maze_graphs[(1, 12)])
     start_point, end_point = CP[0], EndPoints[1]
     

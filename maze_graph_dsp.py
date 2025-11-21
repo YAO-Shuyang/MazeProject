@@ -194,3 +194,9 @@ DP_DSP2 = {
     5: np.array([50, 51, 7, 44, 24, 78, 105, 82, 70, 60, 95, 119, 144], dtype = np.int64),
     6: np.array([105, 82, 70, 60, 95, 119, 144], dtype = np.int64)
 }
+
+DP_DSPs = {
+    1: DP_DSP1,
+    2: DP_DSP2,
+    4: DP_DSP1m
+}
