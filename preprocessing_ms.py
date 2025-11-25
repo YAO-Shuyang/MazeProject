@@ -1224,7 +1224,7 @@ def calc_ms_speed(behav_speed: np.ndarray, behav_time: np.ndarray,
     """
     assert behav_speed.shape[0] == behav_time.shape[0]
 
-    ms_speed = np.zeros_like(ms_time)
+    ms_speed = np.zeros_like(ms_time, dtype = np.float64)
     
     for i in range(ms_speed.shape[0]):
         if ms_time[i] <= behav_time[0]:

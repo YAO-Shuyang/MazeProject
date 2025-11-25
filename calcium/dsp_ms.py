@@ -432,12 +432,16 @@ def run_all_mice_DLC(
     behav_speed = calc_speed_with_smooth(
         behav_positions = trace['correct_pos']/10, 
         behav_time = trace['correct_time'], 
+        lap_beg_time=trace['lap beg time'],
+        lap_end_time=trace['lap end time'],
         smooth_window=5 # frames
     )
     trace['correct_speed_smoothed'] = behav_speed
     trace['correct_speed_raw'] = calc_speed_with_smooth(
         behav_positions = trace['correct_pos']/10, 
         behav_time = trace['correct_time'], 
+        lap_beg_time=trace['lap beg time'],
+        lap_end_time=trace['lap end time'],
         smooth_window=1
     )
 
@@ -589,11 +593,15 @@ def run_all_mice_DLC(
 if __name__ == '__main__':
     from mylib.local_path import f2
     
-    with open(f2['Trace File'][34], 'rb') as handle:
-        trace = pickle.load(handle)
-    
-    trace['p'] = join(r"D:\Data\Dsp_maze", str(int(trace['MiceID'])), str(int(trace['date'])))
-    LocTimeCurve(trace)
+    #with open(f2['Trace File'][35], 'rb') as handle:
+    #    trace = pickle.load(handle)
+    run_all_mice_DLC(
+        i=35,
+        f=f2, 
+        work_flow=r"D:\Data\Dsp_maze"
+    )
+    #trace['p'] = join(r"D:\Data\Dsp_maze", str(int(trace['MiceID'])), str(int(trace['date'])))
+    #LocTimeCurve(trace)
     
             
             
