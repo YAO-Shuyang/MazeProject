@@ -1294,6 +1294,8 @@ def calc_pearsonr(rate_map_all1:np.ndarray, rate_map_all2:np.ndarray = None):
 def calc_speed_with_smooth(
     behav_positions: np.ndarray,
     behav_time: np.ndarray,
+    lap_beg_time: np.ndarray,
+    lap_end_time: np.ndarray,
     smooth_window: int = 5
 ) -> np.ndarray:
     """Compute smoothed speed.
@@ -1318,19 +1320,26 @@ def calc_speed_with_smooth(
     """
     # Do not delete NAN value! to keep the same vector length with behav_positions_original and behav_time_original
     # behav_positions, behav_time = Delete_NAN(behav_positions = behav_positions, behav_time = behav_time)
-    dx = np.append(np.ediff1d(behav_positions[:,0]),0)
-    dy = np.append(np.ediff1d(behav_positions[:,1]),0)
-    dt = np.append(np.ediff1d(behav_time),33)
-    dl = np.sqrt(dx**2+dy**2)
-
-    # Smooth speed
-    smoothed_speed = np.convolve(
-        dl, np.ones(smooth_window)
-    ) / np.convolve(
-        dt, np.ones(smooth_window)
-    ) * 1000
+    dx = np.full(behav_positions.shape[0], np.nan)
+    dy = np.full(behav_positions.shape[0], np.nan)
+    dl = np.full(behav_positions.shape[0], np.nan)
+    dt = np.full(behav_positions.shape[0], np.nan)
+    smoothed_speed = np.full(behav_positions.shape[0], np.nan)
     
-    smoothed_speed[dt > 1000] = np.nan  # if dt > 1000 ms, set speed to nan
+    for i in range(lap_beg_time.shape[0]):
+        idx = np.where((behav_time >= lap_beg_time[i]) & (behav_time <= lap_end_time[i]))[0]
+        dx[idx] = np.append(np.ediff1d(behav_positions[idx,0]),0)
+        dy[idx] = np.append(np.ediff1d(behav_positions[idx,1]),0)
+        dt[idx] = np.append(np.ediff1d(behav_time[idx]), 50)
+        dl[idx] = np.sqrt(dx[idx]**2+dy[idx]**2)
+
+        # Smooth speed
+        smoothed_speed = np.convolve(
+            dl, np.ones(smooth_window), mode='same'
+        ) / np.convolve(
+            dt, np.ones(smooth_window), mode='same'
+        ) * 1000
+
     return smoothed_speed
 
 # Deprecated at 11/19/2025
