@@ -84,8 +84,7 @@ def shuffle_test_isi(SI, spikes, spike_nodes, occu_time, shuffle_n = 1000, Ms = 
     for i in range(shuffle_n):
         spikes_rand[i, shuffle_spike_ind[i]] = 1
     
-    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms, 
-                                                                                    is_silent = silent_cell)
+    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms)
     SI_rand = calc_SI(spikes = spikes_rand, rate_map = smooth_map_rand, t_total = t_total, t_nodes_frac=t_nodes_frac)
     is_placecell = SI > np.percentile(SI_rand, percent)
     return is_placecell
@@ -103,8 +102,7 @@ def shuffle_test_shift(SI, spikes, spike_nodes, occu_time, shuffle_n = 1000, Ms 
     for i in range(shuffle_n):
         spikes_rand[i,:] = np.roll(spikes, shift = shuffle_shift[i])
 
-    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms, 
-                                                                                    is_silent = silent_cell)
+    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms)
     SI_rand = calc_SI(spikes = spikes_rand, rate_map = smooth_map_rand, t_total = t_total, t_nodes_frac=t_nodes_frac)
     is_placecell = SI > np.percentile(SI_rand, percent)
     return is_placecell
@@ -122,8 +120,7 @@ def shuffle_test_all(SI, spikes, spike_nodes, occu_time, shuffle_n = 1000, Ms = 
         np.random.shuffle(spikes_temp)
         spikes_rand[i, :] = cp.deepcopy(spikes_temp)
         
-    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms, 
-                                                                                    is_silent = silent_cell)
+    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms)
     SI_rand = calc_SI(spikes = spikes_rand, rate_map = smooth_map_rand, t_total = t_total, t_nodes_frac=t_nodes_frac)
     is_placecell = SI > np.percentile(SI_rand, percent)
     return is_placecell

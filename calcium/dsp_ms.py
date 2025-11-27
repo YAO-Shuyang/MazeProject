@@ -20,7 +20,7 @@ from mylib.maze_graph import correct_paths, NRGs, Father2SonGraph, CP_DSPs
 from mylib.maze_utils3 import Clear_Axes, DrawMazeProfile, clear_NAN, mkdir, SpikeNodes, SpikeType, GetDMatrices
 from mylib.maze_utils3 import plot_trajactory, spike_nodes_transform, SmoothMatrix, occu_time_transform
 from mylib.preprocessing_ms import coverage_curve, calc_speed_with_smooth, calc_ratemap, place_field_dsp
-from mylib.preprocessing_ms import plot_spike_monitor, calc_ms_speed
+from mylib.preprocessing_ms import plot_spike_monitor, calc_ms_speed, OldMap
 from mylib.preprocessing_ms import calc_SI
 from mylib.divide_laps.lap_split import LapSplit
 from mylib.calcium.axes.peak_curve import get_y_order
@@ -422,7 +422,7 @@ def run_all_mice_DLC(
     
     print("    B. Calculate putative spikes and correlated location from deconvolved signal traces. Delete spikes that evoked at interlaps gap and those spikes that cannot find it's clear locations.")
     # Calculating Spikes, than delete the interlaps frames
-    Spikes_original = SpikeType(Transients = DeconvSignal, threshold = 3)
+    Spikes_original = SpikeType(Transients = DeconvSignal, threshold = 2)
     spike_num_mon1 = np.nansum(Spikes_original, axis = 1) # record temporary spike number
     # Calculating correlated spike nodes
     spike_nodes_original = SpikeNodes(Spikes = Spikes_original, ms_time = ms_time, 
@@ -531,7 +531,7 @@ def run_all_mice_DLC(
             Ms,
             trace['p'],
             behavior_paradigm = trace['paradigm'],
-            kwargs = {'file_name': 'Place cell shuffle [trans]'},
+            kwargs = {'file_name': 'Place cell shuffle [trans]', 'shuffle_n': 1},
             spike_num_thre=5,
             placefield_kwargs={"thre_type": 2, "parameter": 0.2, 'events_num_crit': 5}
         )
@@ -593,15 +593,17 @@ def run_all_mice_DLC(
 if __name__ == '__main__':
     from mylib.local_path import f2
     
-    #with open(f2['Trace File'][35], 'rb') as handle:
-    #    trace = pickle.load(handle)
     run_all_mice_DLC(
-        i=35,
+        i=37,
         f=f2, 
         work_flow=r"D:\Data\Dsp_maze"
     )
-    #trace['p'] = join(r"D:\Data\Dsp_maze", str(int(trace['MiceID'])), str(int(trace['date'])))
-    #LocTimeCurve(trace)
+    """
+    with  open(f2['Trace File'][34], 'rb') as handle:
+        trace = pickle.load(handle)
+    trace['p'] = join(r"D:\Data\Dsp_maze", str(int(trace['MiceID'])), str(int(trace['date'])))
+    LocTimeCurve(trace)
+    """
     
             
             
