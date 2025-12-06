@@ -19,10 +19,10 @@ def compute_P(
     cdef Py_ssize_t F = pext.shape[1]
 
     cdef cnp.ndarray[cnp.double_t, ndim=2] P = np.empty((F, T_test), dtype=np.float64)
-    cdef double[:, ::1] P_mv = P
-    cdef long long[:, ::1] spikes = Spikes_test
-    cdef double[:, ::1] pext_mv = pext
-    cdef double[::1] pextA = pext_A
+    cdef double[:, :] P_mv = P
+    cdef long long[:, :] spikes = Spikes_test
+    cdef double[:, :] pext_mv = pext
+    cdef double[:] pextA = pext_A
 
     cdef Py_ssize_t t, i, f
     cdef double prod
@@ -30,14 +30,12 @@ def compute_P(
     for t in range(T_test):
         # initialize with 1
         for f in range(F):
-            prod = 1.0
+            prod = 0.0
             for i in range(N):
-                if spikes[i, t] == 1:
-                    if not isnan(pext_mv[i, f]):
-                        prod *= pext_mv[i, f]
+                if Spikes_test[i, t] == 1:
+                    prod += np.log(pext[i, f])
                 else:
-                    if not isnan(pext_mv[i, f]):
-                        prod *= (1.0 - pext_mv[i, f])
-            P_mv[f, t] = prod * pextA[f]
+                    prod += np.log(1.0 - pext[i, f])
+            P_mv[f, t] = prod + pext_A[f]
 
     return P

@@ -258,12 +258,17 @@ class NaiveBayesDecoder(object):
         P = np.ones((nx*nx,T_test), dtype = np.float64)
         self.pext = pext
         self.pext_A = pext
-        log_A = np.log(pext_A)
+        
+        pext[np.isnan(pext)] = 1e-10
+        pext_A[np.isnan(pext_A)] = 1e-10
+        pext[pext < 1e-10] = 1e-10
+        pext_A[pext_A < 1e-10] = 1e-10
   
         # generate P matrix.
-        print("    Generating P matirx...")
+        print("    Generating P matirx Cython...")
         t1 = time.time()
-        P = compute_P(Spikes_test.astype(np.int64), pext.astype(np.float64), pext_A.astype(np.float64))
+        """ 
+        P = np.exp(compute_P(Spikes_test.astype(np.int64), pext.astype(np.float64), pext_A.astype(np.float64)))
         print(f"    P matrix generation time: {time.time() - t1} s")
         """
         for t in tqdm(range(T_test)):
@@ -271,9 +276,9 @@ class NaiveBayesDecoder(object):
             nonspike_idx = np.where(Spikes_test[:,t]==0)[0]
             p = np.concatenate((pext[spike_idx,:],(1-pext[nonspike_idx,:])),axis=0)
             P[:,t] = np.nanprod(p, axis = 0) * pext_A
-        """"""   
+        """ 
         P = _get_post_prob(Spikes_test, pext, pext_A, self.res) 
-        """
+        """ 
         self.P = P
         return P
 
