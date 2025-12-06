@@ -25,6 +25,12 @@ ModelPalette = (
 )
 RemappingPalette = ['#333766', '#A4C096']
 MicePaletteDSP = ['#4A90E2', '#8E9F85', '#C3AED6', '#A7D8DE']
+RetrievPalettes = ['#9d639f', '#7da1a4']
+RetrievCmap = sns.blend_palette(
+    ["#9d639f", "#ffffff", "#7da1a4"],  # add white center for true diverging
+    as_cmap=True,
+)
+
 def hex_to_rgba(hex_color):
     """
     Convert a hex color (#RRGGBB or #RRGGBBAA) to RGBA format (0-255).

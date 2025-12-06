@@ -316,7 +316,7 @@ def LocTimeCurve(trace: dict) -> dict:
     cell_list = range(trace['n_neuron'])
     save_loc = join(trace['p'], 'LocTimeCurve')
         
-    mkdir(save_loc)   
+    mkdir(save_loc)
     colors, n_nodes_all = ([
         DSPPalette[0], DSPPalette[1], DSPPalette[2], DSPPalette[3], DSPPalette[0],
         DSPPalette[0], DSPPalette[4], DSPPalette[5], DSPPalette[6], DSPPalette[0]
