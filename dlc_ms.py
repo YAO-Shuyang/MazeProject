@@ -274,9 +274,6 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     
 if __name__ == '__main__':
     
-    with open(r"E:\Data\Cross_maze\10224\20230930\session 2\trace.pkl", 'rb') as f:
-        trace = pickle.load(f)
-    
-    trace['p'] = r"E:\Data\Cross_maze\10224\20230930\session 2"
-    LocTimeCurve(trace)
-    RateMap(trace)
+    from mylib.local_path import f1
+    work_flow = r"D:\Data\Cross_maze"
+    run_all_mice_DLC(728, f=f1, work_flow=work_flow)

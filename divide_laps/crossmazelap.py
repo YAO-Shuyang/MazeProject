@@ -27,7 +27,7 @@ def get_check_area(maze_type: int, start_point: int, check_length: int = 5):
 
 # This function has been proved to be suited for all session for cross maze paradigm.
 def CrossMazeLapSplit(trace, check_length = 6, mid_length = 5):
-    if trace['maze_type'] in [1,2,3]:
+    if trace['maze_type'] in [1,2,3,4]:
         if 'lap beg time' in trace.keys() and 'lap end time' in trace.keys():
             beg_time_ori, end_time_ori = trace['lap beg time'], trace['lap end time']
             behav_time = cp.deepcopy(trace['correct_time'])

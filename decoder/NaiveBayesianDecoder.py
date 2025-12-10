@@ -115,7 +115,7 @@ class NaiveBayesDecoder(object):
         print("    Generate D matrix")
         maze_type = self.maze_type
         nx = self.res
-        D = GetDMatrices(maze_type=maze_type, nx=nx)
+        D = GetDMatrices(maze_type=maze_type, nx=nx)/(nx/6)
         D2 = D**2
         self.D2 = D2
         self.D = D
@@ -128,7 +128,7 @@ class NaiveBayesDecoder(object):
         if self.Loss_function == '0-1':
             self.d = D01
         elif self.Loss_function == 'd':
-            self.d = D
+            self.d = D/8
         elif self.Loss_function == 'd2':
             self.d = D2
         else:
@@ -275,7 +275,7 @@ class NaiveBayesDecoder(object):
             spike_idx = np.where(Spikes_test[:,t]==1)[0]
             nonspike_idx = np.where(Spikes_test[:,t]==0)[0]
             p = np.concatenate((pext[spike_idx,:],(1-pext[nonspike_idx,:])),axis=0)
-            P[:,t] = np.nanprod(p, axis = 0) * pext_A
+            P[:,t] = np.nansum(np.log(p), axis = 0) + np.log(pext_A)
         """ 
         P = _get_post_prob(Spikes_test, pext, pext_A, self.res) 
         """ 
@@ -294,7 +294,7 @@ class NaiveBayesDecoder(object):
 
         # output matrix = D x P
         # output = argmin(D x P, axis = 0)
-        dp = np.dot(D,P)
+        dp = np.dot(D, np.exp(P))
         self.dp = dp
         MazeID_predicted = np.argmin(dp, axis = 0) + 1
         self.MazeID_predicted = MazeID_predicted
