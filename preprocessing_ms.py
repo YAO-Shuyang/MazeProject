@@ -702,11 +702,11 @@ def LocTimeCurve(trace):
     ms_time = cp.deepcopy(trace['ms_time_behav'])
     spike_nodes = spike_nodes_transform(trace['spike_nodes'], nx=12)
     
-    Graph = NRG[int(trace['maze_type'])]
+    Graph = NRGs[int(trace['maze_type'])]
     linearized_x = np.zeros_like(trace['spike_nodes'], np.float64)
 
     for i in range(spike_nodes.shape[0]):
-        linearized_x[i] = Graph[int(spike_nodes[i])]
+        linearized_x[i] = Graph[int(spike_nodes[i])-1]
         
     linearized_x = linearized_x + np.random.rand(spike_nodes.shape[0]) - 0.5
 
