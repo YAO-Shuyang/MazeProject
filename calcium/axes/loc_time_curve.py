@@ -48,6 +48,8 @@ def LocTimeCurveAxes(
         thre = 101
     elif maze_type == 3:
         thre = 144
+    elif maze_type == 4:
+        thre = 111
     else:
         raise ValueError(f"Invalid maze type: {maze_type}")
     
