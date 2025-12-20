@@ -360,6 +360,7 @@ def LocTimeCurve(trace: dict) -> dict:
             items.remove()
     
     plt.close()
+    return trace
 
 def run_all_mice_DLC(
     i: int, 
@@ -531,19 +532,22 @@ def run_all_mice_DLC(
             Ms,
             trace['p'],
             behavior_paradigm = trace['paradigm'],
-            kwargs = {'file_name': 'Place cell shuffle [trans]', 'shuffle_n': 1},
+            kwargs = {'file_name': 'Place cell shuffle [trans]'},
             spike_num_thre=5,
-            placefield_kwargs={"thre_type": 2, "parameter": 0.2, 'events_num_crit': 5}
+            placefield_kwargs={"thre_type": 2, "parameter": 0.2, 'events_num_crit': 5},
+            is_shuffle=False,
+            is_field_included=False
         )
         trace['node '+str(n)]['Route'] = lap_type[seg_beg[n]]
 
     plot_spike_monitor(spike_num_mon1, spike_num_mon2, spike_num_mon3, spike_num_mon4, save_loc = os.path.join(trace['p'], 'behav'))
 
+    """
     print("Total Place Fields:")
     trace['place_field_all'] = place_field_dsp(
         trace, thre_type=2, parameter=0.4, events_num_crit=10, need_events_num=True, split_thre=0.2, reactivate_num=5
     )
-
+    """
     print("    C. Calculating firing rate for each neuron and identified their place fields (those areas which firing rate >= 50% peak rate)")
     # Set occu_time <= 50ms spatial bins as nan to avoid too big firing rate
 
@@ -594,14 +598,14 @@ if __name__ == '__main__':
     from mylib.local_path import f2
     
     run_all_mice_DLC(
-        i=37,
+        i=36,
         f=f2, 
-        work_flow=r"D:\Data\Dsp_maze"
+        work_flow=r"E:\Data\Dsp_maze"
     )
     """
     with  open(f2['Trace File'][34], 'rb') as handle:
         trace = pickle.load(handle)
-    trace['p'] = join(r"D:\Data\Dsp_maze", str(int(trace['MiceID'])), str(int(trace['date'])))
+    trace['p'] = join(r"E:\Data\Dsp_maze", str(int(trace['MiceID'])), str(int(trace['date'])))
     LocTimeCurve(trace)
     """
     
