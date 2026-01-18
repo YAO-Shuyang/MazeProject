@@ -10,17 +10,26 @@ CellregDate = r"D:\Software\Anaconda3\envs\maze\Lib\site-packages\mylib\cellreg"
 
 CM_path = r'D:\Data\Cross_maze'
 DSP_path = r'D:\Data\Dsp_maze'
+<<<<<<< HEAD
 #RM_path = r'D:\Data\Reverse_maze'
 #HP_path = r'D:\Data\Hairpin_maze'
 
 f1 = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'calcium')
 f1_behav = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'behavior')
 #f_pure_behav = pd.read_excel(os.path.join(CM_path,'behavior_only.xlsx'), sheet_name = 'behavior')
+=======
+RM_path = r'D:\Data\Reverse_maze'
+HP_path = r'D:\Data\Hairpin_maze'
+
+f1 = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'calcium')
+f1_behav = pd.read_excel(os.path.join(CM_path,'cross_maze_paradigm.xlsx'), sheet_name = 'behavior')
+f_pure_behav = pd.read_excel(os.path.join(CM_path, "behavior_only.xlsx"), sheet_name = 'behavior')
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
 #f_pure_old = pd.read_excel(os.path.join(CM_path,'behavior_only.xlsx'), sheet_name = 'prev')
 
 f2 = pd.read_excel(os.path.join(DSP_path,'dsp_maze_paradigm.xlsx'), sheet_name = 'calcium')
 f2_behav = pd.read_excel(os.path.join(DSP_path,'dsp_maze_paradigm.xlsx'), sheet_name = 'behavior')
-f2_ori = pd.read_excel(os.path.join(DSP_path,'dsp_maze_paradigm.xlsx'), sheet_name = 'calcium_separate')
+#f2_ori = pd.read_excel(os.path.join(DSP_path,'dsp_maze_paradigm.xlsx'), sheet_name = 'calcium_separate')
 
 #f3 = pd.read_excel(os.path.join(RM_path,'Reverse_maze_paradigm.xlsx'), sheet_name = 'calcium')
 #f3_behav = pd.read_excel(os.path.join(RM_path,'Reverse_maze_paradigm.xlsx'), sheet_name = 'behavior')
@@ -28,11 +37,19 @@ f2_ori = pd.read_excel(os.path.join(DSP_path,'dsp_maze_paradigm.xlsx'), sheet_na
 #f4 = pd.read_excel(os.path.join(HP_path,'Hairpin_maze_paradigm.xlsx'), sheet_name = 'calcium')
 #f4_behav = pd.read_excel(os.path.join(HP_path,'Hairpin_maze_paradigm.xlsx'), sheet_name = 'behavior')
 
+<<<<<<< HEAD
 #f_CellReg_env = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='env')
 #f_CellReg_day = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='day')
 #f_CellReg_reverse = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='reverse')
 #f_CellReg_day_hairpin = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='day_hairpin')
 #f_CellReg_modi = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='modi')
+=======
+f_CellReg_env = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='env')
+f_CellReg_day = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='day')
+f_CellReg_reverse = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='reverse')
+f_CellReg_day_hairpin = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='day_hairpin')
+f_CellReg_modi = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='modi')
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
 f_CellReg_dsp = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='dsp')
 
 #f_decode = pd.read_excel(r"D:\Data\Simulation_pc\cross_maze_decode.xlsx", sheet_name='Lap-wise')

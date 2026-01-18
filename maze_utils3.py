@@ -22,6 +22,12 @@ from mylib.AssertError import KeyWordErrorCheck, VariablesInputErrorCheck, Repor
 import warnings
 from mylib.calcium.smooth.gaussian import gaussian_smooth_matrix1d
 from typing import Union, Optional
+<<<<<<< HEAD
+=======
+
+figpath = 'F:\YSY\FinalResults'
+figdata = 'F:\YSY\FigData'
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
 
 marker_list = ['o','s','^','*','+','x', 'p','1','v','D','h','p']
 

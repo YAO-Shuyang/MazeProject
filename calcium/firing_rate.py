@@ -21,7 +21,11 @@ def calc_rate_map_properties(
     spike_num_thre = 10,
     placefield_kwargs: dict = {"thre_type": 2, "parameter": 0.2},
     is_shuffle: bool = True,
+<<<<<<< HEAD
     is_calc_fields: bool = True
+=======
+    is_field_included: bool = True
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
 ):
     n_neuron = Spikes.shape[0]
     _nbins = 2304
@@ -54,6 +58,7 @@ def calc_rate_map_properties(
                 'smooth_map_all':smooth_map_all, 'nanPos':nanPos, 'occu_time_spf': occu_time, 'p': save_loc, 'maze_type': maze_type}
 
     # Shuffle test
+<<<<<<< HEAD
     if is_shuffle:
         trace_ms = shuffle_test(trace_ms, Ms, **kwargs)
     else:
@@ -67,11 +72,21 @@ def calc_rate_map_properties(
     
     # Generate place field
     if is_calc_fields:
+=======
+    trace_ms = shuffle_test(trace_ms, Ms, is_shuffle=is_shuffle, **kwargs)
+    #plot_field_arange(trace, save_loc=os.path.join(trace['p'], 'PeakCurve'))
+    
+    if is_field_included:
+        # Generate place field
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
         trace_ms['place_field_all'] = place_field(
             trace=trace_ms,
             **placefield_kwargs
         )
+<<<<<<< HEAD
         
+=======
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
         trace_ms = count_field_number(trace_ms)
         try:
             trace_ms = field_register(trace_ms)
