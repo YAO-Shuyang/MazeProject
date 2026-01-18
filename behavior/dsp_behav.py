@@ -329,7 +329,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
     
     print("    ",os.path.join(p,"trace_behav.pkl")," has been saved successfully!")
 
-def concat_trace_behav(oripath1: str, oripath2: str, save_dir: None = None):
+def concat_trace_behav(oripath1: str, oripath2: str, oripath3: str = None, save_dir: None = None):
     if save_dir is None:
         save_dir = os.path.dirname(os.path.dirname(oripath1))
     
@@ -341,6 +341,64 @@ def concat_trace_behav(oripath1: str, oripath2: str, save_dir: None = None):
 
     add_time = trace1['behav_time_original'][-1] + 100000
 
+<<<<<<< HEAD
+    if oripath3 is None:
+        trace = {
+            'date': trace1['date'],
+            'MiceID': trace1['MiceID'],
+            'paradigm': trace1['paradigm'],
+            'session_path': save_dir, 'p': save_dir,
+            'former_path': [trace1['session_path'], trace2['session_path']],
+            'maze_type': trace1['maze_type'],
+            'nx': 48, 'ny': 48,
+            'body_parts': trace1['body_parts'],
+            'dlc_position': {k: np.concatenate([trace1['dlc_position'][k], trace2['dlc_position'][k]], axis=0) for k in trace1['dlc_position'].keys()},
+            'behav_position_original': np.concatenate([trace1['behav_position_original'], trace2['behav_position_original']], axis=0),
+            'behav_time_original': np.concatenate([trace1['behav_time_original'], trace2['behav_time_original'] + add_time]),
+            'lap beg time': np.concatenate([trace1['lap beg time'], trace2['lap beg time'] + add_time]),
+            'lap end time': np.concatenate([trace1['lap end time'], trace2['lap end time'] + add_time]),
+            'processed_pos': np.concatenate([trace1['processed_pos'], trace2['processed_pos']], axis=0),
+            'processed_pos_new': np.concatenate([trace1['processed_pos_new'], trace2['processed_pos_new']], axis=0),
+            'behav_time': np.concatenate([trace1['behav_time'], trace2['behav_time'] + add_time]),
+            'behav_nodes': np.concatenate([trace1['behav_nodes'], trace2['behav_nodes']]),
+            'correct_pos': np.concatenate([trace1['correct_pos'], trace2['correct_pos']], axis=0),
+            'correct_nodes': np.concatenate([trace1['correct_nodes'], trace2['correct_nodes']]),
+            'correct_time': np.concatenate([trace1['correct_time'], trace2['correct_time'] + add_time]),
+            'occu_time': trace1['occu_time'] + trace2['occu_time'],
+            'correct_speed': np.concatenate([trace1['correct_speed'], trace2['correct_speed']]),
+            'smooth_speed': np.concatenate([trace1['smooth_speed'], trace2['smooth_speed']])
+        }
+    else:
+        with open(oripath3, 'rb') as handle:
+            trace3 = pickle.load(handle)
+        add_time2 = trace2['behav_time_original'][-1] + 100000
+        trace = {
+            'date': trace1['date'],
+            'MiceID': trace1['MiceID'],
+            'paradigm': trace1['paradigm'],
+            'session_path': save_dir, 'p': save_dir,
+            'former_path': [trace1['session_path'], trace2['session_path'], trace3['session_path']],
+            'maze_type': trace1['maze_type'],
+            'nx': 48, 'ny': 48,
+            'body_parts': trace1['body_parts'],
+            'dlc_position': {k: np.concatenate([trace1['dlc_position'][k], trace2['dlc_position'][k], trace3['dlc_position'][k]], axis=0) for k in trace1['dlc_position'].keys()},
+            'behav_position_original': np.concatenate([trace1['behav_position_original'], trace2['behav_position_original'], trace3['behav_position_original']], axis=0),
+            'behav_time_original': np.concatenate([trace1['behav_time_original'], trace2['behav_time_original'] + add_time, trace3['behav_time_original'] + add_time + add_time2]),
+            'lap beg time': np.concatenate([trace1['lap beg time'], trace2['lap beg time'] + add_time, trace3['lap beg time'] + add_time + add_time2]),
+            'lap end time': np.concatenate([trace1['lap end time'], trace2['lap end time'] + add_time, trace3['lap end time'] + add_time + add_time2]),
+            'processed_pos': np.concatenate([trace1['processed_pos'], trace2['processed_pos'], trace3['processed_pos']], axis=0),
+            'processed_pos_new': np.concatenate([trace1['processed_pos_new'], trace2['processed_pos_new'], trace3['processed_pos_new']], axis=0),
+            'behav_time': np.concatenate([trace1['behav_time'], trace2['behav_time'] + add_time, trace3['behav_time'] + add_time + add_time2]),
+            'behav_nodes': np.concatenate([trace1['behav_nodes'], trace2['behav_nodes'], trace3['behav_nodes']]),
+            'correct_pos': np.concatenate([trace1['correct_pos'], trace2['correct_pos'], trace3['correct_pos']], axis=0),
+            'correct_nodes': np.concatenate([trace1['correct_nodes'], trace2['correct_nodes'], trace3['correct_nodes']]),
+            'correct_time': np.concatenate([trace1['correct_time'], trace2['correct_time'] + add_time, trace3['correct_time'] + add_time + add_time2]),
+            'occu_time': trace1['occu_time'] + trace2['occu_time'] + trace3['occu_time'],
+            'correct_speed': np.concatenate([trace1['correct_speed'], trace2['correct_speed'], trace3['correct_speed']]),
+            'smooth_speed': np.concatenate([trace1['smooth_speed'], trace2['smooth_speed'], trace3['smooth_speed']])
+        }
+
+=======
     trace = {
         'date': trace1['date'],
         'MiceID': trace1['MiceID'],
@@ -367,6 +425,7 @@ def concat_trace_behav(oripath1: str, oripath2: str, save_dir: None = None):
         'smooth_speed': np.concatenate([trace1['smooth_speed'], trace2['smooth_speed']])
     }
     
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
     with open(os.path.join(save_dir, 'trace_behav.pkl'), 'wb') as handle:
         pickle.dump(trace, handle)
     

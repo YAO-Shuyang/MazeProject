@@ -32,7 +32,12 @@ from mylib.dsp.neural_traj import get_neural_trajectory, segmented_neural_trajec
 
 # 11/20/25, 准备新增两个实验。
 # 我们将correct/incorrect imaging videos合在一起重新跑了CNMF-E。从而，代码需要随之修改。
+<<<<<<< HEAD
+DSPPalette = ["#A9CCE3", "#82C3C5", '#9C8FBC', "#D9A6A9", "#DCC8A4", '#647D91', "#C06C84", "#007a8c",
+              "#DF9E26", "#15C4CA", "#4A1CBF"]
+=======
 DSPPalette = ["#A9CCE3", "#82C3C5", '#9C8FBC', "#D9A6A9", "#DCC8A4", '#647D91', "#C06C84", "#007a8c"]
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
 
 def classify_lap(
     behav_nodes: np.ndarray, 
@@ -96,8 +101,16 @@ def classify_lap(
             3: [99, 87, 88, 76],
             4: [8, 7, 6, 18],
             5: [93, 105, 106, 94],
+<<<<<<< HEAD
+            6: [135, 134, 133, 121, 110], # 110 here is to handle an exception from mouse 10266, SB, trial 111.
+            7: [138, 126, 127, 115],
+            8: [30, 31, 19, 20],
+            9: [45, 46, 47, 48],
+            10: [62, 50, 51, 52, 39]
+=======
             6: [135, 134, 133, 121],
             7: [138, 126, 127, 115]
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
         }
     else:
         raise NotImplementedError(
@@ -162,6 +175,8 @@ def split_calcium_data(
 
     return idx 
 
+<<<<<<< HEAD
+=======
 """
 def LocTimeCurve(trace: dict) -> dict:
     maze_type = trace['maze_type']
@@ -210,24 +225,33 @@ def LocTimeCurve(trace: dict) -> dict:
     
     return trace
 """
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
 def get_son_area(area: np.ndarray):
     return np.concatenate([Father2SonGraph[i] for i in area])
 
 def RoutewiseCorrelation(trace: dict):
     maze_type = trace['maze_type']
     CPs = CP_DSPs[maze_type]
+<<<<<<< HEAD
+    if maze_type != 4:
+        n_nodes = 10
+    elif maze_type == 4:
+        n_nodes = 11 if 'node 15' not in trace.keys() else 16
+=======
     n_nodes = 10 if maze_type != 4 else 11
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
     corr_mat = np.ones((n_nodes, n_nodes), np.float64)
     
     for i in range(n_nodes - 1):
         for j in range(i+1, n_nodes):
             corr = np.zeros(trace['n_neuron'], np.float64) * np.nan
-            
+            idx = np.arange(trace['n_neuron'])
+            """
             idx = np.where(
                 (trace[f'node {i}']['is_placecell'] == 1) |
                 (trace[f'node {j}']['is_placecell'] == 1)
             )[0]
-            
+            """
             bins = get_son_area(np.intersect1d(
                 CPs[trace[f'node {i}']['Route']],
                 CPs[trace[f'node {j}']['Route']],
@@ -252,62 +276,79 @@ def calc_pvc(ratemap1, ratemap2, bins):
     
     return np.nanmean(corr)
 
-def MazeSegmentsPVCorrelation(trace: dict):
-    seg1 = np.array([1,13,14,26,27,15,3,4,5])
-    seg2 = np.array([6,18,17,29,30,31,19,20,21,9,10,11,12,24])
-    seg3 = np.array([23,22,34,33,32,44,45,46,47,48,60,59,58,57,56,68,69,70,71,72,84,83,95])
-    seg4 = np.array([94,82,81,80,92,104,103,91,90,78,79,67,55,54])
-    seg5 = np.array([66,65,64,63,75,74,62,50,51,39,38,37,49,61,73,85,97])
-    seg6 = np.array([109,110,122,123,111,112,100])
-    seg7 = np.array([99,87,88,76,77,89,101,102,114,113,125,124,136,137,138,126,127,115,116,117,129,141,142,130,131,132,144])
+# New version on 11/20/25
+def LocTimeCurve(trace: dict) -> dict:
+    mouse = trace['MiceID'],
+    date = trace['date']
+    maze_type = trace['maze_type']
+    cell_list = range(trace['n_neuron'])
+    save_loc = join(trace['p'], 'LocTimeCurve')
+        
+    mkdir(save_loc)
+    if 'node 10' not in trace.keys():
+        colors, n_nodes_all = ([
+            DSPPalette[0], DSPPalette[1], DSPPalette[2], DSPPalette[3], DSPPalette[0],
+            DSPPalette[0], DSPPalette[4], DSPPalette[5], DSPPalette[6], DSPPalette[0]
+        ], 10)
+    elif 'node 11' not in trace.keys() and 'node 10' in trace.keys():
+        colors, n_nodes_all = ([
+            DSPPalette[0], DSPPalette[1], DSPPalette[2], DSPPalette[3], DSPPalette[7], DSPPalette[0],
+            DSPPalette[0], DSPPalette[4], DSPPalette[5], DSPPalette[6], DSPPalette[0]
+        ], 11)
+    elif 'node 15' in trace.keys():
+        colors, n_nodes_all = ([
+            DSPPalette[0], DSPPalette[1], DSPPalette[2], DSPPalette[3], DSPPalette[7], DSPPalette[0],
+            DSPPalette[0], DSPPalette[4], DSPPalette[5], DSPPalette[6], DSPPalette[0],
+            DSPPalette[0], DSPPalette[8], DSPPalette[9], DSPPalette[10], DSPPalette[0]
+        ], 16)
     
-    segments = np.concatenate([seg1, seg2, seg3, seg4, seg5, seg6, seg7])
-    son_segments = get_son_area(segments)
-    trace['segments'] = np.concatenate([
-        np.repeat(0, seg1.shape[0]),
-        np.repeat(1, seg2.shape[0]),
-        np.repeat(2, seg3.shape[0]),
-        np.repeat(3, seg4.shape[0]),
-        np.repeat(4, seg5.shape[0]),
-        np.repeat(5, seg6.shape[0]),
-        np.repeat(6, seg7.shape[0])
-    ])
+    fig = plt.figure(figsize=(3, 4))
+    ax = Clear_Axes(plt.axes(), close_spines=['top', 'right'], ifxticks=True, ifyticks=True)      
+    linearized_xs = [
+        NRGs[maze_type][spike_nodes_transform(trace[f'node {_i}']['spike_nodes'], 12).astype(np.int64) - 1] + 
+        np.random.rand(trace[f'node {_i}']['spike_nodes'].shape[0]) - 0.5
+        for _i in range(n_nodes_all)
+    ]
     
-    D = GetDMatrices(1, 48)
+    for cell in tqdm(cell_list):
+        clear_items = []
+        for i in range(n_nodes_all):
+            ax, a, b = LocTimeCurveAxes(
+                ax,
+                behav_time=trace[f'node {i}']['ms_time_behav'],
+                given_x=linearized_xs[i],
+                spikes=trace[f'node {i}']['Spikes'][cell, :],
+                spike_time=trace[f'node {i}']['ms_time_behav'],
+                maze_type=maze_type,
+                line_kwargs={'linewidth': 0.4, 'color': colors[i]},
+                bar_kwargs={'markeredgewidth': 0.5, 'markersize': 2, 'color': 'k'},
+                is_include_incorrect_paths=True
+            )
+            clear_items = clear_items + a + b
+        
+        if n_nodes_all in [10, 11]:
+            t1 = trace['node 4']['ms_time_behav'][-1]/1000 if n_nodes_all == 10 else trace['node 5']['ms_time_behav'][-1]/1000
+            t2 = trace['node 5']['ms_time_behav'][0]/1000 if n_nodes_all == 10 else trace['node 6']['ms_time_behav'][0]/1000
+            t3 = trace['node 9']['ms_time_behav'][-1]/1000 if n_nodes_all == 10 else trace['node 10']['ms_time_behav'][-1]/1000
+            ax.set_yticks([0, t1, t2, t3], [0, t1, 0, t3-t2])
+        else:
+            t1 = trace['node 4']['ms_time_behav'][-1]/1000
+            t2 = trace['node 5']['ms_time_behav'][0]/1000
+            t3 = trace['node 9']['ms_time_behav'][-1]/1000
+            t4 = trace['node 10']['ms_time_behav'][0]/1000
+            t5 = trace['node 15']['ms_time_behav'][0]/1000
+            ax.set_yticks([0, t1, t2, t3, t4, t5], [0, t1, 0, t3-t2, 0, t5-t4])
+            
+        plt.savefig(os.path.join(save_loc, f'Cell {cell+1}.png'), dpi=600)
+        plt.savefig(os.path.join(save_loc, f'Cell {cell+1}.svg'), dpi=600)
+        for items in clear_items:
+            items.remove()
     
-    idx = np.where(
-        (trace['node 0']['is_placecell'] == 1) |
-        (trace['node 4']['is_placecell'] == 1) |
-        (trace['node 5']['is_placecell'] == 1) |
-        (trace['node 9']['is_placecell'] == 1)
-    )[0]
-
-    segments_pvc = np.zeros((4, len(son_segments)))
-    for i in range(len(son_segments)):
-        segments_pvc[0, i], _ = pearsonr(
-                trace['node 0']['smooth_map_all'][idx, son_segments[i]-1], 
-                trace['node 4']['smooth_map_all'][idx, son_segments[i]-1]
-        )
-        
-        segments_pvc[1, i], _ = pearsonr(
-                trace['node 4']['smooth_map_all'][idx, son_segments[i]-1], 
-                trace['node 5']['smooth_map_all'][idx, son_segments[i]-1]
-        )
-        
-        segments_pvc[2, i], _ = pearsonr(
-                trace['node 5']['smooth_map_all'][idx, son_segments[i]-1], 
-                trace['node 9']['smooth_map_all'][idx, son_segments[i]-1]
-        )
-        
-        segments_pvc[3, i], _ = pearsonr(
-                trace['node 0']['smooth_map_all'][idx, son_segments[i]-1], 
-                trace['node 9']['smooth_map_all'][idx, son_segments[i]-1]
-        )
-        
-    trace['segments_pvc'] = segments_pvc
-    trace['segments_x'] = D[son_segments-1, 0]
+    plt.close()
     return trace
 
+<<<<<<< HEAD
+=======
 # New version on 11/20/25
 def LocTimeCurve(trace: dict) -> dict:
     mouse = trace['MiceID'],
@@ -362,11 +403,16 @@ def LocTimeCurve(trace: dict) -> dict:
     plt.close()
     return trace
 
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
 def run_all_mice_DLC(
     i: int, 
     f: pd.DataFrame, 
     work_flow: str, 
+<<<<<<< HEAD
+    v_thre: float = 0, 
+=======
     v_thre: float = 2.5, 
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
     cam_degree = 0, 
     speed_sm_args = {}
 ):
@@ -388,7 +434,7 @@ def run_all_mice_DLC(
         with open(os.path.join(p, 'trace_behav.pkl'), 'rb') as handle:
             trace = pickle.load(handle)
     else:
-        warnings.warn(f"{os.path.join(p,'trace_behav.pkl')} is not exist!")
+        raise FileNotFoundError(f"{os.path.join(p,'trace_behav.pkl')} is not exist!")
     
     trace['p'] = p
     f.loc[i, 'Path'] = p
@@ -508,14 +554,24 @@ def run_all_mice_DLC(
             # 报错并错误的分类，需注意！
             idx = np.insert(idx, 4, idx_0[1])
     else:
+<<<<<<< HEAD
+        if idx.shape[0] not in [10, 15]:
+            raise ValueError(
+                f"Breakpoints should be 10 or 15 for Maze 1 modified but {idx.shape[0]} were found! "
+=======
         if idx.shape[0] != 10:
             raise ValueError(
                 f"Breakpoints should be 10 for Maze 1 modified but {idx.shape[0]} were found! "
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
             )
             
     seg_beg, seg_end = np.concatenate([[0], idx+1]), np.concatenate([idx, [d_type.shape[0]-1]])
     trace['n_neuron'] = n_neuron
+<<<<<<< HEAD
+    n_nodes_total = idx.shape[0]+1
+=======
     n_nodes_total = 10 if maze_type != 4 else 11
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
     for n in range(n_nodes_total):
         print(f"        Node {n} -----------------------------------------------------------")
         lap_idx = np.arange(seg_beg[n], seg_end[n] + 1)
@@ -532,11 +588,15 @@ def run_all_mice_DLC(
             Ms,
             trace['p'],
             behavior_paradigm = trace['paradigm'],
-            kwargs = {'file_name': 'Place cell shuffle [trans]'},
+            kwargs = {'file_name': 'Place cell shuffle [trans]', 'shuffle_n': 1},
             spike_num_thre=5,
             placefield_kwargs={"thre_type": 2, "parameter": 0.2, 'events_num_crit': 5},
             is_shuffle=False,
+<<<<<<< HEAD
+            is_calc_fields=False
+=======
             is_field_included=False
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
         )
         trace['node '+str(n)]['Route'] = lap_type[seg_beg[n]]
 
@@ -544,6 +604,7 @@ def run_all_mice_DLC(
 
     """
     print("Total Place Fields:")
+    """
     trace['place_field_all'] = place_field_dsp(
         trace, thre_type=2, parameter=0.4, events_num_crit=10, need_events_num=True, split_thre=0.2, reactivate_num=5
     )
@@ -579,7 +640,11 @@ def run_all_mice_DLC(
     trace = RoutewiseCorrelation(trace)
     
     print("      4. Loc-time curve")
+<<<<<<< HEAD
+    #trace = LocTimeCurve(trace)
+=======
     trace = LocTimeCurve(trace)
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
 
     print("      5. Population Vector Correlation (Deprecated)")
     #MazeSegmentsPVCorrelation(trace)
@@ -596,6 +661,24 @@ def run_all_mice_DLC(
 
 if __name__ == '__main__':
     from mylib.local_path import f2
+<<<<<<< HEAD
+    
+    for i in range(len(f2)):
+        if f2['MiceID'][i] == 10209:
+            continue
+
+        run_all_mice_DLC(
+            i=i,
+            f=f2, 
+            work_flow=r"D:\Data\Dsp_maze"
+        )
+    """
+    with  open(f2['Trace File'][34], 'rb') as handle:
+        trace = pickle.load(handle)
+    trace['p'] = join(r"D:\Data\Dsp_maze", str(int(trace['MiceID'])), str(int(trace['date'])))
+    LocTimeCurve(trace)
+    """
+=======
     
     run_all_mice_DLC(
         i=36,
@@ -612,3 +695,4 @@ if __name__ == '__main__':
             
             
     
+>>>>>>> b5d20b9290e0c8bdb6d050c4f45fc391fe5aa352
