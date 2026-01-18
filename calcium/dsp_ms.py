@@ -101,7 +101,7 @@ def classify_lap(
             7: [138, 126, 127, 115],
             8: [30, 31, 19, 20],
             9: [45, 46, 47, 48],
-            10: [62, 50, 51, 52, 39]
+            10: [62, 50, 51, 52, 39, 40]
         }
     else:
         raise NotImplementedError(
@@ -519,7 +519,7 @@ def run_all_mice_DLC(
 if __name__ == '__main__':
     from mylib.local_path import f2
     
-    for i in range(35, len(f2)):
+    for i in range(35+6, len(f2)):
         if f2['MiceID'][i] == 10209:
             continue
 
