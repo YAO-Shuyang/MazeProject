@@ -133,11 +133,11 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
             trace=trace, 
             behavior_paradigm=behavior_paradigm
         )
-        assert frame_labels.shape[0] == spike_nodes.shape[0]
+        assert frame_labels.shape[0] == spike_nodes.shape[0], f"{frame_labels.shape[0]}, {ms_time_behav.shape[0]} vs {spike_nodes.shape[0]}"
 
         # cis direction
         idx = np.where(frame_labels == 1)[0]
-        
+        """
         if maze_type != 0:
             print("Consider all place fields either on correct track or incorrect track.")
             additional_trace =  calc_rate_map_properties(
@@ -157,6 +157,7 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
             #RateMapIncludeIP(trace)
             print("    Draw trace map that includes activities on incorrect path.")
             #TraceMapIncludeIP(trace)
+        """
     else:
         idx = np.arange(ms_time_behav.shape[0])
         
@@ -274,9 +275,9 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str,
     
 if __name__ == '__main__':
     
-    with open(r"E:\Data\Cross_maze\10224\20230930\session 2\trace.pkl", 'rb') as f:
-        trace = pickle.load(f)
-    
-    trace['p'] = r"E:\Data\Cross_maze\10224\20230930\session 2"
-    LocTimeCurve(trace)
-    RateMap(trace)
+    from mylib.local_path import f1
+    work_flow = r"D:\Data\Cross_maze"
+    for i in range(729, 733):
+        if os.path.exists(f1['Trace File'][i]):
+            continue
+        run_all_mice_DLC(i, f=f1, work_flow=work_flow)

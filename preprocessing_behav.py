@@ -424,20 +424,6 @@ def clean_data(behav_positions: np.ndarray = None, behav_time: np.ndarray = None
     return  behav_positions, behav_time
 
 # -------------------------------------------------------------------------------------------------------------------------------------
-""" Obsolete
-with open(r'F:\YSY\Simulation_pc\decoder_DMatrix.pkl', 'rb') as handle:
-    D_Matrice = pickle.load(handle)
-
-def P_Matrice():
-    with open(r'F:\YSY\Simulation_pc\P_Matrix-Maze1.pkl', 'rb') as handle:
-        P1 = pickle.load(handle)
-    print("    Path Matrix P1 is loaded successful! ")
-
-    with open(r'F:\YSY\Simulation_pc\P_Matrix-Maze1.pkl', 'rb') as handle:
-        P2 = pickle.load(handle)
-    print("    Path Matrix P1 is loaded successful! ")
-    return P1, P2
-"""
 def LocomotionDirection(check_node = 1, targ_node = 1, maze_type = 1, nx = 48):
     D = GetDMatrices(maze_type, nx)
     

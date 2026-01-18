@@ -70,8 +70,8 @@ class NaiveBayesDecoderPoison(object):
         maze_type = self.maze_type
         nx = self.res
         
-        D = GetDMatrices
-            D2 = D**2
+        D = GetDMatrices(maze_type, nx)
+        D2 = D**2
         self.D2 = D2
         self.D = D
 

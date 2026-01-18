@@ -51,7 +51,7 @@ class EqualRateDriftModel:
         self.predicted_prob = [np.repeat(self.params[0], len(seq)-1) for seq in sequences]
         return self.predicted_prob
     
-    def calc_loss(self, sequences: list[np.ndarray]):
+    def calc_loss(self, sequences: list[np.ndarray], is_report: bool = False):
         if self.predicted_prob is None:
             self.get_predicted_prob(sequences)
             
@@ -62,12 +62,13 @@ class EqualRateDriftModel:
         
         n_total = np.sum([len(seq)-1 for seq in sequences if len(seq) > 1])
         self._loss = -loss / n_total
-        print(f"Simple Drift Model:\n"
-              f"  Loss: {self.loss}\n"
-              f"  Parameters: {self.params}.\n")
+        if is_report:
+            print(f"Simple Drift Model:\n"
+                f"  Loss: {self.loss}\n"
+                f"  Parameters: {self.params}.\n")
         return self._loss
 
-    def calc_loss_along_seq(self, sequences: list[np.ndarray]):
+    def calc_loss_along_seq(self, sequences: list[np.ndarray], is_report: bool = False):
         max_length = max([len(seq) for seq in sequences])
         predicted_p = self.get_predicted_prob(sequences)
         padded_p = np.zeros((len(predicted_p), max_length-1)) * np.nan
@@ -78,9 +79,10 @@ class EqualRateDriftModel:
         
         dloss = padd_seq * np.log(padded_p + 1e-10) + (1 - padd_seq) * np.log(1 - padded_p + 1e-10)
         loss = -np.nanmean(dloss, axis=0)
-        print(f"Simple Drift Model:\n"
-              f"  Loss: {loss}\n"
-              f"  Parameters: {self.params}.\n")
+        if is_report:
+            print(f"Simple Drift Model:\n"
+                  f"  Loss: {loss}\n"
+                  f"  Parameters: {self.params}.\n")
         return loss
 
 class TwoProbDriftModel:
@@ -127,8 +129,8 @@ class TwoProbDriftModel:
         ps = np.array([self.params[1], self.params[0]])
         self.predicted_prob = [ps[seq][:-1] for seq in sequences]
         return self.predicted_prob
-    
-    def calc_loss(self, sequences: list[np.ndarray]):
+
+    def calc_loss(self, sequences: list[np.ndarray], is_report: bool = False):
         if self.predicted_prob is None:
             self.get_predicted_prob(sequences)
             
@@ -139,12 +141,13 @@ class TwoProbDriftModel:
         
         n_total = np.sum([len(seq)-1 for seq in sequences if len(seq) > 1])
         self._loss = -loss / n_total
-        print(f"Two Probability Drift Model:\n"
-              f"  Loss: {self.loss}\n"
-              f"  Parameters: {self.params}.\n")
+        if is_report:
+            print(f"Two Probability Drift Model:\n"
+                  f"  Loss: {self.loss}\n"
+                  f"  Parameters: {self.params}.\n")
         return self._loss
 
-    def calc_loss_along_seq(self, sequences: list[np.ndarray]):
+    def calc_loss_along_seq(self, sequences: list[np.ndarray], is_report: bool = False):
         max_length = max([len(seq) for seq in sequences])
         predicted_p = self.get_predicted_prob(sequences)
         padded_p = np.zeros((len(predicted_p), max_length-1)) * np.nan
@@ -155,9 +158,10 @@ class TwoProbDriftModel:
         
         dloss = padd_seq * np.log(padded_p + 1e-10) + (1 - padd_seq) * np.log(1 - padded_p + 1e-10)
         loss = -np.nanmean(dloss, axis=0)
-        print(f"Two Probability Drift Model:\n"
-              f"  Loss: {loss}\n"
-              f"  Parameters: {self.params}.\n")
+        if is_report:
+            print(f"Two Probability Drift Model:\n"
+                  f"  Loss: {loss}\n"
+                  f"  Parameters: {self.params}.\n")
         return loss
 
 def count(P1: np.ndarray, P2: np.ndarray, sequence: np.ndarray):
@@ -209,12 +213,24 @@ class TwoProbabilityIndependentModel:
         P1 = P1[:, 1] / np.sum(P1, axis=1)
         P2 = P2[:, 1] / np.sum(P2, axis=1)
         
+        non_inf_idx1 = np.where(
+            (np.isnan(P1) == False) & (np.isinf(P1) == False)
+        )[0]
+        X1 = np.arange(1, P1.shape[0]+1)[non_inf_idx1]
+        P1 = P1[non_inf_idx1]
+        
+        non_inf_idx2 = np.where(
+            (np.isnan(P2) == False) & (np.isinf(P2) == False)
+        )[0]
+        X2 = np.arange(1, P2.shape[0]+1)[non_inf_idx2]
+        P2 = P2[non_inf_idx2]
+
         self._params_retention = curve_fit(
-            retention_func, np.arange(1, P1.shape[0]+1), P1, p0=[0.5, 0.5]
+            retention_func, X1, P1, p0=[0.5, 0.5]
         )[0]
         
         self._params_recovery = curve_fit(
-            recovery_func, np.arange(1, P2.shape[0]+1), P2, p0=[0.5, 0.5]
+            recovery_func, X2, P2, p0=[0.5, 0.5]
         )[0]
 
         self.p0 = retention_func(1, *self.params_retention)
@@ -263,7 +279,7 @@ class TwoProbabilityIndependentModel:
         self.predicted_prob = prob_seq
         return prob_seq
     
-    def calc_loss(self, sequences: list[np.ndarray]):
+    def calc_loss(self, sequences: list[np.ndarray], is_report: bool = False):
         self.get_predicted_prob(sequences)
             
         loss = 0
@@ -273,13 +289,14 @@ class TwoProbabilityIndependentModel:
         
         n_total = np.sum([len(seq)-1 for seq in sequences if len(seq) > 1])
         self._loss = -loss / n_total
-        print(f"Retention + Recovery Model:\n"
-              f"  Loss: {self.loss}\n"
-              f"  Retention Parameters: {self.params_retention}\n"
-              f"  Recovery Parameters: {self.params_recovery}.\n")
+        if is_report:
+            print(f"Retention + Recovery Model:\n"
+                  f"  Loss: {self.loss}\n"
+                  f"  Retention Parameters: {self.params_retention}\n"
+                  f"  Recovery Parameters: {self.params_recovery}.\n")
         return self._loss
 
-    def calc_loss_along_seq(self, sequences: list[np.ndarray]):
+    def calc_loss_along_seq(self, sequences: list[np.ndarray], is_report: bool = False):
         max_length = max([len(seq) for seq in sequences])
         predicted_p = self.get_predicted_prob(sequences)
         padded_p = np.zeros((len(predicted_p), max_length-1)) * np.nan
@@ -290,10 +307,11 @@ class TwoProbabilityIndependentModel:
         
         dloss = padd_seq * np.log(padded_p + 1e-10) + (1 - padd_seq) * np.log(1 - padded_p + 1e-10)
         loss = -np.nanmean(dloss, axis=0)
-        print(f"Retention + Recovery Model:\n"
-              f"  Loss: {loss}\n"
-              f"  Retention Parameters: {self.params_retention}\n"
-              f"  Recovery Parameters: {self.params_recovery}.\n")
+        if is_report:
+            print(f"Retention + Recovery Model:\n"
+                  f"  Loss: {loss}\n"
+                  f"  Retention Parameters: {self.params_retention}\n"
+                  f"  Recovery Parameters: {self.params_recovery}.\n")
         return loss
         
     @property
@@ -380,8 +398,8 @@ class JointProbabilityModel:
         
         self.predicted_prob = prob_seq
         return prob_seq
-    
-    def calc_loss(self, sequences: list[np.ndarray]) -> float:
+
+    def calc_loss(self, sequences: list[np.ndarray], is_report: bool = False) -> float:
         self.get_predicted_prob(sequences)
             
         loss = 0
@@ -391,12 +409,13 @@ class JointProbabilityModel:
         
         n_total = np.sum([len(seq)-1 for seq in sequences if len(seq) > 1])
         self._loss = -loss / n_total
-        print(f"Joint Probability Model:\n"
-              f"  Loss: {self.loss}\n"
-              f"  Parameters: {self.params}.\n")
+        if is_report:
+            print(f"Joint Probability Model:\n"
+                  f"  Loss: {self.loss}\n"
+                  f"  Parameters: {self.params}.\n")
         return self._loss
 
-    def calc_loss_along_seq(self, sequences: list[np.ndarray]):
+    def calc_loss_along_seq(self, sequences: list[np.ndarray], is_report: bool = False):
         max_length = max([len(seq) for seq in sequences])
         predicted_p = self.get_predicted_prob(sequences)
         padded_p = np.zeros((len(predicted_p), max_length-1)) * np.nan
@@ -407,9 +426,10 @@ class JointProbabilityModel:
         
         dloss = padd_seq * np.log(padded_p + 1e-10) + (1 - padd_seq) * np.log(1 - padded_p + 1e-10)
         loss = -np.nanmean(dloss, axis=0)
-        print(f"Joint Probability Model:\n"
-              f"  Loss: {loss}\n"
-              f"  Parameters: {self.params}.\n")
+        if is_report:
+            print(f"Joint Probability Model:\n"
+                  f"  Loss: {loss}\n"
+                  f"  Parameters: {self.params}.\n")
         return loss
     
     @property

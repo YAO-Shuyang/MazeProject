@@ -15,7 +15,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
 from mylib.maze_utils3 import spike_nodes_transform, mkdir
 import seaborn as sns
-from mylib.maze_graph import NRG, CP_DSP, DSP_NRG
+from mylib.maze_graph import NRGs, CP_DSPs, DSP_NRGs
 from mylib.maze_graph import Father2SonGraph as F2S
 import umap.umap_ as umap
 import os
@@ -88,6 +88,7 @@ def get_neural_trajectory(trace: dict, is_normalize: bool = True):
     
     return trace
 
+# Deprecated
 def segmented_neural_trajectory(trace):
     breakpoints = np.array([6, 23, 94, 66, 97, 99, 144])
     prev_bps = np.array([144, 5, 24, 95, 54, 85, 100])

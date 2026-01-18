@@ -1,7 +1,7 @@
 
 from mylib.preprocessing_ms import place_field, shuffle_test, Generate_SilentNeuron, calc_ratemap
 from mylib.preprocessing_ms import half_half_correlation, odd_even_correlation, CrossLapsCorrelation
-from mylib.preprocessing_ms import OldMapSplit, field_specific_correlation, count_field_number, field_register
+from mylib.preprocessing_ms import OldMapSplit, field_specific_correlation, count_field_number, field_register, calc_SI
 import scipy.stats
 import numpy as np
 import pickle
@@ -19,7 +19,9 @@ def calc_rate_map_properties(
     behavior_paradigm: str,
     kwargs: dict = {},
     spike_num_thre = 10,
-    placefield_kwargs: dict = {"thre_type": 2, "parameter": 0.2}
+    placefield_kwargs: dict = {"thre_type": 2, "parameter": 0.2},
+    is_shuffle: bool = True,
+    is_calc_fields: bool = True
 ):
     n_neuron = Spikes.shape[0]
     _nbins = 2304
@@ -52,18 +54,27 @@ def calc_rate_map_properties(
                 'smooth_map_all':smooth_map_all, 'nanPos':nanPos, 'occu_time_spf': occu_time, 'p': save_loc, 'maze_type': maze_type}
 
     # Shuffle test
-    trace_ms = shuffle_test(trace_ms, Ms, **kwargs)
+    if is_shuffle:
+        trace_ms = shuffle_test(trace_ms, Ms, **kwargs)
+    else:
+        trace_ms['SI_all'] = calc_SI(
+            trace_ms['Spikes'], 
+            rate_map = trace_ms['rate_map_all'], 
+            t_total = trace_ms['t_total'], 
+            t_nodes_frac = trace_ms['t_nodes_frac']
+        )
     #plot_field_arange(trace, save_loc=os.path.join(trace['p'], 'PeakCurve'))
     
     # Generate place field
-    trace_ms['place_field_all'] = place_field(
-        trace=trace_ms,
-        **placefield_kwargs
-    )
-    
-    trace_ms = count_field_number(trace_ms)
-    try:
-        trace_ms = field_register(trace_ms)
-    except:
-        pass
+    if is_calc_fields:
+        trace_ms['place_field_all'] = place_field(
+            trace=trace_ms,
+            **placefield_kwargs
+        )
+        
+        trace_ms = count_field_number(trace_ms)
+        try:
+            trace_ms = field_register(trace_ms)
+        except:
+            pass
     return trace_ms

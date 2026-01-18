@@ -5,7 +5,7 @@ from scipy.stats import poisson, norm, nbinom, gamma, kstest, ks_2samp, anderson
 from scipy.stats import linregress, pearsonr, chisquare, ttest_1samp, ttest_ind
 from scipy.stats import ttest_rel, levene, spearmanr
 from mylib.stats.ks import poisson_kstest, normal_discrete_kstest, nbinom_kstest
-from mylib.behavior.correct_rate import lapwise_behavioral_score
+from mylib.behavior.correct_rate import lap_wise_decision_rate, calc_behavioral_score
 from mylib.stats.indept import indept_field_properties, indept_field_properties_mutual_info, indept_field_evolution_CI
 from mylib.stats.ks import lognorm_kstest
 from mylib.Intervaces_Dsp import *
@@ -2167,12 +2167,12 @@ def ConditionalProb_Interface(
     else:
         retained_dur_cis, prob_cis, recover_prob_cis, global_recover_prob_cis, on_next_num_cis, off_next_num_cis = RegisteredField.conditional_prob(
             field_reg=trace['cis']['field_reg'],
-            field_info=trace['field_info'],
+            field_info=trace['cis']['field_info'],
             thre=4
         )
         retained_dur_trs, prob_trs, recover_prob_trs, global_recover_prob_trs, on_next_num_trs, off_next_num_trs = RegisteredField.conditional_prob(
             field_reg=trace['trs']['field_reg'],
-            field_info=trace['field_info'],
+            field_info=trace['trs']['field_info'],
             thre=4
         )
     
@@ -2237,7 +2237,69 @@ def ConditionalProb_Interface_NovelFalimiar(
                 np.concatenate([on_next_num_cis, on_next_num_trs]),
                 np.concatenate([off_next_num_cis, off_next_num_trs]))
         
+def assign_labels_to_snr(snr: np.ndarray, boundaries: np.ndarray = np.array([10, 15, 20])):
+    if snr.ndim == 1:
+        return np.digitize(np.array([np.nanmean(snr)]), boundaries)
+    elif snr.ndim == 2:
+        return np.digitize(np.nanmean(snr, axis=0), boundaries)
+    else:
+        raise ValueError(f'SNR array must be 1D or 2D, but got {snr.ndim}D.')
+
+# Fig0313
+def ConditionalProb_Interface_Control(
+    trace: dict,
+    variable_names: list | None = None,
+    spike_threshold: int | float = 10,
+):
+    VariablesInputErrorCheck(input_variable=variable_names, check_variable=[
+        'Duration', 'SNR Level', 'SNR Value for Retention', 'SNR Value for Recovery', 'Conditional Prob.', 'Conditional Recover Prob.',
+        'Paradigm'])
+
+    if trace['paradigm'] == 'CrossMaze':
+        retained_dur, SNR_label, avg_snr_on, avg_snr_off, retained_prob, recover_prob = RegisteredField.conditional_prob(
+            field_reg=trace['field_reg'],
+            field_info=trace['field_info'],
+            category='label',
+            thre=4,
+            labeled_matrix=trace['field_info_adv'][:, :, 2].astype(np.float64),
+            n_labels=4,
+            process=assign_labels_to_snr
+        )
+        paradm = 'MA' if trace['maze_type'] == 1 else 'MB'
+
+        return (retained_dur, SNR_label, avg_snr_on, avg_snr_off, retained_prob*100, recover_prob*100,
+                np.repeat(paradm, retained_prob.shape[0]))
         
+    else:
+        retained_dur_cis, SNR_label_cis, avg_snr_on_cis, avg_snr_off_cis, prob_cis, recover_prob_cis = RegisteredField.conditional_prob(
+            field_reg=trace['cis']['field_reg'],
+            field_info=trace['cis']['field_info'],
+            thre=4,
+            category='label',
+            labeled_matrix=trace['cis']['field_info_adv'][:, :, 2].astype(np.float64),
+            n_labels=4,
+            process=assign_labels_to_snr
+        )
+        retained_dur_trs, SNR_label_trs, avg_snr_on_trs, avg_snr_off_trs, prob_trs, recover_prob_trs = RegisteredField.conditional_prob(
+            field_reg=trace['trs']['field_reg'],
+            field_info=trace['trs']['field_info'],
+            thre=4,
+            category='label',
+            labeled_matrix=trace['trs']['field_info_adv'][:, :, 2].astype(np.float64),
+            n_labels=4,
+            process=assign_labels_to_snr
+        )
+        paradm_cis = 'MAf' if trace['paradigm'] == 'ReverseMaze' else 'HPf'
+        paradm_trs = 'MAb' if trace['paradigm'] == 'ReverseMaze' else 'HPb'
+    
+        return (np.concatenate([retained_dur_cis, retained_dur_trs]), 
+                np.concatenate([SNR_label_cis, SNR_label_trs]),
+                np.concatenate([avg_snr_on_cis, avg_snr_on_trs]),
+                np.concatenate([avg_snr_off_cis, avg_snr_off_trs]),
+                np.concatenate([prob_cis*100, prob_trs*100]), 
+                np.concatenate([recover_prob_cis*100, recover_prob_trs*100]), 
+                np.concatenate([np.repeat(paradm_cis, prob_cis.shape[0]), np.repeat(paradm_trs, prob_trs.shape[0])]))
+
 # Fig0313
 def ConditionalProb_Interface_Position(
     trace: dict,
@@ -2853,16 +2915,19 @@ def FieldLifespan_Interface(
     
     if trace['paradigm'] == 'CrossMaze':
         duration, lifespan = RegisteredField.get_field_lifespans(
-            field_reg=trace['field_reg']
+            field_reg=trace['field_reg'],
+            field_info=trace['field_info']
         )
     
         return duration, lifespan, np.repeat(trace['paradigm'], lifespan.shape[0])
     else:
         duration_cis, lifespan_cis = RegisteredField.get_field_lifespans(
-            field_reg=trace['cis']['field_reg']
+            field_reg=trace['cis']['field_reg'],
+            field_info=trace['cis']['field_info']
         )
         duration_trs, lifespan_trs = RegisteredField.get_field_lifespans(
-            field_reg=trace['trs']['field_reg']
+            field_reg=trace['trs']['field_reg'],
+            field_info=trace['trs']['field_info']
         )
     
         return (np.concatenate([duration_cis, duration_trs]), 

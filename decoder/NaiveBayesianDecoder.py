@@ -6,6 +6,8 @@ import scipy.stats
 import numpy as np
 from numba import jit
 import time
+from mazepy.datastruc.neuact import SpikeTrain
+from mazepy.datastruc.variables import VariableBin
 
 @jit(nopython=True)
 def _generate_tuning_curve(
@@ -38,6 +40,7 @@ def _get_post_prob(Spikes_test: np.ndarray, pext: np.ndarray, pext_A: np.ndarray
         
     return P
 
+from mylib.decoder.calc_p import compute_P
 class NaiveBayesDecoder(object):
     '''
     version: 1.3
@@ -112,7 +115,7 @@ class NaiveBayesDecoder(object):
         print("    Generate D matrix")
         maze_type = self.maze_type
         nx = self.res
-        D = GetDMatrices(maze_type=maze_type, nx=nx)
+        D = GetDMatrices(maze_type=maze_type, nx=nx)/(nx/6)
         D2 = D**2
         self.D2 = D2
         self.D = D
@@ -125,7 +128,7 @@ class NaiveBayesDecoder(object):
         if self.Loss_function == '0-1':
             self.d = D01
         elif self.Loss_function == 'd':
-            self.d = D
+            self.d = D/8
         elif self.Loss_function == 'd2':
             self.d = D2
         else:
@@ -164,6 +167,16 @@ class NaiveBayesDecoder(object):
         n_neuron = self.Spikes_train.shape[0]
         maze_type = self.maze_type
         
+        t1 = time.time()
+        
+        spike_train = SpikeTrain(
+            activity=self.Spikes_train,
+            time=np.arange(self.Spikes_train.shape[1])*1000,
+            variable=VariableBin(self.MazeID_train.astype(np.int64))-1
+        )
+        pext = spike_train.calc_tuning_curve(nbins=self.res**2, is_remove_nan=True)
+        print(f"    Tuning curve generation time: {time.time() - t1} s")
+        """
         spike_freq_all = np.zeros([n_neuron,_nbins], dtype = np.float64)
         count_freq = np.zeros(_nbins, dtype = np.float64)
         for i in range(n_neuron):
@@ -184,6 +197,7 @@ class NaiveBayesDecoder(object):
         count_freq[count_freq < 1] = 1  # 1/25
         pext = spike_freq_all / count_freq
         t2 = time.time()
+        """
         #pext = _generate_tuning_curve(self.Spikes_train, self.MazeID_train, self.res)
         peak = np.nanmax(pext, axis=1)
 
@@ -208,8 +222,9 @@ class NaiveBayesDecoder(object):
         else:
             smooth_pext = pext
 
+        count_freq = spike_train.calc_occu_time(nbins=self.res**2)
         pext_A = count_freq / np.nansum(count_freq)
-        
+
         smooth_pext[np.where(smooth_pext < 0.000001)] = 0.000001
         smooth_pext[np.where(smooth_pext > 0.999999)] = 0.999999
         
@@ -243,18 +258,27 @@ class NaiveBayesDecoder(object):
         P = np.ones((nx*nx,T_test), dtype = np.float64)
         self.pext = pext
         self.pext_A = pext
-        log_A = np.log(pext_A)
+        
+        pext[np.isnan(pext)] = 1e-10
+        pext_A[np.isnan(pext_A)] = 1e-10
+        pext[pext < 1e-10] = 1e-10
+        pext_A[pext_A < 1e-10] = 1e-10
   
         # generate P matrix.
-        print("    Generating P matirx...")
+        print("    Generating P matirx Cython...")
+        t1 = time.time()
+        """ 
+        P = np.exp(compute_P(Spikes_test.astype(np.int64), pext.astype(np.float64), pext_A.astype(np.float64)))
+        print(f"    P matrix generation time: {time.time() - t1} s")
+        """
         for t in tqdm(range(T_test)):
             spike_idx = np.where(Spikes_test[:,t]==1)[0]
             nonspike_idx = np.where(Spikes_test[:,t]==0)[0]
             p = np.concatenate((pext[spike_idx,:],(1-pext[nonspike_idx,:])),axis=0)
-            P[:,t] = np.nanprod(p, axis = 0) * pext_A
-        """   
+            P[:,t] = np.nansum(np.log(p), axis = 0) + np.log(pext_A)
+        """ 
         P = _get_post_prob(Spikes_test, pext, pext_A, self.res) 
-        """
+        """ 
         self.P = P
         return P
 
@@ -270,7 +294,7 @@ class NaiveBayesDecoder(object):
 
         # output matrix = D x P
         # output = argmin(D x P, axis = 0)
-        dp = np.dot(D,P)
+        dp = np.dot(D, np.exp(P))
         self.dp = dp
         MazeID_predicted = np.argmin(dp, axis = 0) + 1
         self.MazeID_predicted = MazeID_predicted

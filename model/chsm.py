@@ -147,7 +147,7 @@ class ContinuousHiddenStateModel:
         self.predicted_prob = predicted_prob
         return predicted_prob
     
-    def calc_loss(self, sequences: list[np.ndarray]):
+    def calc_loss(self, sequences: list[np.ndarray], is_report: bool = False):
         if self.predicted_prob is None:
             self.get_predicted_prob(sequences)
             
@@ -158,12 +158,13 @@ class ContinuousHiddenStateModel:
         
         n_total = np.sum([len(seq)-1 for seq in sequences if len(seq) > 1])
         self._loss = -loss / n_total
-        print(f"Continuous Hidden State Model with {self.func_name}:\n"
-              f"  Loss: {self.loss}\n"
-              f"  Parameters: {self.params}.\n")
+        if is_report:
+            print(f"Continuous Hidden State Model with {self.func_name}:\n"
+                  f"  Loss: {self.loss}\n"
+                  f"  Parameters: {self.params}.\n")
         return self._loss
 
-    def calc_loss_along_seq(self, sequences: list[np.ndarray]) -> float:
+    def calc_loss_along_seq(self, sequences: list[np.ndarray], is_report: bool = False) -> float:
         max_length = max([len(seq) for seq in sequences])
         predicted_p = self.get_predicted_prob(sequences)
         padded_p = np.zeros((len(predicted_p), max_length-1)) * np.nan
@@ -174,8 +175,9 @@ class ContinuousHiddenStateModel:
         
         dloss = padd_seq * np.log(padded_p + 1e-10) + (1 - padd_seq) * np.log(1 - padded_p + 1e-10)
         loss = -np.nanmean(dloss, axis=0)
-        print(f"Continuous Hidden State Model with {self.func_name}:\n"
-              f"  Loss: {loss}\n")
+        if is_report:
+            print(f"Continuous Hidden State Model with {self.func_name}:\n"
+                  f"  Loss: {loss}\n")
         return loss
 
     @property

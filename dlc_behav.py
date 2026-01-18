@@ -123,10 +123,28 @@ def run_all_mice_DLC(i: int, f: pd.DataFrame, work_flow: str, speed_sm_args = {'
         return   
     behav_position_original = dlc_position_generation(dlc, **dlc_args)
     frames_num_tracker[0] = behav_position_original.shape[0]
+  
+    lap_info_path = os.path.join(folder, 'frame_labels.pkl')
+    if os.path.exists(lap_info_path):
+        with open(lap_info_path, 'rb') as handle:
+            lap_info = pickle.load(handle)
+
+        nanidx = np.where(np.isnan(lap_info))
+        if len(nanidx[0]) != 0:
+            warnings.warn(f"lap info contains NAN value! Relabeling please!")
+        else:
+            lap_info = lap_info.astype(np.int64)
+    else:
+        warnings.warn(f"Didn't find {lap_info_path}")
+        return
+
+    behav_position_original = dlc_position_generation(dlc, **dlc_args)
+    frames_num_tracker[0] = behav_position_original.shape[0]
 
     trace = {'date':date,'MiceID':MiceID,'paradigm':behavior_paradigm,'session_path':p,'behav_folder':folder, 
              'maze_type':maze_type,'nx':48, 'ny':48, 'body_parts': list(dlc.keys()), 'dlc_position': dlc,
-             'behav_position_original': cp.deepcopy(behav_position_original),
+             'behav_position_original': cp.deepcopy(behav_position_original),'lap beg time': behav_time_original[lap_info[:, 0]], 
+             'lap end time': behav_time_original[lap_info[:, 1]], 
              'behav_time_original': cp.deepcopy(behav_time_original)}
     
     behav_positions = cp.deepcopy(trace['behav_position_original'])

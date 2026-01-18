@@ -1,0 +1,41 @@
+import numpy as np
+cimport numpy as cnp
+from libc.math cimport isnan
+
+def compute_P(
+    cnp.ndarray[cnp.int64_t, ndim=2] Spikes_test,
+    cnp.ndarray[cnp.double_t, ndim=2] pext,
+    cnp.ndarray[cnp.double_t, ndim=1] pext_A
+):
+    """
+    Spikes_test : (N, T_test) array of 0/1 integers
+    pext        : (N, F) array of probabilities
+    pext_A      : (F,) array of multipliers
+    Returns:
+        P : (F, T_test) array
+    """
+    cdef Py_ssize_t N = Spikes_test.shape[0]
+    cdef Py_ssize_t T_test = Spikes_test.shape[1]
+    cdef Py_ssize_t F = pext.shape[1]
+
+    cdef cnp.ndarray[cnp.double_t, ndim=2] P = np.empty((F, T_test), dtype=np.float64)
+    cdef double[:, :] P_mv = P
+    cdef long long[:, :] spikes = Spikes_test
+    cdef double[:, :] pext_mv = pext
+    cdef double[:] pextA = pext_A
+
+    cdef Py_ssize_t t, i, f
+    cdef double prod
+
+    for t in range(T_test):
+        # initialize with 1
+        for f in range(F):
+            prod = 0.0
+            for i in range(N):
+                if Spikes_test[i, t] == 1:
+                    prod += np.log(pext[i, f])
+                else:
+                    prod += np.log(1.0 - pext[i, f])
+            P_mv[f, t] = prod + pext_A[f]
+
+    return P

@@ -84,8 +84,7 @@ def shuffle_test_isi(SI, spikes, spike_nodes, occu_time, shuffle_n = 1000, Ms = 
     for i in range(shuffle_n):
         spikes_rand[i, shuffle_spike_ind[i]] = 1
     
-    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms, 
-                                                                                    is_silent = silent_cell)
+    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms)
     SI_rand = calc_SI(spikes = spikes_rand, rate_map = smooth_map_rand, t_total = t_total, t_nodes_frac=t_nodes_frac)
     is_placecell = SI > np.percentile(SI_rand, percent)
     return is_placecell
@@ -103,8 +102,7 @@ def shuffle_test_shift(SI, spikes, spike_nodes, occu_time, shuffle_n = 1000, Ms 
     for i in range(shuffle_n):
         spikes_rand[i,:] = np.roll(spikes, shift = shuffle_shift[i])
 
-    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms, 
-                                                                                    is_silent = silent_cell)
+    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms)
     SI_rand = calc_SI(spikes = spikes_rand, rate_map = smooth_map_rand, t_total = t_total, t_nodes_frac=t_nodes_frac)
     is_placecell = SI > np.percentile(SI_rand, percent)
     return is_placecell
@@ -122,13 +120,12 @@ def shuffle_test_all(SI, spikes, spike_nodes, occu_time, shuffle_n = 1000, Ms = 
         np.random.shuffle(spikes_temp)
         spikes_rand[i, :] = cp.deepcopy(spikes_temp)
         
-    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms, 
-                                                                                    is_silent = silent_cell)
+    smooth_map_rand, _, _, _ = calc_ratemap(Spikes = spikes_rand, spike_nodes = spike_nodes, occu_time = occu_time, Ms = Ms)
     SI_rand = calc_SI(spikes = spikes_rand, rate_map = smooth_map_rand, t_total = t_total, t_nodes_frac=t_nodes_frac)
     is_placecell = SI > np.percentile(SI_rand, percent)
     return is_placecell
 
-def shuffle_test(trace, Ms = None, shuffle_n = 1000, percent = 95, save_loc: str = None, file_name: str = "Shuffle_Venn"):
+def shuffle_test(trace, Ms = None, shuffle_n = 1000, percent = 95, save_loc: str = None, file_name: str = "Shuffle_Venn", is_shuffle: bool = True):
     n_neuron = trace['n_neuron']
     SI_all = np.zeros(n_neuron, dtype = np.float64)
     is_placecell_isi = np.zeros(n_neuron, dtype = np.int64)
@@ -136,7 +133,12 @@ def shuffle_test(trace, Ms = None, shuffle_n = 1000, percent = 95, save_loc: str
     is_placecell_all = np.zeros(n_neuron, dtype = np.int64)
 
     SI_all = calc_SI(trace['Spikes'], rate_map = trace['rate_map_all'], t_total = trace['t_total'], t_nodes_frac = trace['t_nodes_frac'])
-
+    trace['SI_all'] = SI_all
+    
+    if is_shuffle == False:
+        trace['is_placecell'] = np.ones_like(SI_all, dtype=np.int64)
+        return trace
+    
     for i in tqdm(range(n_neuron)):
         if i in trace['SilentNeuron']:
             continue
@@ -147,7 +149,6 @@ def shuffle_test(trace, Ms = None, shuffle_n = 1000, percent = 95, save_loc: str
         is_placecell_all[i] = shuffle_test_all(SI = SI_all[i], spikes = trace['Spikes'][i,], spike_nodes=trace['spike_nodes'], 
             occu_time=trace['occu_time_spf'], Ms = Ms, silent_cell = trace['SilentNeuron'], shuffle_n = shuffle_n, percent = percent)
     
-    trace['SI_all'] = SI_all
     trace['is_placecell_isi'] = is_placecell_isi
     trace['is_placecell_shift'] = is_placecell_shift
     trace['is_placecell_all'] = is_placecell_all
@@ -705,11 +706,11 @@ def LocTimeCurve(trace):
     ms_time = cp.deepcopy(trace['ms_time_behav'])
     spike_nodes = spike_nodes_transform(trace['spike_nodes'], nx=12)
     
-    Graph = NRG[int(trace['maze_type'])]
+    Graph = NRGs[int(trace['maze_type'])]
     linearized_x = np.zeros_like(trace['spike_nodes'], np.float64)
 
     for i in range(spike_nodes.shape[0]):
-        linearized_x[i] = Graph[int(spike_nodes[i])]
+        linearized_x[i] = Graph[int(spike_nodes[i])-1]
         
     linearized_x = linearized_x + np.random.rand(spike_nodes.shape[0]) - 0.5
 
@@ -1224,7 +1225,7 @@ def calc_ms_speed(behav_speed: np.ndarray, behav_time: np.ndarray,
     """
     assert behav_speed.shape[0] == behav_time.shape[0]
 
-    ms_speed = np.zeros_like(ms_time)
+    ms_speed = np.zeros_like(ms_time, dtype = np.float64)
     
     for i in range(ms_speed.shape[0]):
         if ms_time[i] <= behav_time[0]:
