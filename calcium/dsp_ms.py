@@ -501,7 +501,7 @@ def run_all_mice_DLC(
     
     print("      4. Loc-time curve")
     #trace = LocTimeCurve(trace)
-    trace = LocTimeCurve(trace)
+    #trace = LocTimeCurve(trace)
 
     print("      5. Population Vector Correlation (Deprecated)")
     #MazeSegmentsPVCorrelation(trace)
