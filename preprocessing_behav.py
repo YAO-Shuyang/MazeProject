@@ -454,17 +454,17 @@ def run_all_mice(mylist: list, behavior_paradigm = 'CrossMaze', P = None, cam_de
     maze_type = mylist[4] # int
 
     if behavior_paradigm == 'CrossMaze':
-        totalpath = 'G:\YSY\Cross_maze'
+        totalpath = r'G:\YSY\Cross_maze'
         session = common
         c = 'session'
         p = os.path.join(totalpath, MiceID, date,"session "+str(session))
     elif behavior_paradigm == 'SimpleMaze':
-        totalpath = 'G:\YSY\Simple_maze'
+        totalpath = r'G:\YSY\Simple_maze'
         training_day = common
         c = 'training_day'
         p = os.path.join(totalpath, MiceID, date)
     elif behavior_paradigm == 'ReverseMaze':
-        totalpath = 'G:\YSY\Reverse_maze'
+        totalpath = r'G:\YSY\Reverse_maze'
         training_day = common
         c = 'training_day'
         p = os.path.join(totalpath, MiceID, date)
