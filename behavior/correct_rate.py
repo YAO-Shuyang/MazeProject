@@ -24,7 +24,7 @@ def lap_wise_decision_rate(trace: dict) -> np.ndarray:
     ----
     Only behavioral paradigms CrossMaze are supported.
     """
-    beg, end = LapSplit(trace, 'CrossMaze')
+    beg, end = LapSplit(trace, trace['paradigm'])
     decision_rate = np.zeros((len(beg), 2))
     
     maze_type = trace['maze_type']
