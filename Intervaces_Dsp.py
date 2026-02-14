@@ -203,140 +203,95 @@ def SegmentedCorrelationAcrossRoutes_DSP_Interface(trace: dict, variable_names =
     KeyWordErrorCheck(trace, __file__, ['segments_pvc'])
     VariablesInputErrorCheck(
         input_variable = variable_names, 
-        check_variable = ['Segments', 'Mean PVC', 'Compare Groups', 'Routes']
+        check_variable = ['Position', 'aPVC', 'Routes']
     )
     
     segment_pieces = []
     segment_pvc = []
-    groups = []
     routes = []
-    seg_temp = np.concatenate([[0], segs])
     
     D = GetDMatrices(1, 48)
-    
-    seg_temp = np.array([seg_temp[0], seg_temp[2], seg_temp[4], seg_temp[6], seg_temp[1], seg_temp[3], seg_temp[5], seg_temp[7]])
-    for i in [0, 4, 5, 9]:
-        for j in range(10):
-            if i == j:
-                continue
-            
-            if j in [0, 4, 5, 9]:
-                if j <= i:
-                    continue
-            
-            bins = get_son_area(np.intersect1d(CP_DSP[trace[f'node {i}']['Route']], CP_DSP[trace[f'node {j}']['Route']]))-1
-            
-            pc_idx = np.where(
-                (trace[f'node {i}']['is_placecell'] == 1) |
-                (trace[f'node {j}']['is_placecell'] == 1)
-            )[0]
-            
-            pvc = np.zeros(bins.shape[0], np.float64)
-            for k in range(bins.shape[0]):
-                pvc[k] = np.corrcoef(
-                    trace[f'node {i}']['smooth_map_all'][pc_idx, bins[k]],
-                    trace[f'node {j}']['smooth_map_all'][pc_idx, bins[k]]
+
+    for j in range(10):
+        if j in [0, 5]:
+            continue
+        
+        if j >= 5:
+            i=5
+            r_offset = 2
+        else:
+            i=0
+            r_offset = 0
+  
+        pc_idx = np.where(
+            (trace[f'node {i}']['is_placecell'] == 1) |
+            (trace[f'node {i+4}']['is_placecell'] == 1)
+        )
+        
+        n_bins = CP_DSPs[1][0].shape[0]
+        pvc = np.zeros((n_bins, 16), np.float64)
+        for k in range(n_bins):
+            sonbins = Father2SonGraph[CP_DSPs[1][0][k]]
+            for b in range(16):
+                pvc[k, b] = np.corrcoef(
+                    trace[f'node {i}']['smooth_map_all'][pc_idx, sonbins[b]-1],
+                    trace[f'node {j}']['smooth_map_all'][pc_idx, sonbins[b]-1]
                 )[0, 1]
-                
-            dist = D[bins, 0]
-            dist = dist / (np.max(dist) + 0.0001) *111
-            dist = (dist // 1).astype(np.int64)
-            
-            pvc_norm = np.zeros(111)
-            for k in range(111):
-                pvc_norm[k] = np.nanmean(pvc[dist == k])
-            
-            segment_pieces.append(np.arange(0, 111))
-            segment_pvc.append(pvc_norm)
-            groups.append(np.repeat(f'{i}-{j}', 111))
-            routes.append(np.repeat(trace[f'node {j}']['Route'], 111))
+        
+        segment_pieces.append(np.arange(n_bins))
+        segment_pvc.append(np.nanmean(pvc, axis=1))
+        routes.append(np.repeat(j-r_offset, n_bins)) if j not in [4, 9] else routes.append(np.repeat(0, n_bins))
     
-    return np.concatenate(segment_pieces), np.concatenate(segment_pvc), np.concatenate(groups), np.concatenate(routes)
+    return np.concatenate(segment_pieces), np.concatenate(segment_pvc), np.concatenate(routes)
 
 def SegmentedCorrelationAcrossRoutes_Egocentric_DSP_Interface(trace: dict, variable_names = None):
     VariablesInputErrorCheck(
         input_variable = variable_names, 
-        check_variable = ['Segments', 'Mean PVC', 'Compare Groups', 'Routes', 'Control For Route']
+        check_variable = ['Position', 'rPVC', 'Routes', 'Type']
     )
-    segment_pieces = []
-    segment_pvc = []
-    groups = []
+    pos = []
+    rpvc = []
     routes = []
-    control_for_route = []
-    seg_temp = np.concatenate([[0], segs])
-    
+    isctrl = []
     D = GetDMatrices(1, 48)
-    
-    seg_temp = np.array([seg_temp[0], seg_temp[2], seg_temp[4], seg_temp[6], seg_temp[1], seg_temp[3], seg_temp[5], seg_temp[7]])
-    for i in [0, 4, 5, 9]:
-        for j in [1, 2, 3, 6, 7, 8]:
-            
-            son_bins1 = get_son_area(CP_DSP[trace[f'node {j}']['Route']])
-            son_bins2 = get_son_area(CP_DSP[0])
-            
-            D1 = D[son_bins1-1, SP_DSP[trace[f'node {j}']['Route']]-1]
-            D2 = D[son_bins2-1, SP_DSP[0]-1]
-            
-            idx1 = np.argsort(D1)
-            idx2 = np.argsort(D2)[:idx1.shape[0]]
+    for i, k in zip([0, 5], [4, 9]):
+        jrange = range(1,4) if i == 0 else range(6, 9)
+        rrange = range(1,4) if i == 0 else range(4, 7)
+        for j, rt in zip(jrange, rrange):
             
             pc_idx = np.where(
                 (trace[f'node {i}']['is_placecell'] == 1) |
-                (trace[f'node {j}']['is_placecell'] == 1)
-            )[0]
+                (trace[f'node {i+4}']['is_placecell'] == 1)
+            )
+            rt_len = CP_DSPs[1][rt].shape[0]
+            ctrl_bins = CP_DSPs[1][0][-rt_len:]
             
-            PVC = np.zeros(idx1.shape[0], np.float64)
-            for k in range(idx1.shape[0]):
-                PVC[k] = np.corrcoef(
-                    trace[f'node {j}']['smooth_map_all'][pc_idx, son_bins1[idx1[k]]-1],
-                    trace[f'node {i}']['smooth_map_all'][pc_idx, son_bins2[idx2[k]]-1]
-                )[0, 1]
+            PVC = np.zeros((2, rt_len, 16), np.float64)
+            for b in range(rt_len):
+                sonbins = np.asarray(Father2SonGraph[CP_DSPs[1][rt][b]])
+                sb_ordered_rt = np.argsort(D[sonbins-1, SP_DSPs[1][rt]-1])
+                sb_ordered_rt = sonbins[sb_ordered_rt]
                 
-            n_len = CP_DSP[trace[f'node {j}']['Route']].shape[0]
-            dist = D1[idx1]
-            dist = dist / (np.max(dist) + 0.0001) * n_len
-            dist = (dist // 1).astype(np.int64)
+                sonbins_ctrl = np.asarray(Father2SonGraph[CP_DSPs[1][0][-rt_len+b]])
+                sonbins_0 = np.asarray(Father2SonGraph[CP_DSPs[1][0][b]])
             
-            pvc_norm = np.zeros(n_len)
-            for k in range(n_len):
-                pvc_norm[k] = np.nanmean(PVC[dist == k])
-            
-            segment_pieces.append(np.arange(0, n_len))
-            segment_pvc.append(pvc_norm)
-            groups.append(np.repeat(f'{i}-{j}', n_len))
-            routes.append(np.repeat(trace[f'node {j}']['Route'], n_len)) 
-            control_for_route.append(np.repeat(trace[f'node {j}']['Route'], n_len))    
-            
-            # Control
-            n_targ = np.array([0, 4, 5, 9])
-            for m in n_targ:
-                if m == i:
-                    continue
-                
-                
-                PVC = np.zeros(idx1.shape[0], np.float64)
-                for k in range(idx1.shape[0]):
-                    PVC[k] = np.corrcoef(
-                        trace[f'node {i}']['smooth_map_all'][pc_idx, son_bins1[idx1[k]]-1],
-                        trace[f'node {m}']['smooth_map_all'][pc_idx, son_bins2[idx2[k]]-1]
+                for n in range(16):
+                    PVC[0, b, n] = np.corrcoef(
+                        trace[f'node {j}']['smooth_map_all'][pc_idx, sb_ordered_rt[n]-1],
+                        trace[f'node {i}']['smooth_map_all'][pc_idx, sonbins_0[n]-1]
                     )[0, 1]
-                        
-                n_len = CP_DSP[trace[f'node {j}']['Route']].shape[0]
-                dist = D1[idx1]
-                dist = dist / (np.max(dist) + 0.0001) * n_len
-                dist = (dist // 1).astype(np.int64)
-                    
-                pvc_norm = np.zeros(n_len)
-                for k in range(n_len):
-                    pvc_norm[k] = np.nanmean(PVC[dist == k])
-                    
-                segment_pieces.append(np.arange(0, n_len))
-                segment_pvc.append(pvc_norm)
-                groups.append(np.repeat(f'{i}-{m}', n_len))
-                routes.append(np.repeat(trace[f'node {m}']['Route'], n_len))
-                control_for_route.append(np.repeat(trace[f'node {j}']['Route'], n_len)) 
- 
-    return np.concatenate(segment_pieces), np.concatenate(segment_pvc), np.concatenate(groups), np.concatenate(routes), np.concatenate(control_for_route)
+                    PVC[1, b, n] = np.corrcoef(
+                        trace[f'node {k}']['smooth_map_all'][pc_idx, sonbins_ctrl[n]-1],
+                        trace[f'node {i}']['smooth_map_all'][pc_idx, sonbins_0[n]-1]
+                    )[0, 1]
+            
+            for dtype in range(2):
+                pos.append(np.arange(rt_len))
+                rpvc.append(np.nanmean(PVC[dtype, :, :], axis=1))
+                routes.append(np.repeat(rt, rt_len))
+                isctrl.append(np.repeat(['Real', 'Ctrl'][dtype], rt_len))
+        
+    return np.concatenate(pos), np.concatenate(rpvc), np.concatenate(routes), np.concatenate(isctrl)
 
 def SegmentedCorrelationAcrossRoutes_Egocentric_DSP_Interface2(trace: dict, variable_names = None):
     VariablesInputErrorCheck(
