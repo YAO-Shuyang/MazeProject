@@ -5,8 +5,8 @@ import numpy as np
 figpath = r'D:\Data\FinalResults'
 figdata = r'D:\Data\FigData'
 
-DMatrixPath = r"D:\Software\Anaconda3\envs\maze\Lib\site-packages\mylib\dismat"# r"D:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder_DMatrix.pkl"
-CellregDate = r"D:\Software\Anaconda3\envs\maze\Lib\site-packages\mylib\cellreg"
+DMatrixPath = r"D:\Softwares\Anaconda2025\envs\maze\Lib\site-packages\mylib\dismat"# r"D:\Anaconda\envs\maze\Lib\site-packages\mylib\decoder_DMatrix.pkl"
+CellregDate = r"D:\Softwares\Anaconda2025\envs\maze\Lib\site-packages\mylib\cellreg"
 
 CM_path = r'D:\Data\Cross_maze'
 DSP_path = r'D:\Data\Dsp_maze'
@@ -32,7 +32,7 @@ f2_behav = pd.read_excel(os.path.join(DSP_path,'dsp_maze_paradigm.xlsx'), sheet_
 #f_CellReg_day = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='day')
 #f_CellReg_reverse = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='reverse')
 #f_CellReg_day_hairpin = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='day_hairpin')
-#f_CellReg_modi = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='modi')
+f_CellReg_modi = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='modi')
 f_CellReg_dsp = pd.read_excel(r"D:\Data\cellregs.xlsx", sheet_name='dsp')
 
 #f_decode = pd.read_excel(r"D:\Data\Simulation_pc\cross_maze_decode.xlsx", sheet_name='Lap-wise')
