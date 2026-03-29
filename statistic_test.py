@@ -32,6 +32,13 @@ RetrievCmap = sns.blend_palette(
     as_cmap=True,
 )
 
+session_convertor = {
+    10212: np.array([-5, -4, -3, -2, -1, 0, 1], dtype=np.int64),
+    10224: np.array([0, 1, 2, 3, 4, 5, 6], dtype=np.int64),
+    10227: np.array([-3, -2, -1, 0, 1, 2, 3], dtype=np.int64),
+    10232: np.array([-1, 0, 1, 2, 3, 4, 5], dtype=np.int64),
+}
+
 def hex_to_rgba(hex_color):
     """
     Convert a hex color (#RRGGBB or #RRGGBBAA) to RGBA format (0-255).
