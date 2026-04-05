@@ -259,10 +259,14 @@ def SegmentedCorrelationAcrossRoutes_Egocentric_DSP_Interface(trace: dict, varia
         rrange = range(1,4) if i == 0 else range(4, 7)
         for j, rt in zip(jrange, rrange):
             
+            pc_idx = np.arange(
+                trace['n_neuron']
+            )
+            """
             pc_idx = np.where(
                 (trace[f'node {i}']['is_placecell'] == 1) |
                 (trace[f'node {i+4}']['is_placecell'] == 1)
-            )
+            )"""
             rt_len = CP_DSPs[1][rt].shape[0]
             ctrl_bins = CP_DSPs[1][0][-rt_len:]
             
@@ -313,19 +317,24 @@ def SegmentedCorrelationAcrossRoutes_Egocentric_DSP_Interface2(trace: dict, vari
             if u >= v:
                 continue
             
-            son_bins1 = get_son_area(CP_DSP[trace[f'node {j}']['Route']])
-            son_bins2 = get_son_area(CP_DSP[trace[f'node {i}']['Route']])
+            son_bins1 = get_son_area(CP_DSP1[trace[f'node {j}']['Route']])
+            son_bins2 = get_son_area(CP_DSP1[trace[f'node {i}']['Route']])
             
-            D1 = D[son_bins1-1, SP_DSP[trace[f'node {j}']['Route']]-1]
-            D2 = D[son_bins2-1, SP_DSP[trace[f'node {i}']['Route']]-1]
+            D1 = D[son_bins1-1, SP_DSP1[trace[f'node {j}']['Route']]-1]
+            D2 = D[son_bins2-1, SP_DSP1[trace[f'node {i}']['Route']]-1]
             
             idx1 = np.argsort(D1)
             idx2 = np.argsort(D2)[:idx1.shape[0]]
             
+            pc_idx = np.arange(
+                trace['n_neuron']
+            )
+
+            """
             pc_idx = np.where(
                 (trace[f'node {i}']['is_placecell'] == 1) |
                 (trace[f'node {j}']['is_placecell'] == 1)
-            )[0]
+            )[0]"""
             
             PVC = np.zeros(idx1.shape[0], np.float64)
             for k in range(idx1.shape[0]):
@@ -334,7 +343,7 @@ def SegmentedCorrelationAcrossRoutes_Egocentric_DSP_Interface2(trace: dict, vari
                     trace[f'node {i}']['smooth_map_all'][pc_idx, son_bins2[idx2[k]]-1]
                 )[0, 1]
                 
-            n_len = CP_DSP[trace[f'node {j}']['Route']].shape[0]
+            n_len = CP_DSP1[trace[f'node {j}']['Route']].shape[0]
             dist = D1[idx1]
             dist = dist / (np.max(dist) + 0.0001) * n_len
             dist = (dist // 1).astype(np.int64)
@@ -357,7 +366,7 @@ def SegmentedCorrelationAcrossRoutes_Egocentric_DSP_Interface2(trace: dict, vari
                     trace[f'node {i}']['smooth_map_all'][pc_idx, son_bins2[idx2[k]]-1]
                 )[0, 1]
                         
-            n_len = CP_DSP[trace[f'node {j}']['Route']].shape[0]
+            n_len = CP_DSP1[trace[f'node {j}']['Route']].shape[0]
             dist = D1[idx1]
             dist = dist / (np.max(dist) + 0.0001) * n_len
             dist = (dist // 1).astype(np.int64)
